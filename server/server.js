@@ -3,7 +3,10 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { ApolloServer } = require('apollo-server-express');
-
+const { 
+  ApolloServerPluginLandingPageLocalDefault,
+  ApolloServerPluginLandingPageProductionDefault 
+} = require('apollo-server-core');
 
 const jwt = require('jsonwebtoken');
 
@@ -25,6 +28,17 @@ async function startServer() {
     typeDefs,
     resolvers,
     introspection: true,
+    // Production(배포) 모드에서도 Landing Page를 활성화
+    plugins: [
+      // 1) 로컬 + 개발용 기본 페이지:
+      // ApolloServerPluginLandingPageLocalDefault()
+  
+      // 2) 프로덕션 환경에서도 뜨도록
+      ApolloServerPluginLandingPageProductionDefault({
+        // 기본 안내 문구 또는 studio 링크 등 커스터마이징 가능
+        footer: false
+      })
+    ],
     context: ({ req }) => {
       // --- 여기가 핵심: "어드민 JWT" 인증 체크 ---
       // Authorization: Bearer <token>
