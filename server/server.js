@@ -3,12 +3,13 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { ApolloServer } = require('apollo-server-express');
-const { 
-  ApolloServerPluginLandingPageLocalDefault,
-  ApolloServerPluginLandingPageProductionDefault 
+const jwt = require('jsonwebtoken');
+
+const {
+  ApolloServerPluginLandingPageProductionDefault
 } = require('apollo-server-core');
 
-const jwt = require('jsonwebtoken');
+
 
 const connectDB = require('./config/db');
 const typeDefs = require('./graphql/typeDefs');
@@ -27,15 +28,10 @@ async function startServer() {
   const server = new ApolloServer({
     typeDefs,
     resolvers,
-    introspection: true,
-    // Production(배포) 모드에서도 Landing Page를 활성화
+    introspection: true, // 스키마 탐색 가능하게 설정
     plugins: [
-      // 1) 로컬 + 개발용 기본 페이지:
-      // ApolloServerPluginLandingPageLocalDefault()
-  
-      // 2) 프로덕션 환경에서도 뜨도록
       ApolloServerPluginLandingPageProductionDefault({
-        // 기본 안내 문구 또는 studio 링크 등 커스터마이징 가능
+        embed: true, // 스튜디오 창을 강제 활성화
         footer: false
       })
     ],
@@ -71,6 +67,7 @@ async function startServer() {
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
+    console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
   });
 }
 
