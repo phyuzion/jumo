@@ -5,38 +5,41 @@ const User = require('../models/User');
 const Customer = require('../models/Customer');
 const CallLog = require('../models/CallLog');
 
-// 어드민 권한 체크 함수
+// [어드민 체크] - JWT Bearer
 function checkAdmin(context) {
   if (!context.isAdmin) {
     throw new Error('Admin privileges required');
   }
 }
 
+// [유저 체크] - userId + phone
+async function checkUserAuth(userId, phone) {
+  const user = await User.findOne({ userId, phone });
+  if (!user) {
+    throw new Error('User auth failed (invalid userId/phone)');
+  }
+  if (user.validUntil && user.validUntil < new Date()) {
+    throw new Error('User expired');
+  }
+  return user;
+}
+
 const resolvers = {
-  // ===================
-  //       Query
-  // ===================
+  // ==================================================
+  //                    Query
+  // ==================================================
   Query: {
-    // [어드민 전용] 단일 유저 조회 (phone)
+    // -------------------------
+    // [어드민 전용]
+    // -------------------------
     getUserByPhone: async (_, { phone }, context) => {
       checkAdmin(context);
-      
-      // 부분 검색(Regex): phone이 포함된 모든 유저
-      return User.find({
-        phone: { $regex: phone, $options: 'i' },
-      });
+      return User.find({ phone: { $regex: phone, $options: 'i' } });
     },
-
-    // [어드민 전용] 유저 조회 (이름)
     getUserByName: async (_, { name }, context) => {
       checkAdmin(context);
-      
-      return User.find({
-        name: { $regex: name, $options: 'i' },
-      });
+      return User.find({ name: { $regex: name, $options: 'i' } });
     },
-
-    // [어드민 전용] 유저 목록
     getUsers: async (_, { phone, name }, context) => {
       checkAdmin(context);
       const filter = {};
@@ -45,37 +48,21 @@ const resolvers = {
       return User.find(filter);
     },
 
-    // [유저/공개] 고객 조회 (전화번호)
-    getCustomerByPhone: async (_, { phone }) => {
-      // 필요하면 user 인증 검증
+    // -------------------------
+    // [유저 전용] => (userId, phone) 인증
+    // -------------------------
+    getCustomerByPhone: async (_, { userId, phone, searchPhone }) => {
+      // 유저 인증
+      await checkUserAuth(userId, phone);
 
-      // phone에 부분일치
+      // DB에서 고객들 검색 (부분검색 or 정확히 일치?)
       const customers = await Customer.find({
-        phone: { $regex: phone, $options: 'i' },
-      });
-      
-      // 각 고객마다 callLogs를 조회해 CustomerResult로 묶어서 반환
-      const results = [];
-      for (const c of customers) {
-        const logs = await CallLog.find({ customerId: c._id }).populate('userId');
-        results.push({
-          customer: c,
-          callLogs: logs,
-        });
-      }
-
-      return results;
-    },
-
-    // [유저/공개] 고객 조회 (이름)
-    getCustomerByName: async (_, { name }) => {
-      // 부분 검색
-      const customers = await Customer.find({
-        name: { $regex: name, $options: 'i' },
+        phone: { $regex: searchPhone, $options: 'i' },
       });
 
       const results = [];
       for (const c of customers) {
+        // 이 고객과 연관된 callLogs
         const logs = await CallLog.find({ customerId: c._id }).populate('userId');
         results.push({
           customer: c,
@@ -85,44 +72,47 @@ const resolvers = {
       return results;
     },
 
-    // 전체 콜로그 개수
-    getTotalCallLogs: async (_, { customerId }) => {
-      // ex) countDocuments
-      const count = await CallLog.countDocuments({ customerId });
-      return count;
-    },
+    getCallLogByID: async (_, { userId, phone, logId }) => {
+      const user = await checkUserAuth(userId, phone);
 
-    // 최신 limit개의 콜로그
-    getCallLogs: async (_, { customerId, limit }) => {
-      const queryLimit = limit || 10; // 디폴트 10
-      const logs = await CallLog.find({ customerId })
-        .populate('userId')
-        .populate('customerId')
-        .sort({ timestamp: -1 }) // 최신순
-        .limit(queryLimit);
-      return logs;
-    },
-
-    getCallLogByID: async (_, { logId }) => {
       const log = await CallLog.findById(logId)
-        .populate('userId')      // 유저 정보도 같이
-        .populate('customerId'); // 고객 정보도 같이
-    
-      if (!log) {
-        throw new Error('CallLog not found');
+        .populate('userId')
+        .populate('customerId');
+      if (!log) throw new Error('CallLog not found');
+
+      // 작성자가 내 user._id랑 같은지?
+      if (log.userId && log.userId._id.toString() !== user._id.toString()) {
+        throw new Error('Not your callLog');
       }
       return log;
     },
-    
+
+    // 통합 콜로그 목록 (start~end)
+    getCallLogs: async (_, { userId, phone, start, end }) => {
+      const user = await checkUserAuth(userId, phone);
+
+      const skip = start - 1;
+      const limit = end - start + 1;
+
+      const logs = await CallLog.find({ userId: user._id })
+        .populate('customerId')
+        .populate('userId')
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit);
+
+      return logs;
+    },
   },
 
-  // ===================
-  //     Mutation
-  // ===================
+  // ==================================================
+  //                  Mutation
+  // ==================================================
   Mutation: {
-    // (A) 어드민 생성
+    // -------------------------
+    // [어드민 전용]
+    // -------------------------
     createAdmin: async (_, { adminId, password }) => {
-      // 여기서는 슈퍼 어드민 체크 생략
       const exist = await Admin.findOne({ adminId });
       if (exist) {
         throw new Error('Admin already exists');
@@ -132,7 +122,6 @@ const resolvers = {
       return newAdmin;
     },
 
-    // (B) 어드민 로그인
     adminLogin: async (_, { adminId, password }) => {
       const admin = await Admin.findOne({ adminId });
       if (!admin) {
@@ -142,26 +131,28 @@ const resolvers = {
       if (!match) {
         throw new Error('Invalid password');
       }
+      // JWT 발급
       const token = jwt.sign({ adminId: admin.adminId }, process.env.JWT_SECRET, {
-        expiresIn: '1h'
+        expiresIn: '1h',
       });
-      return {
-        token,
-        adminId: admin.adminId,
-      };
+      return { token, adminId: admin.adminId };
     },
 
-    // (C) 유저 생성 [어드민]
     createUser: async (_, { phone, name, memo, validUntil }, context) => {
       checkAdmin(context);
 
-      // 6글자 ID 자동
+      // 6글자 userId 자동
       const userId = Math.random().toString(36).substring(2, 8).toUpperCase();
-      const newUser = await User.create({ userId, phone, name, memo, validUntil });
+      const newUser = await User.create({
+        userId,
+        phone,
+        name,
+        memo,
+        validUntil
+      });
       return newUser;
     },
 
-    // (D) 유저 수정 [어드민]
     updateUser: async (_, { userId, phone, name, memo, validUntil }, context) => {
       checkAdmin(context);
 
@@ -176,7 +167,9 @@ const resolvers = {
       return updated;
     },
 
-    // (E) 클라이언트 로그인
+    // -------------------------
+    // [유저 전용]
+    // -------------------------
     clientLogin: async (_, { userId, phone }) => {
       const user = await User.findOne({ userId, phone });
       if (!user) return false;
@@ -184,19 +177,18 @@ const resolvers = {
       return true;
     },
 
-    // (F) 콜로그 생성
     createCallLog: async (_, { userId, phone, customerPhone, score, memo }) => {
-      // 유저 검증
+      // 유저 인증
       const user = await User.findOne({ userId, phone });
       if (!user) {
         throw new Error('Invalid user or expired');
       }
-      // 고객 찾기 or 생성
+
+      // 고객 찾거나 생성
       let customer = await Customer.findOne({ phone: customerPhone });
       if (!customer) {
         customer = await Customer.create({
           phone: customerPhone,
-          name: 'None',
           totalCalls: 0,
           averageScore: 0
         });
@@ -209,6 +201,7 @@ const resolvers = {
         score: score || 0,
         memo: memo || 'None',
       });
+
       // 고객 평균점수 갱신
       const newTotal = customer.totalCalls + 1;
       const newAvg = ((customer.averageScore * customer.totalCalls) + (score || 0)) / newTotal;
@@ -222,9 +215,8 @@ const resolvers = {
       };
     },
 
-    // (G) 콜로그 수정
     updateCallLog: async (_, { logId, userId, phone, score, memo }) => {
-      // 유저 검증
+      // 유저 인증
       const user = await User.findOne({ userId, phone });
       if (!user) {
         throw new Error('Invalid user or expired');
@@ -233,13 +225,19 @@ const resolvers = {
       if (!callLog) {
         throw new Error('CallLog not found');
       }
-      // (작성자만 수정 가능하게 하려면 검증 로직 추가)
+
+      // 작성자가 내 user._id인지 확인
+      if (callLog.userId.toString() !== user._id.toString()) {
+        throw new Error('Not your callLog');
+      }
+
+      // 업데이트
       const oldScore = callLog.score;
       if (score !== undefined) callLog.score = score;
       if (memo !== undefined) callLog.memo = memo;
       await callLog.save();
 
-      // score 변경 → 평균점수 재계산
+      // 점수 변경 시 평균 재계산
       if (score !== undefined && score !== oldScore) {
         const customer = await Customer.findById(callLog.customerId);
         if (customer) {
@@ -255,14 +253,10 @@ const resolvers = {
     },
   },
 
-  // (선택) CallLog 필드 자동 Resolvers
+  // CallLog 필드 리졸버
   CallLog: {
-    customerId: async (parent) => {
-      return Customer.findById(parent.customerId);
-    },
-    userId: async (parent) => {
-      return User.findById(parent.userId);
-    },
+    customerId: async (parent) => Customer.findById(parent.customerId),
+    userId: async (parent) => User.findById(parent.userId),
   },
 };
 

@@ -1,3 +1,4 @@
+// typeDefs.js
 const { gql } = require('apollo-server-express');
 
 const typeDefs = gql`
@@ -20,8 +21,8 @@ const typeDefs = gql`
   # ----------------------
   type User {
     _id: ID!
-    userId: String!
-    phone: String!
+    userId: String!      # 6글자 자동
+    phone: String!       # 고유
     name: String
     memo: String
     validUntil: String
@@ -34,10 +35,8 @@ const typeDefs = gql`
   type Customer {
     _id: ID!
     phone: String!
-    name: String
     totalCalls: Int
     averageScore: Float
-    createdAt: String
   }
 
   # ----------------------
@@ -52,11 +51,13 @@ const typeDefs = gql`
     memo: String
   }
 
+  # 콜로그 생성 시 반환
   type CallLogCreationResult {
     callLog: CallLog
     customer: Customer
   }
 
+  # 고객 + 콜로그 묶음
   type CustomerResult {
     customer: Customer
     callLogs: [CallLog]
@@ -66,44 +67,63 @@ const typeDefs = gql`
   #         Query
   # ============================
   type Query {
-    # [어드민 전용] 유저 정보 개별 조회
-    getUserByPhone(phone: String!): User
+    # [어드민 전용] ----------------------------------
+    getUserByPhone(phone: String!): [User]
     getUserByName(name: String!): [User]
-
-    # [어드민 전용] 유저 목록 (기존 getUsers 대체 or 보완)
     getUsers(phone: String, name: String): [User]
 
-    # [공개 or 유저용] 고객 조회 (전화번호)
-    getCustomerByPhone(phone: String!): [CustomerResult]
+    # [유저 전용] => (userId, phone) 인증
+    getCustomerByPhone(
+      userId: String!,
+      phone: String!,
+      searchPhone: String!
+    ): [CustomerResult]
 
-    # [공개 or 유저용] 고객 조회 (이름)
-    getCustomerByName(name: String!): [CustomerResult]
+    getCallLogByID(
+      userId: String!,
+      phone: String!,
+      logId: ID!
+    ): CallLog
 
-    # CallLogs 관련 (공개/유저/어드민 공용으로 쓸 수도 있음)
-    getTotalCallLogs(customerId: ID!): Int
-    getCallLogs(customerId: ID!, limit: Int): [CallLog]
-    getCallLogByID(logId: ID!): CallLog
+    # 콜로그 조회 (start, end) - 통합
+    getCallLogs(
+      userId: String!,
+      phone: String!,
+      start: Int!,
+      end: Int!
+    ): [CallLog]
   }
 
   # ============================
   #       Mutation
   # ============================
   type Mutation {
-    # [어드민] Admin 계정 생성
+    # [어드민] ----------------------------------------
     createAdmin(adminId: String!, password: String!): Admin
-    # [어드민] Admin 로그인
     adminLogin(adminId: String!, password: String!): AdminLoginResponse
 
     # [어드민] 유저 생성 / 수정
     createUser(phone: String!, name: String, memo: String, validUntil: String): User
     updateUser(userId: String!, phone: String, name: String, memo: String, validUntil: String): User
 
-    # [클라이언트/유저] 로그인
+    # [클라이언트/유저] --------------------------------
     clientLogin(userId: String!, phone: String!): Boolean
 
-    # [클라이언트/유저] 콜로그 생성 / 수정
-    createCallLog(userId: String!, phone: String!, customerPhone: String!, score: Int, memo: String): CallLogCreationResult
-    updateCallLog(logId: ID!, userId: String!, phone: String!, score: Int, memo: String): CallLog
+    createCallLog(
+      userId: String!,
+      phone: String!,
+      customerPhone: String!,
+      score: Int,
+      memo: String
+    ): CallLogCreationResult
+
+    updateCallLog(
+      logId: ID!,
+      userId: String!,
+      phone: String!,
+      score: Int,
+      memo: String
+    ): CallLog
   }
 `;
 
