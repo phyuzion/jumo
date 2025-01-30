@@ -1,9 +1,7 @@
 // RoutesConfig.js
-
-import { Summary, CallLogs, } from './pages';
+import { Summary, CallLogs } from './pages';
 import { FiShoppingBag } from 'react-icons/fi';
 import { AiOutlineCalendar } from 'react-icons/ai';
-
 
 export const routes = [
   {
