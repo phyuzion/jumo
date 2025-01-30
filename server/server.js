@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { ApolloServer } = require('apollo-server-express');
+
+
 const jwt = require('jsonwebtoken');
 
 const connectDB = require('./config/db');
@@ -22,6 +24,7 @@ async function startServer() {
   const server = new ApolloServer({
     typeDefs,
     resolvers,
+    introspection: true,
     context: ({ req }) => {
       // --- 여기가 핵심: "어드민 JWT" 인증 체크 ---
       // Authorization: Bearer <token>
@@ -54,7 +57,6 @@ async function startServer() {
   const PORT = process.env.PORT || 4000;
   app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
-    console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
   });
 }
 
