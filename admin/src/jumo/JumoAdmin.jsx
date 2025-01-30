@@ -6,9 +6,6 @@ import { routes } from './RoutesConfig.js';
 import { ContextProvider, useStateContext } from './contexts/ContextProvider.js';
 import './JumoAdmin.css';
 
-import Summary from './pages/Summary.jsx';
-import CallLogs from './pages/CallLogs.jsx';
-// 필요시 import Login from './pages/Login.jsx'; // (지금은 App.js에서 분리했으니 X)
 
 const JumoAdminContent = () => {
   const { activeMenu } = useStateContext();
