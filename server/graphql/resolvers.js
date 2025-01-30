@@ -48,6 +48,52 @@ const resolvers = {
       return User.find(filter);
     },
 
+
+    // --- 새로 추가: getUserList / getCallLogs / getCustomers
+    getUserList: async (_, { start, end }, context) => {
+      checkAdmin(context);
+      const skip = start - 1;
+      const limit = end - start + 1;
+
+      // 정렬 기준: _id 오름차순 (원하는 대로 바꿀 수 있음)
+      const users = await User.find({})
+        .sort({ _id: 1 })
+        .skip(skip)
+        .limit(limit);
+
+      return users;
+    },
+
+    getCallLogs: async (_, { start, end }, context) => {
+      checkAdmin(context);
+      const skip = start - 1;
+      const limit = end - start + 1;
+
+      // 전체 콜로그, timestamp 역순
+      const logs = await CallLog.find({})
+        .populate('customerId')
+        .populate('userId')
+        .sort({ timestamp: -1 })
+        .skip(skip)
+        .limit(limit);
+
+      return logs;
+    },
+
+    getCustomers: async (_, { start, end }, context) => {
+      checkAdmin(context);
+      const skip = start - 1;
+      const limit = end - start + 1;
+
+      // 정렬 기준: phone 오름차순 (필요에 따라 변경)
+      const customers = await Customer.find({})
+        .sort({ phone: 1 })
+        .skip(skip)
+        .limit(limit);
+
+      return customers;
+    },
+
     // -------------------------
     // [유저 전용] => (userId, phone) 인증
     // -------------------------
@@ -88,7 +134,7 @@ const resolvers = {
     },
 
     // 통합 콜로그 목록 (start~end)
-    getCallLogs: async (_, { userId, phone, start, end }) => {
+    getCallLogsForUser: async (_, { userId, phone, start, end }) => {
       const user = await checkUserAuth(userId, phone);
 
       const skip = start - 1;

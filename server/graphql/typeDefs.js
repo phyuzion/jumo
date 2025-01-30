@@ -72,6 +72,13 @@ const typeDefs = gql`
     getUserByName(name: String!): [User]
     getUsers(phone: String, name: String): [User]
 
+
+    # 새로 추가 (어드민 리스트 조회)
+    getUserList(start: Int!, end: Int!): [User]
+    getCallLogs(start: Int!, end: Int!): [CallLog]
+    getCustomers(start: Int!, end: Int!): [Customer]
+
+
     # [유저 전용] => (userId, phone) 인증
     getCustomerByPhone(
       userId: String!,
@@ -85,8 +92,8 @@ const typeDefs = gql`
       logId: ID!
     ): CallLog
 
-    # 콜로그 조회 (start, end) - 통합
-    getCallLogs(
+    # 유저 콜로그 조회 (start, end) - 통합
+    getCallLogsForUser(
       userId: String!,
       phone: String!,
       start: Int!,
