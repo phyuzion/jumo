@@ -9,6 +9,18 @@ export const ADMIN_LOGIN = gql`
   }
 `;
 
+
+export const GET_SUMMARY = gql`
+  query {
+    getSummary {
+      callLogsCount
+      usersCount
+      customersCount
+    }
+  }
+`;
+
+
 export const GET_USER_LIST = gql`
     query getUserList($start: Int!, $end: Int!) {
         getUserList(start: $start, end: $end) {
@@ -52,4 +64,6 @@ export const GET_CUSTOMERS = gql`
         }
     }
 `;
+
+
 

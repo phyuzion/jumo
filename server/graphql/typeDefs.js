@@ -63,6 +63,12 @@ const typeDefs = gql`
     callLogs: [CallLog]
   }
 
+  type SummaryResult {
+    callLogsCount: Int
+    usersCount: Int
+    customersCount: Int
+  }
+
   # ============================
   #         Query
   # ============================
@@ -99,6 +105,8 @@ const typeDefs = gql`
       start: Int!,
       end: Int!
     ): [CallLog]
+
+    getSummary: SummaryResult
   }
 
   # ============================

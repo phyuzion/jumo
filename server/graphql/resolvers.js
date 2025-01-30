@@ -149,6 +149,21 @@ const resolvers = {
 
       return logs;
     },
+
+    getSummary: async (_, __, context) => {
+      checkAdmin(context); // 어드민 권한 체크
+
+      // 1) 각 모델의 countDocuments (또는 estimatedDocumentCount)
+      const callLogsCount = await CallLog.countDocuments({});
+      const usersCount = await User.countDocuments({});
+      const customersCount = await Customer.countDocuments({});
+
+      return {
+        callLogsCount,
+        usersCount,
+        customersCount
+      };
+    },
   },
 
   // ==================================================
