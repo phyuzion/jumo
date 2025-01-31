@@ -149,6 +149,30 @@ const resolvers = {
 
       return logs;
     },
+    
+    getCallLogByPhone: async (_, { customerPhone, userId, userPhone }, context) => {
+      // 1) 인증
+      if (context.isAdmin) {
+        // 어드민이면 통과
+      } else {
+        // 유저라면 userId + userPhone 체크
+        await checkUserAuth(userId, userPhone);
+      }
+
+      // 2) 고객 찾기 (phone=customerPhone)
+      const customer = await Customer.findOne({ phone: customerPhone });
+      if (!customer) {
+        // 고객이 없다면 빈 배열
+        return [];
+      }
+
+      // 3) 해당 customerId의 콜로그 찾기
+      const logs = await CallLog.find({ customerId: customer._id })
+        .populate('userId')
+        .populate('customerId')
+        .sort({ timestamp: -1 });
+      return logs;
+    },
 
     getSummary: async (_, __, context) => {
       checkAdmin(context); // 어드민 권한 체크

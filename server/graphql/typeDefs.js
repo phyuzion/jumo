@@ -76,6 +76,7 @@ const typeDefs = gql`
     # [어드민 전용] ----------------------------------
     getUserByPhone(phone: String!): [User]
     getUserByName(name: String!): [User]
+
     getUsers(phone: String, name: String): [User]
 
 
@@ -97,6 +98,12 @@ const typeDefs = gql`
       phone: String!,
       logId: ID!
     ): CallLog
+
+    getCallLogByPhone(
+      customerPhone: String!,
+      userId: String,
+      userPhone: String
+    ): [CallLog]
 
     # 유저 콜로그 조회 (start, end) - 통합
     getCallLogsForUser(
