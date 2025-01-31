@@ -34,6 +34,34 @@ export const GET_USER_LIST = gql`
     }
 `;
 
+
+export const GET_USER_BY_PHONE = gql`
+  query getUserByPhone($phone: String!) {
+    getUserByPhone(phone: $phone) {
+      _id
+      userId
+      name
+      phone
+      memo
+      validUntil
+    }
+  }
+`;
+
+export const GET_USER_BY_NAME = gql`
+  query getUserByName($name: String!) {
+    getUserByName(name: $name) {
+      _id
+      userId
+      name
+      phone
+      memo
+      validUntil
+    }
+  }
+`;
+
+
 // 어드민 전용 callLogs 조회
 export const GET_CALL_LOGS = gql`
     query GetCallLogs($start: Int!, $end: Int!) {
