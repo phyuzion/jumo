@@ -32,7 +32,7 @@ const Users = () => {
     try {
       const parsed = JSON.parse(summaryDataStr);
       // parsed = { callLogsCount, usersCount, customersCount }
-      if (parsed?.callLogsCount) {
+      if (parsed?.usersCount) {
         totalCount = parseInt(parsed.usersCount, 10) || 200;
       }
     } catch (err) {

@@ -114,5 +114,28 @@ export const GET_CUSTOMERS = gql`
     }
 `;
 
+export const GET_CUSTOMER_BY_PHONE = gql`
+  query getCustomerByPhone($searchPhone: String!, $userId: String, $phone: String) {
+    getCustomerByPhone(userId: $userId, phone: $phone, searchPhone: $searchPhone) {
+      customer {
+        _id
+        phone
+        averageScore
+        totalCalls
+      }
+      callLogs {
+        _id
+        score
+        memo
+        timestamp
+        userId {
+          userId
+          phone
+        }
+      }
+    }
+  }
+`;
+
 
 
