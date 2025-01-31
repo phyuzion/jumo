@@ -86,10 +86,9 @@ const typeDefs = gql`
     getCustomers(start: Int!, end: Int!): [Customer]
 
 
-    # [유저 전용] => (userId, phone) 인증
     getCustomerByPhone(
-      userId: String!,
-      phone: String!,
+      userId: String,
+      phone: String,
       searchPhone: String!
     ): [CustomerResult]
 

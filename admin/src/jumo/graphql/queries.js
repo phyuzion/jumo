@@ -82,6 +82,27 @@ export const GET_CALL_LOGS = gql`
     }
 `;
 
+// queries.js
+export const GET_CALL_LOGS_BY_PHONE = gql`
+  query getCallLogByPhone($customerPhone: String!, $userId: String, $userPhone: String) {
+    getCallLogByPhone(customerPhone: $customerPhone, userId: $userId, userPhone: $userPhone) {
+      _id
+      timestamp
+      userId {
+        name
+        phone
+      }
+      customerId {
+        phone
+        averageScore
+      }
+      memo
+      score
+    }
+  }
+`;
+
+
 export const GET_CUSTOMERS = gql`
     query GetCustomers($start: Int!, $end: Int!) {
         getCustomers(start: $start, end: $end) {

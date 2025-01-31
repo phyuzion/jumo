@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { useQuery } from "@apollo/client";
+import React, { useState, useEffect, useRef } from "react";
+import { useQuery, useLazyQuery } from "@apollo/client";
 import {
   GridComponent,
   ColumnsDirective,
@@ -15,45 +15,77 @@ import {
   Toolbar,
 } from "@syncfusion/ej2-react-grids";
 
-import { GET_CALL_LOGS } from "../graphql/queries";
+import { GET_CALL_LOGS, GET_CALL_LOGS_BY_PHONE } from "../graphql/queries";
 import { Header } from "../components";
 
-const PAGE_SIZE = 20; // 한 페이지당 표시할 로우 수
-
-// 임시로 총개수를 200 으로 잡지만, 필요하면 서버에 getCallLogsCount 쿼리로 real값 가능
-const TOTAL_COUNT = 200; 
+const PAGE_SIZE = 20;
 
 const CallLogs = () => {
+  const gridRef = useRef(null);
 
-  // 1) Apollo useQuery(기본 1페이지: 1~20)
+  // 1) summaryData 로컬 스토리지에서 읽기
+  const summaryDataStr = localStorage.getItem('summaryData');
+  let totalCount = 200; // 디폴트
+  if (summaryDataStr) {
+    try {
+      const parsed = JSON.parse(summaryDataStr);
+      // parsed = { callLogsCount, usersCount, customersCount }
+      if (parsed?.callLogsCount) {
+        totalCount = parseInt(parsed.callLogsCount, 10) || 200;
+      }
+    } catch (err) {
+      // parse 실패 시 그냥 200 유지
+    }
+  }
+
+  // Main list (admin callLogs)
   const { loading, error, data, refetch } = useQuery(GET_CALL_LOGS, {
     variables: { start: 1, end: PAGE_SIZE },
     fetchPolicy: 'network-only',
   });
 
-  // 2) 콜로그 배열 (state)
-  const [logs, setLogs] = useState([]);
+  // lazy query for searching by phone
+  const [getLogsByPhoneLazy, { data: phoneData }] = useLazyQuery(GET_CALL_LOGS_BY_PHONE, {
+    fetchPolicy: 'network-only',
+  });
 
-  // 3) 서버 응답이 바뀔 때 logs 업데이트 + 로컬 스토리지 저장
+  const [logs, setLogs] = useState([]);
+  const [searchValue, setSearchValue] = useState('');
+
+  // on data
   useEffect(() => {
-    if (data && data.getCallLogs) {
+    if (data?.getCallLogs) {
       setLogs(data.getCallLogs);
       localStorage.setItem('callLogs', JSON.stringify(data.getCallLogs));
     }
   }, [data]);
 
-  // 4) Syncfusion 페이지네이션 이벤트
+  // on phoneData
+  useEffect(() => {
+    if (phoneData?.getCallLogByPhone) {
+      setLogs(phoneData.getCallLogByPhone);
+      localStorage.setItem('callLogs', JSON.stringify(phoneData.getCallLogByPhone));
+    }
+  }, [phoneData]);
+
+  // force grid refresh if logs changes
+  useEffect(() => {
+    if (gridRef.current) {
+      gridRef.current.dataSource = logs;
+      gridRef.current.refresh();
+    }
+  }, [logs]);
+
+  // paging
   const handleActionBegin = async (args) => {
     if (args.requestType === 'paging') {
+      args.cancel = true;
       const currentPage = args.currentPage;
       const start = (currentPage - 1) * PAGE_SIZE + 1;
       const end   = currentPage * PAGE_SIZE;
-
-      args.cancel = true; // 클라이언트 페이징 중단
-
       try {
         const res = await refetch({ start, end });
-        if (res.data && res.data.getCallLogs) {
+        if (res.data?.getCallLogs) {
           setLogs(res.data.getCallLogs);
           localStorage.setItem('callLogs', JSON.stringify(res.data.getCallLogs));
         }
@@ -63,30 +95,92 @@ const CallLogs = () => {
     }
   };
 
+  // search
+  const handleSearch = async () => {
+    if (!searchValue) {
+      // empty => refetch main
+      refetch({ start:1, end: PAGE_SIZE });
+      return;
+    }
+    try {
+      // if admin: no userId, userPhone needed
+      // if user: pass userId, userPhone
+      await getLogsByPhoneLazy({
+        variables: {
+          customerPhone: searchValue,
+          // userId: 'U123', userPhone: '010-xxx' if user
+        }
+      });
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // format timestamp => "YYYY-MM-DD HH:mm:ss"
+  const timestampAccessor = (field, data) => {
+    if (!data.timestamp) return '';
+    const ms = parseInt(data.timestamp); // if stored as millisecond number
+    const d = new Date(ms);
+    if (isNaN(d.getTime())) return data.timestamp;
+
+    // e.g. "YYYY-MM-DD HH:mm:ss"
+    const year = d.getFullYear();
+    const month = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    const hours = String(d.getHours()).padStart(2,'0');
+    const mins = String(d.getMinutes()).padStart(2,'0');
+    const secs = String(d.getSeconds()).padStart(2,'0');
+    return `${year}-${month}-${day} ${hours}:${mins}:${secs}`;
+  };
+
   return (
     <div className="m-2 md:m-10 p-2 md:p-10 bg-white rounded-3xl shadow-2xl">
       <Header category="Page" title="수신내역 (서버 페이징)" />
+
+      <div className="flex gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="고객 전화번호 검색"
+          value={searchValue}
+          onChange={(e) => setSearchValue(e.target.value)}
+          className="border p-1 rounded"
+        />
+        <button
+          className="bg-gray-500 text-white px-4 py-2 rounded"
+          onClick={handleSearch}
+        >
+          검색
+        </button>
+      </div>
 
       {loading && <p>Loading call logs...</p>}
       {error && <p className="text-red-500">Error: {error.message}</p>}
 
       {!loading && !error && (
         <GridComponent
+          ref={gridRef}
           id="gridComp"
           dataSource={logs}
           allowPaging={true}
           allowSorting={true}
-          toolbar={['Search']}
           pageSettings={{
             pageSize: PAGE_SIZE,
-            totalRecordsCount: TOTAL_COUNT,
+            totalRecordsCount: totalCount,
             pageCount: 5,
           }}
           actionBegin={handleActionBegin}
         >
           <ColumnsDirective>
             <ColumnDirective field="_id" headerText="LogID" width="80" textAlign="Center" />
-            <ColumnDirective field="timestamp" headerText="Timestamp" width="150" textAlign="Center" />
+            
+            <ColumnDirective 
+              field="timestamp" 
+              headerText="Timestamp" 
+              width="150" 
+              textAlign="Center"
+              valueAccessor={timestampAccessor}
+            />
+            
             <ColumnDirective field="userId.name" headerText="User Name" width="100" textAlign="Center" />
             <ColumnDirective field="userId.phone" headerText="User Phone" width="120" textAlign="Center" />
             <ColumnDirective field="customerId.phone" headerText="Customer" width="110" textAlign="Center" />

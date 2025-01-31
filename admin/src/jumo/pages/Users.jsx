@@ -20,10 +20,26 @@ import { CREATE_USER, UPDATE_USER } from "../graphql/mutations";
 import { Header } from "../components";
 
 const PAGE_SIZE = 10; 
-const TOTAL_COUNT = 200; 
 
 const Users = () => {
   const gridRef = useRef(null);
+
+
+  // 1) summaryData 로컬 스토리지에서 읽기
+  const summaryDataStr = localStorage.getItem('summaryData');
+  let totalCount = 200; // 디폴트
+  if (summaryDataStr) {
+    try {
+      const parsed = JSON.parse(summaryDataStr);
+      // parsed = { callLogsCount, usersCount, customersCount }
+      if (parsed?.callLogsCount) {
+        totalCount = parseInt(parsed.usersCount, 10) || 200;
+      }
+    } catch (err) {
+      // parse 실패 시 그냥 200 유지
+    }
+  }
+
 
   // ----------------- GRAPHQL: List Query -----------------
   const { loading, error, data, refetch } = useQuery(GET_USER_LIST, {
@@ -291,7 +307,7 @@ const Users = () => {
           allowSorting={true}
           pageSettings={{
             pageSize: PAGE_SIZE,
-            totalRecordsCount: TOTAL_COUNT,
+            totalRecordsCount: totalCount,
             pageCount: 5,
           }}
           actionBegin={handleActionBegin}

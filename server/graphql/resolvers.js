@@ -95,11 +95,14 @@ const resolvers = {
     },
 
     // -------------------------
-    // [유저 전용] => (userId, phone) 인증
-    // -------------------------
     getCustomerByPhone: async (_, { userId, phone, searchPhone }) => {
-      // 유저 인증
-      await checkUserAuth(userId, phone);
+      // 1) 인증
+      if (context.isAdmin) {
+        // pass
+      } else {
+        await checkUserAuth(userId, phone);
+      }
+
 
       // DB에서 고객들 검색 (부분검색 or 정확히 일치?)
       const customers = await Customer.find({
