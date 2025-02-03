@@ -1,5 +1,3 @@
-import 'package:graphql_flutter/graphql_flutter.dart';
-
 final String GET_CALL_LOGS_FOR_USER = r'''
 query getCallLogsForUser($userId: String!, $phone: String!, $start: Int!, $end: Int!) {
   getCallLogsForUser(userId: $userId, phone: $phone, start: $start, end: $end) {

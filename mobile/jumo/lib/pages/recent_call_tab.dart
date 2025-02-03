@@ -5,7 +5,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'edit_call_dialog.dart';
 
 class RecentCallTab extends StatefulWidget {
-  const RecentCallTab({Key? key}) : super(key: key);
+  const RecentCallTab({super.key});
 
   @override
   _RecentCallTabState createState() => _RecentCallTabState();

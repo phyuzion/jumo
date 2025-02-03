@@ -88,20 +88,42 @@ class _OverlayView extends State<OverlayView> {
     return Center(
       child: Container(
         padding: EdgeInsets.all(sideValue * 2),
-        width: _overlaySize.toDouble(),
-        height: _overlaySize.toDouble() * 1.8,
+        width: _overlaySize.toDouble() * 4,
+        height: _overlaySize.toDouble() * 3,
         color: Colors.transparent,
         child: Card(
-          color: Colors.black.withOpacity(0.1),
+          color: Colors.white.withOpacity(0.1),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: sideValue),
-                  child: Text('test'),
+                  child: Text(
+                    '01089236835',
+                    style: TextStyle(fontSize: 12, color: Colors.white),
+                  ),
                 ),
               ),
+              Flexible(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: sideValue),
+                  child: Text(
+                    '별점 : 3 , 토탈콜 : 12',
+                    style: TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                ),
+              ),
+              Flexible(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: sideValue),
+                  child: Text(
+                    'test',
+                    style: TextStyle(fontSize: 12, color: Colors.white),
+                  ),
+                ),
+              ),
+              /*
               Flexible(
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: sideValue),
@@ -124,6 +146,7 @@ class _OverlayView extends State<OverlayView> {
                   ),
                 ),
               ),
+              */
             ],
           ),
         ),

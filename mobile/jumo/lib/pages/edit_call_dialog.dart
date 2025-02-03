@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -10,8 +12,7 @@ class EditCallDialog extends StatefulWidget {
   final Map<String, dynamic> callLog;
   final bool isNew; // true: 신규 저장, false: 기존 콜로그 수정
 
-  const EditCallDialog({Key? key, required this.callLog, required this.isNew})
-    : super(key: key);
+  const EditCallDialog({super.key, required this.callLog, required this.isNew});
 
   @override
   State<EditCallDialog> createState() => _EditCallDialogState();
@@ -26,6 +27,8 @@ class _EditCallDialogState extends State<EditCallDialog> {
   void initState() {
     super.initState();
     // 신규 저장일 경우, 초기 메모와 별점은 빈 값으로 설정
+
+    log('$log');
     _memoController = TextEditingController(
       text: widget.isNew ? "" : widget.callLog["memo"] ?? "",
     );

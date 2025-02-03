@@ -37,6 +37,8 @@ class _ControllerState extends State<Controller>
   late LatestPage _latestPage;
   late SearchPage _searchPage;
 
+  bool _isShowing = false;
+
   @override
   void initState() {
     super.initState();
@@ -87,7 +89,7 @@ class _ControllerState extends State<Controller>
       alignment: OverlayAlignment.center,
       visibility: NotificationVisibility.visibilityPublic,
       positionGravity: PositionGravity.none,
-      width: _overlaySize * 3,
+      width: _overlaySize * 12,
       height: _overlaySize * 6,
     );
   }
@@ -149,6 +151,17 @@ class _ControllerState extends State<Controller>
     }
   }
 
+  void _togglePlayback() {
+    setState(() {
+      if (_isShowing) {
+        FlutterOverlayWindow.closeOverlay();
+      } else {
+        showOverlay();
+      }
+      _isShowing = !_isShowing;
+    });
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
@@ -177,6 +190,14 @@ class _ControllerState extends State<Controller>
                   physics: const NeverScrollableScrollPhysics(),
                   controller: _tabController,
                   children: [_latestPage, _searchPage, _accountPage],
+                ),
+                floatingActionButton: FloatingActionButton(
+                  onPressed: _togglePlayback,
+                  backgroundColor: Colors.blue, // 버튼 색상
+                  child: Icon(
+                    _isShowing ? Icons.stop : Icons.play_arrow, // 재생/정지 토글
+                    color: Colors.white,
+                  ),
                 ),
               )
               : Center(

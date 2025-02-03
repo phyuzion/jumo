@@ -7,7 +7,7 @@ import '../graphql/queries.dart';
 import '../util/constants.dart';
 
 class MyRecordTab extends StatefulWidget {
-  const MyRecordTab({Key? key}) : super(key: key);
+  const MyRecordTab({super.key});
 
   @override
   State<MyRecordTab> createState() => _MyRecordTabState();
@@ -207,7 +207,15 @@ class _MyRecordTabState extends State<MyRecordTab> {
                 showDialog(
                   context: context,
                   builder:
-                      (context) => EditCallDialog(callLog: log, isNew: false),
+                      (context) => EditCallDialog(
+                        callLog: {
+                          "phone": phone,
+                          "dateTime": dateTime,
+                          "memo": memo,
+                          "rating": rating,
+                        },
+                        isNew: false,
+                      ),
                 );
               },
               child: const Text("수정", textAlign: TextAlign.center),
