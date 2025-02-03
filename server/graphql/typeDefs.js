@@ -69,6 +69,13 @@ const typeDefs = gql`
     customersCount: Int
   }
 
+
+  # 새로 추가: 클라이언트 로그인 응답 타입
+  type ClientLoginResponse {
+    success: Boolean!
+    user: User
+  }
+
   # ============================
   #         Query
   # ============================
@@ -128,7 +135,7 @@ const typeDefs = gql`
     updateUser(userId: String!, phone: String, name: String, memo: String, validUntil: String): User
 
     # [클라이언트/유저] --------------------------------
-    clientLogin(userId: String!, phone: String!): Boolean
+    clientLogin(userId: String!, phone: String!): ClientLoginResponse
 
     createCallLog(
       userId: String!,

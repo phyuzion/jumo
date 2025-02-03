@@ -255,14 +255,13 @@ const resolvers = {
       return updated;
     },
 
-    // -------------------------
-    // [유저 전용]
-    // -------------------------
+    // 기존 clientLogin 수정: now return ClientLoginResponse
     clientLogin: async (_, { userId, phone }) => {
       const user = await User.findOne({ userId, phone });
-      if (!user) return false;
-      if (user.validUntil && user.validUntil < new Date()) return false;
-      return true;
+      if (!user || (user.validUntil && user.validUntil < new Date())) {
+        return { success: false, user: null };
+      }
+      return { success: true, user };
     },
 
     createCallLog: async (_, { userId, phone, customerPhone, score, memo }) => {
