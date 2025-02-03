@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:jumo/pages/latestPage.dart';
+import 'package:jumo/pages/searchPage.dart';
 import 'update_controller.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../pages/account.dart';
@@ -34,6 +35,7 @@ class _ControllerState extends State<Controller>
 
   late AccountPage _accountPage;
   late LatestPage _latestPage;
+  late SearchPage _searchPage;
 
   @override
   void initState() {
@@ -44,6 +46,7 @@ class _ControllerState extends State<Controller>
 
     _accountPage = const AccountPage();
     _latestPage = const LatestPage();
+    _searchPage = const SearchPage();
 
     _checkPermission();
     _initPorts();
@@ -165,7 +168,7 @@ class _ControllerState extends State<Controller>
                     controller: _tabController,
                     tabs: const [
                       Tab(text: LATEST_TAB),
-                      Tab(text: ACCOUNT_TAB),
+                      Tab(text: SEARCH_TAB),
                       Tab(text: ACCOUNT_TAB),
                     ],
                   ),
@@ -173,7 +176,7 @@ class _ControllerState extends State<Controller>
                 body: TabBarView(
                   physics: const NeverScrollableScrollPhysics(),
                   controller: _tabController,
-                  children: [_latestPage, _accountPage, _accountPage],
+                  children: [_latestPage, _searchPage, _accountPage],
                 ),
               )
               : Center(

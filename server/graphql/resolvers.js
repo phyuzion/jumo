@@ -95,7 +95,7 @@ const resolvers = {
     },
 
     // -------------------------
-    getCustomerByPhone: async (_, { userId, phone, searchPhone }) => {
+    getCustomerByPhone: async (_, { userId, phone, searchPhone }, context) => {
       // 1) 인증
       if (context.isAdmin) {
         // pass

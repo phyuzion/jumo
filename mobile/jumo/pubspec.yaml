@@ -25,6 +25,7 @@ dependencies:
   graphql: ^5.2.0-beta.10
   graphql_flutter: ^5.2.0-beta.8
   intl: ^0.20.2
+  call_e_log: ^0.0.4
 
 dev_dependencies:
   flutter_test:

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:get_storage/get_storage.dart';
 import 'package:jumo/pages/latestPage.dart';
+import 'package:jumo/pages/searchPage.dart';
 import 'pages/login.dart';
 
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -49,12 +50,21 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orangeAccent),
         useMaterial3: true,
       ),
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(1.0)), // 텍스트 크기 고정
+          child: child!,
+        );
+      },
       initialRoute: '/login',
       routes: {
         '/login': (context) => const LoginPage(),
         '/main': (context) => const Controller(),
         '/account': (context) => const AccountPage(),
         '/latest': (context) => const LatestPage(),
+        '/search': (context) => const SearchPage(),
       },
     );
   }
