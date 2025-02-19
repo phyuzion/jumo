@@ -155,7 +155,13 @@ module.exports = {
 
       user.password = await bcrypt.hash(newPassword, 10);
       await user.save();
-      return user;
+
+
+      // 커스텀 페이로드로 반환
+      return {
+        success: true,
+        user, // 변경된 유저 정보
+      };
     },
 
     updateUser: async (_, { userId, name, phoneNumber, validUntil, type }, { tokenData }) => {

@@ -18,6 +18,11 @@ module.exports = gql`
     tempPassword: String!
   }
 
+  type ChangePasswordPayload {
+    success: Boolean!
+    user: User
+  }
+
   extend type Query {
     """
     (Admin 전용) 모든 유저 조회
@@ -44,7 +49,7 @@ module.exports = gql`
     """
     유저 비밀번호 변경 (본인)
     """
-    userChangePassword(oldPassword: String!, newPassword: String!): User
+    userChangePassword(oldPassword: String!, newPassword: String!): ChangePasswordPayload
 
     """
     (Admin 전용) 유저 정보 업데이트
