@@ -1,2 +1,8 @@
 .DS_Store
 admin/.DS_Store
+server/.DS_Store
+client/.DS_Store
+mobile/.DS_Store
+// with this snippet from client/.gitignore:
+node_modules
+.DS_Store
