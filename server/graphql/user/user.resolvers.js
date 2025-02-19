@@ -188,7 +188,7 @@ module.exports = {
         throw new UserInputError('유저를 찾을 수 없습니다.');
       }
 
-      const newPass = Math.floor(100000 + Math.random() * 900000).toString();
+      const newPass = generateRandomString(6);
       user.password = await bcrypt.hash(newPass, 10);
       await user.save();
       return newPass;
