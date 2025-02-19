@@ -6,6 +6,7 @@ module.exports = gql`
     userId: ID!
     name: String
     memo: String
+    type: Int
     createdAt: String
   }
 
@@ -16,10 +17,12 @@ module.exports = gql`
     records: [Record!]!
   }
 
-  input RecordInput {
+  # 업서트 입력
+  input PhoneRecordInput {
     phoneNumber: String!
     name: String
     memo: String
+    type: Int
   }
 
   extend type Query {
@@ -28,7 +31,10 @@ module.exports = gql`
   }
 
   extend type Mutation {
-    uploadPhoneRecords(records: [RecordInput!]!): Boolean
-    updatePhoneRecordMemo(phoneNumber: String!, memo: String!): Boolean
+    """
+    여러 번호(레코드) 업서트
+    - 없으면 새로 생성, 있으면 수정
+    """
+    upsertPhoneRecords(records: [PhoneRecordInput!]!): Boolean
   }
 `;

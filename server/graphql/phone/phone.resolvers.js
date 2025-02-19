@@ -4,6 +4,9 @@ const { UserInputError, AuthenticationError, ForbiddenError } = require('apollo-
 const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
 
+/**
+ * 유저 검증 (로그인 + validUntil)
+ */
 async function checkUserValid(tokenData) {
   if (!tokenData?.userId) {
     throw new AuthenticationError('로그인이 필요합니다.');
@@ -35,7 +38,8 @@ module.exports = {
   },
 
   Mutation: {
-    uploadPhoneRecords: async (_, { records }, { tokenData }) => {
+    // 업서트 Mutation
+    upsertPhoneRecords: async (_, { records }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
       if (!records || !Array.isArray(records) || records.length === 0) {
@@ -43,70 +47,56 @@ module.exports = {
       }
 
       for (const record of records) {
-        const { phoneNumber, name, memo } = record;
+        const { phoneNumber, name, memo, type } = record;
+
+        // phoneNumber 필수 체크
         if (!phoneNumber || phoneNumber.trim() === '') {
-          continue;
+          continue; // 혹은 throw new UserInputError('phoneNumber가 없습니다.');
         }
 
+        // 1) PhoneNumber 문서 찾거나 생성
         let phoneDoc = await PhoneNumber.findOne({ phoneNumber });
         if (!phoneDoc) {
-          phoneDoc = new PhoneNumber({ phoneNumber, type: 0, records: [] });
+          phoneDoc = new PhoneNumber({
+            phoneNumber,
+            type: 0, // 기본 값 (위험번호 아님)
+            records: [],
+          });
         }
 
-        const existingRecord = phoneDoc.records.find(
+        // 2) userId 기반으로 record 찾기
+        let userRecord = phoneDoc.records.find(
           (r) => r.userId.toString() === user._id.toString()
         );
 
-        if (existingRecord) {
-          const isSameName = existingRecord.name === (name || '');
-          const isSameMemo = existingRecord.memo === (memo || '');
-          if (!isSameName || !isSameMemo) {
-            existingRecord.name = name || '';
-            existingRecord.memo = memo || '';
-            existingRecord.createdAt = new Date();
-          }
-        } else {
-          phoneDoc.records.push({
+        // 없으면 새로 push
+        if (!userRecord) {
+          userRecord = {
             userId: user._id,
             name: name || '',
             memo: memo || '',
             createdAt: new Date(),
-          });
+            type: type || 0,
+          };
+          phoneDoc.records.push(userRecord);
+
+        } else {
+          // 있으면 업데이트
+          if (name !== undefined) userRecord.name = name;
+          if (memo !== undefined) userRecord.memo = memo;
+          if (type !== undefined) userRecord.type = type;
+          userRecord.createdAt = new Date();
         }
+
+        // 예) 위험 번호 로직
+        // "type=99"인 record가 3개 이상이면 phoneDoc.type=99
+        const countDanger = phoneDoc.records.filter((rec) => rec.type === 99).length;
+        if (countDanger >= 3) {
+          phoneDoc.type = 99; // 위험 번호로 설정
+        }
+
         await phoneDoc.save();
       }
-
-      return true;
-    },
-
-    updatePhoneRecordMemo: async (_, { phoneNumber, memo }, { tokenData }) => {
-      const user = await checkUserValid(tokenData);
-
-      if (!phoneNumber || phoneNumber.trim() === '') {
-        throw new UserInputError('phoneNumber가 비어 있습니다.');
-      }
-
-      const phoneDoc = await PhoneNumber.findOne({ phoneNumber });
-      if (!phoneDoc) {
-        throw new UserInputError('해당 전화번호가 존재하지 않습니다.');
-      }
-
-      let foundRecord = phoneDoc.records.find(
-        (r) => r.userId.toString() === user._id.toString()
-      );
-
-      if (!foundRecord) {
-        throw new ForbiddenError('본인이 업로드한 기록이 없습니다.');
-      }
-
-      if (foundRecord.memo === memo) {
-        // 동일 메모면 그냥 true
-        return true;
-      }
-
-      foundRecord.memo = memo;
-      foundRecord.createdAt = new Date();
-      await phoneDoc.save();
 
       return true;
     },

@@ -1,4 +1,5 @@
 // graphql/user/user.typeDefs.js
+
 const { gql } = require('apollo-server-express');
 
 module.exports = gql`
@@ -23,16 +24,33 @@ module.exports = gql`
     user: User
   }
 
+  # 유저가 저장한 전화번호 기록 정보를 나타낼 타입
+  type UserPhoneRecord {
+    phoneNumber: String!
+    name: String
+    memo: String
+    type: Int
+    createdAt: String
+  }
+
+  # getUserRecords 쿼리의 반환 구조
+  type UserRecordsPayload {
+    user: User!
+    records: [UserPhoneRecord!]!
+  }
+
   extend type Query {
     """
     (Admin 전용) 모든 유저 조회
     """
     getAllUsers: [User!]!
 
+
     """
-    특정 유저 1명 조회 (Admin or 본인)
+    특정 유저 상세 + 해당 유저가 저장한 전화번호부 기록
+    Admin이면 임의 userId 조회 가능, 일반 유저면 본인만
     """
-    getUser(userId: ID!): User
+    getUserRecords(userId: ID!): UserRecordsPayload
   }
 
   extend type Mutation {
@@ -68,3 +86,4 @@ module.exports = gql`
     resetUserPassword(userId: ID!): String
   }
 `;
+
