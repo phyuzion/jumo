@@ -4,6 +4,7 @@ const express = require('express');
 const cors = require('cors');
 const { ApolloServer } = require('apollo-server-express');
 const jwt = require('jsonwebtoken');
+const rateLimit = require('express-rate-limit');
 
 const {
   ApolloServerPluginLandingPageProductionDefault
@@ -15,6 +16,22 @@ const connectDB = require('./config/db');
 const typeDefs = require('./graphql/typeDefs');
 const resolvers = require('./graphql/resolvers');
 
+
+const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
+const PORT = process.env.PORT || 4000;
+
+
+async function getUserFromToken(token) {
+  if (!token) return null;
+  try {
+    const realToken = token.replace('Bearer ', ''); // "Bearer " 제거
+    const decoded = jwt.verify(realToken, SECRET_KEY);
+    return decoded; // { adminId? , userId? , iat, exp, ... }
+  } catch (e) {
+    return null;
+  }
+}
+
 async function startServer() {
   // 1) MongoDB 연결
   await connectDB();
@@ -23,6 +40,16 @@ async function startServer() {
   const app = express();
   app.use(cors());
   app.use(express.json());
+
+
+  // 초당 1회 요청 제한 (windowMs: 1000ms, max:1)
+  const limiter = rateLimit({
+    windowMs: 1000, // 1초
+    max: 1,         // 최대 1회
+    message: '너무 많은 요청입니다. 잠시 후 다시 시도해주세요.',
+  });
+  // /graphql 라우트에만 적용 (전역 적용도 가능)
+  //app.use('/graphql', limiter);
 
   // 3) ApolloServer 생성
   const server = new ApolloServer({
@@ -35,29 +62,14 @@ async function startServer() {
         footer: false
       })
     ],
-    context: ({ req }) => {
-      // --- 여기가 핵심: "어드민 JWT" 인증 체크 ---
-      // Authorization: Bearer <token>
-      const token = req.headers.authorization?.split(' ')[1];
-      let isAdmin = false;
-
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, process.env.JWT_SECRET);
-          // decoded = { adminId: 'admin', iat:..., exp:... }
-          if (decoded.adminId) {
-            isAdmin = true;
-          }
-        } catch (err) {
-          // 토큰이 만료 or 유효하지 않음
-          isAdmin = false;
-        }
-      }
-
-      // context로 내려보내기
-      return { isAdmin };
+    context: async ({ req }) => {
+      const authHeader = req.headers.authorization || '';
+      const tokenData = await getUserFromToken(authHeader);
+      // context에 tokenData와 req를 넘겨서 resolvers에서 사용
+      return { tokenData, req };
     },
   });
+
 
   // 4) ApolloServer와 Express 연결
   await server.start();

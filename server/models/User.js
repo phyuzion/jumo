@@ -1,12 +1,17 @@
+// models/User.js
+
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  userId: { type: String, required: true, unique: true }, // 6글자 자동생성
-  phone: { type: String, required: true, unique: true }, // 전화번호도 고유
+  systemId: { type: String, required: true, unique: true },
+  loginId: { type: String, required: true, unique: true },
+  password: { type: String, required: true }, // bcrypt 해시
   name: { type: String },
-  memo: { type: String, default: '' },
-  validUntil: { type: Date }, // 1달 유효
+  phoneNumber: { type: String },
+  type: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now },
+  validUntil: { type: Date },                  // 유효 기간
+  refreshToken: { type: String, default: '' }, // 리프레시 토큰
 });
 
 module.exports = mongoose.model('User', userSchema);

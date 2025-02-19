@@ -1,157 +1,142 @@
-// typeDefs.js
+// graphql/typeDefs.js
 const { gql } = require('apollo-server-express');
 
 const typeDefs = gql`
-  # ----------------------
-  #       Admin
-  # ----------------------
+  """
+  Admin 타입
+  """
   type Admin {
-    _id: ID!
-    adminId: String!
-    createdAt: String
+    id: ID!
+    username: String!
   }
 
-  type AdminLoginResponse {
-    token: String
-    adminId: String
-  }
-
-  # ----------------------
-  #       User
-  # ----------------------
+  """
+  User 타입
+  """
   type User {
-    _id: ID!
-    userId: String!      # 6글자 자동
-    phone: String!       # 고유
+    id: ID!
+    systemId: String!
+    loginId: String!
+    name: String
+    phoneNumber: String
+    type: Int
+    createdAt: String
+    validUntil: String
+  }
+
+  """
+  유저 생성 후 반환되는 데이터 구조
+  """
+  type CreateUserPayload {
+    user: User!
+    tempPassword: String!  # 임시 비번
+  }
+
+  """
+  전화번호부 하나의 레코드
+  """
+  type Record {
+    userId: ID!
     name: String
     memo: String
-    validUntil: String
     createdAt: String
   }
 
-  # ----------------------
-  #     Customer
-  # ----------------------
-  type Customer {
-    _id: ID!
-    phone: String!
-    totalCalls: Int
-    averageScore: Float
+  """
+  전화번호부 구조
+  """
+  type PhoneNumber {
+    id: ID!
+    phoneNumber: String!
+    type: Int
+    records: [Record!]!
   }
 
-  # ----------------------
-  #     CallLog
-  # ----------------------
-  type CallLog {
-    _id: ID!
-    customerId: Customer
-    userId: User
-    timestamp: String
-    score: Int
+  """
+  로그인/리프레시 응답 토큰
+  """
+  type AuthPayload {
+    accessToken: String!
+    refreshToken: String!
+  }
+
+  """
+  전화번호 업로드시 사용될 input
+  """
+  input RecordInput {
+    phoneNumber: String!
+    name: String
     memo: String
   }
 
-  # 콜로그 생성 시 반환
-  type CallLogCreationResult {
-    callLog: CallLog
-    customer: Customer
-  }
-
-  # 고객 + 콜로그 묶음
-  type CustomerResult {
-    customer: Customer
-    callLogs: [CallLog]
-  }
-
-  type SummaryResult {
-    callLogsCount: Int
-    usersCount: Int
-    customersCount: Int
-  }
-
-
-  # 새로 추가: 클라이언트 로그인 응답 타입
-  type ClientLoginResponse {
-    success: Boolean!
-    user: User
-  }
-
-  # ============================
-  #         Query
-  # ============================
   type Query {
-    # [어드민 전용] ----------------------------------
-    getUserByPhone(phone: String!): [User]
-    getUserByName(name: String!): [User]
+    """
+    (Admin 전용) 모든 유저 조회
+    """
+    getAllUsers: [User!]!
 
-    getUsers(phone: String, name: String): [User]
+    """
+    특정 유저 1명 조회 (Admin or 본인만 가능)
+    """
+    getUser(userId: ID!): User
 
+    """
+    (Admin, User) 특정 전화번호 조회
+    """
+    getPhoneNumber(phoneNumber: String!): PhoneNumber
 
-    # 새로 추가 (어드민 리스트 조회)
-    getUserList(start: Int!, end: Int!): [User]
-    getCallLogs(start: Int!, end: Int!): [CallLog]
-    getCustomers(start: Int!, end: Int!): [Customer]
-
-
-    getCustomerByPhone(
-      userId: String,
-      phone: String,
-      searchPhone: String!
-    ): [CustomerResult]
-
-    getCallLogByID(
-      userId: String!,
-      phone: String!,
-      logId: ID!
-    ): CallLog
-
-    getCallLogByPhone(
-      customerPhone: String!,
-      userId: String,
-      userPhone: String
-    ): [CallLog]
-
-    # 유저 콜로그 조회 (start, end) - 통합
-    getCallLogsForUser(
-      userId: String!,
-      phone: String!,
-      start: Int!,
-      end: Int!
-    ): [CallLog]
-
-    getSummary: SummaryResult
+    """
+    (Admin, User) 타입으로 전화번호 목록 조회
+    """
+    getPhoneNumbersByType(type: Int!): [PhoneNumber!]!
   }
 
-  # ============================
-  #       Mutation
-  # ============================
   type Mutation {
-    # [어드민] ----------------------------------------
-    createAdmin(adminId: String!, password: String!): Admin
-    adminLogin(adminId: String!, password: String!): AdminLoginResponse
+    # ========== Admin 관련 ==========
+    createAdmin(username: String!, password: String!): Admin
+    adminLogin(username: String!, password: String!): AuthPayload
 
-    # [어드민] 유저 생성 / 수정
-    createUser(phone: String!, name: String, memo: String, validUntil: String): User
-    updateUser(userId: String!, phone: String, name: String, memo: String, validUntil: String): User
+    # ========== User 관련 ==========
+    createUser(phoneNumber: String!, name: String!): CreateUserPayload
 
-    # [클라이언트/유저] --------------------------------
-    clientLogin(userId: String!, phone: String!): ClientLoginResponse
+    """
+    유저 로그인 -> accessToken + refreshToken 반환
+    """
+    userLogin(loginId: String!, password: String!, phoneNumber: String!): AuthPayload
 
-    createCallLog(
-      userId: String!,
-      phone: String!,
-      customerPhone: String!,
-      score: Int,
-      memo: String
-    ): CallLogCreationResult
+    """
+    유저 비밀번호 변경 (본인)
+    """
+    userChangePassword(oldPassword: String!, newPassword: String!): User
 
-    updateCallLog(
-      logId: ID!,
-      userId: String!,
-      phone: String!,
-      score: Int,
-      memo: String
-    ): CallLog
+    """
+    (Admin 전용) 유저 정보 업데이트
+    - userId: 대상 유저
+    - name, phoneNumber, validUntil, type 등 부분 업데이트
+    """
+    updateUser(
+      userId: ID!
+      name: String
+      phoneNumber: String
+      validUntil: String
+      type: Int
+    ): User
+
+    """
+    (Admin 전용) 특정 유저의 비밀번호를 리셋(임시비번)으로 교체
+    """
+    resetUserPassword(userId: ID!): String
+
+    # ========== 토큰 재발급 ==========
+    refreshToken(refreshToken: String!): AuthPayload
+
+    # ========== 전화번호부 관련 ==========
+    uploadPhoneRecords(records: [RecordInput!]!): Boolean
+
+    """
+    메모만 수정(기존 전화번호 + 본인 업로드한 record 대상)
+    """
+    updatePhoneRecordMemo(phoneNumber: String!, memo: String!): Boolean
   }
 `;
 
