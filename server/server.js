@@ -13,8 +13,7 @@ const {
 
 
 const connectDB = require('./config/db');
-const typeDefs = require('./graphql/typeDefs');
-const resolvers = require('./graphql/resolvers');
+const { typeDefs, resolvers } = require('./graphql'); // 통합된 것 import
 
 
 const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
