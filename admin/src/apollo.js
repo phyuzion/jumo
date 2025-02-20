@@ -10,7 +10,7 @@ const httpLink = createHttpLink({
 
 // 2) Auth Link: 로컬 스토리지에서 Access Token 읽어서 Authorization 헤더에 삽입
 const authLink = setContext((_, { headers }) => {
-  const accessToken = localStorage.getItem('adminAccessToken');
+  const accessToken = localStorage.getItem('adminToken');
   return {
     headers: {
       ...headers,

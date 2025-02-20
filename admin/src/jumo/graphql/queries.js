@@ -1,14 +1,16 @@
+// src/graphql/queries.js
 import { gql } from '@apollo/client';
 
 export const GET_SUMMARY = gql`
   query {
     getSummary {
-      callLogsCount
       usersCount
-      customersCount
+      phoneCount
+      dangerPhoneCount
     }
   }
 `;
+
 
 
 export const GET_USER_LIST = gql`

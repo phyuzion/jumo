@@ -23,7 +23,7 @@ const Login = () => {
       const { accessToken, refreshToken } = res.data.adminLogin;
 
       // 3) 로컬 스토리지에 저장
-      localStorage.setItem('adminAccessToken', accessToken);
+      localStorage.setItem('adminToken', accessToken);
       localStorage.setItem('adminRefreshToken', refreshToken);
 
       alert('로그인 성공');

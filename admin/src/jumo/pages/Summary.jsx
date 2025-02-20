@@ -1,7 +1,7 @@
+// src/pages/Summary.jsx
 import React, { useEffect } from 'react';
 import { useQuery } from '@apollo/client';
 
-// 아이콘: react-icons
 import { MdOutlineSupervisorAccount } from 'react-icons/md';
 import { BsBoxSeam } from 'react-icons/bs';
 import { HiOutlineRefresh } from 'react-icons/hi';
@@ -15,6 +15,7 @@ const Summary = () => {
   // 2) 로컬 스토리지 저장 (useEffect)
   useEffect(() => {
     if (data && data.getSummary) {
+      // 예: { usersCount, phoneCount, dangerPhoneCount }
       localStorage.setItem('summaryData', JSON.stringify(data.getSummary));
     }
   }, [data]);
@@ -22,10 +23,11 @@ const Summary = () => {
   if (loading) return <p>Loading summary...</p>;
   if (error) return <p>Error: {error.message}</p>;
 
-  // 3) 서버에서 받은 결과
-  const { callLogsCount, usersCount, customersCount } = data.getSummary;
+  // 3) 서버에서 받은 결과 (새로운 필드명)
+  const { usersCount, phoneCount, dangerPhoneCount } = data.getSummary;
 
-  // 4) summaryData 배열 (3개 카드)
+  // 4) 카드 구성 예시
+  // 아이콘, 개수(amount), 제목(title)을 매핑
   const summaryData = [
     {
       icon: <MdOutlineSupervisorAccount />,
@@ -36,15 +38,15 @@ const Summary = () => {
     },
     {
       icon: <BsBoxSeam />,
-      amount: customersCount,
-      title: '고객수',
+      amount: phoneCount,
+      title: '전화번호(문서)수',
       iconColor: 'rgb(255, 244, 229)',
       iconBg: 'rgb(254, 201, 15)',
     },
     {
       icon: <HiOutlineRefresh />,
-      amount: callLogsCount,
-      title: '콜수',
+      amount: dangerPhoneCount,
+      title: '위험번호(99) 수',
       iconColor: 'rgb(228, 106, 118)',
       iconBg: 'rgb(255, 244, 229)',
     },
@@ -57,29 +59,28 @@ const Summary = () => {
           {summaryData.map((item, index) => (
             <div
               key={index}
-              className="bg-white dark:text-gray-200 dark:bg-secondary-dark-bg 
-                         md:w-56 p-4 pt-9 rounded-2xl shadow-xl 
+              className="bg-white dark:text-gray-200 dark:bg-secondary-dark-bg
+                         md:w-56 p-4 pt-9 rounded-2xl shadow-xl
                          hover:drop-shadow-xl cursor-pointer flex flex-col items-center"
             >
-              {/* 아이콘 영역 (중앙 정렬) */}
+              {/* 아이콘 영역 */}
               <div className="flex justify-center items-center w-full mb-4">
                 <button
                   type="button"
                   style={{ color: item.iconColor, backgroundColor: item.iconBg }}
-                  className="text-4xl opacity-0.9 rounded-full p-4 hover:drop-shadow-xl 
+                  className="text-4xl opacity-0.9 rounded-full p-4 hover:drop-shadow-xl
                              flex items-center justify-center"
                 >
                   {item.icon}
                 </button>
               </div>
-              {/* Amount (왼쪽), Title (오른쪽) */}
+
+              {/* Amount, Title */}
               <div className="flex w-full px-4">
                 <p className="mr-auto text-lg font-semibold">{item.amount}</p>
                 <p className="ml-auto text-sm text-gray-500">{item.title}</p>
               </div>
-
             </div>
-
           ))}
         </div>
       </div>
