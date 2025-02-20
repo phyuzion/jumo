@@ -3,7 +3,8 @@ const { gql } = require('apollo-server-express');
 
 module.exports = gql`
   type Record {
-    userId: ID!
+    userName: String
+    userType: Int
     name: String
     memo: String
     type: Int
@@ -20,6 +21,8 @@ module.exports = gql`
   # 업서트 입력
   input PhoneRecordInput {
     phoneNumber: String!
+    userName: String
+    userType: Int
     name: String
     memo: String
     type: Int
