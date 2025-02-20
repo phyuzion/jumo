@@ -236,22 +236,21 @@ const Users = () => {
           allowSorting={true}
         >
           <ColumnsDirective>
-            <ColumnDirective field="id" headerText="ID" width="80" />
-            <ColumnDirective field="loginId" headerText="LoginId" width="100" />
-            <ColumnDirective field="name" headerText="Name" width="100" />
-            <ColumnDirective field="phoneNumber" headerText="Phone" width="120" />
-            <ColumnDirective field="type" headerText="Type" width="60" textAlign="Center" />
+            <ColumnDirective field="loginId" headerText="아이디" width="40" />
+            <ColumnDirective field="name" headerText="상호" width="150" />
+            <ColumnDirective field="phoneNumber" headerText="번호" width="100" />
+            <ColumnDirective field="type" headerText="타입" width="50" textAlign="Center" />
             <ColumnDirective
               field="validUntil"
-              headerText="ValidUntil"
-              width="100"
+              headerText="유효기간"
+              width="50"
               textAlign="Center"
               valueAccessor={validUntilAccessor}
             />
             {/* Edit */}
             <ColumnDirective
               headerText="Edit"
-              width="80"
+              width="50"
               textAlign="Center"
               template={(u) => (
                 <button
@@ -265,7 +264,7 @@ const Users = () => {
             {/* Reset PW */}
             <ColumnDirective
               headerText="Reset"
-              width="80"
+              width="50"
               textAlign="Center"
               template={(u) => (
                 <button
@@ -279,7 +278,7 @@ const Users = () => {
             {/* Records */}
             <ColumnDirective
               headerText="기록"
-              width="80"
+              width="50"
               textAlign="Center"
               template={(u) => (
                 <button
