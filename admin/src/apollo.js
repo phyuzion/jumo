@@ -1,46 +1,47 @@
-// src/apollo.js (수정)
+// src/apollo.js
 import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
+// 1) HTTP Link: GraphQL 서버 URL
 const httpLink = createHttpLink({
-  uri: 'https://jumo-vs8e.onrender.com/graphql',
+  uri: 'https://jumo-vs8e.onrender.com/graphql', // 예시
 });
 
-// Auth Link
+// 2) Auth Link: 로컬 스토리지에서 Access Token 읽어서 Authorization 헤더에 삽입
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('adminToken');
+  const accessToken = localStorage.getItem('adminAccessToken');
   return {
     headers: {
       ...headers,
-      Authorization: token ? `Bearer ${token}` : ""
-    }
+      Authorization: accessToken ? `Bearer ${accessToken}` : '',
+    },
   };
 });
 
-// Error Link
+// 3) Error Link: 인증 에러 시 처리
 const errorLink = onError(({ graphQLErrors, networkError }) => {
   if (graphQLErrors) {
     for (let err of graphQLErrors) {
-      // 예: 토큰 만료 시 서버가 "UNAUTHENTICATED" 라는 code를 내려준다거나,
-      // 또는 401 등으로 처리
-      if (err.extensions?.code === "UNAUTHENTICATED") {
-        // 로그아웃 처리
-        localStorage.removeItem('adminToken');
+      if (err.extensions?.code === 'UNAUTHENTICATED') {
+        // 만료 or 무효 토큰 → 토큰 제거 → 로그인 페이지로
+        localStorage.removeItem('adminAccessToken');
+        localStorage.removeItem('adminRefreshToken');
         window.location.href = '/login';
       }
     }
   }
   if (networkError && networkError.statusCode === 401) {
-    // 네트워크 레벨 401
-    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminAccessToken');
+    localStorage.removeItem('adminRefreshToken');
     window.location.href = '/login';
   }
 });
 
+// 4) Apollo Client 생성
 const client = new ApolloClient({
   link: errorLink.concat(authLink).concat(httpLink),
-  cache: new InMemoryCache()
+  cache: new InMemoryCache(),
 });
 
 export default client;

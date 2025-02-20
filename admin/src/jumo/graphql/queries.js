@@ -1,15 +1,5 @@
 import { gql } from '@apollo/client';
 
-export const ADMIN_LOGIN = gql`
-  mutation adminLogin($adminId: String!, $password: String!) {
-    adminLogin(adminId: $adminId, password: $password) {
-        token
-        adminId
-    }
-  }
-`;
-
-
 export const GET_SUMMARY = gql`
   query {
     getSummary {
