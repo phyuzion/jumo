@@ -85,6 +85,15 @@ const Users = () => {
     }
   }, [users]);
 
+
+  // ============= COLUMN HELPER =============
+  const validUntilAccessor = (field, data) => {
+    if (!data.validUntil) return '';
+    const d = new Date(parseInt(data.validUntil));
+    if (isNaN(d.getTime())) return data.validUntil;
+    return d.toISOString().slice(0,10); // "YYYY-MM-DD"
+  };
+
   // ============= CREATE =============
   const handleCreate = () => {
     setFormPhone('');
@@ -132,7 +141,8 @@ const Users = () => {
       // u.validUntil가 "YYYY-MM-DDTHH:MM:SSZ" 형식일 수도, epoch일 수도
       // 여기서는 ISO string 가정
       try {
-        const dt = new Date(u.validUntil);
+        const dt = new Date(parseInt(u.validUntil));
+        console.log(dt);
         if (!isNaN(dt.getTime())) {
           dtStr = dt.toISOString().slice(0,10);
         }
@@ -236,6 +246,7 @@ const Users = () => {
               headerText="ValidUntil"
               width="100"
               textAlign="Center"
+              valueAccessor={validUntilAccessor}
             />
             {/* Edit */}
             <ColumnDirective
