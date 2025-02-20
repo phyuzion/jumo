@@ -6,99 +6,78 @@ import {
   ColumnDirective,
   Resize,
   Sort,
-  ContextMenu,
   Filter,
   Page,
-  ExcelExport,
-  PdfExport,
   Inject,
   Toolbar,
+  Search,
+  Selection
 } from "@syncfusion/ej2-react-grids";
 
-import { GET_USER_LIST, GET_USER_BY_PHONE, GET_USER_BY_NAME } from "../graphql/queries";
-import { CREATE_USER, UPDATE_USER } from "../graphql/mutations";
+import { GET_ALL_USERS, GET_USER_RECORDS } from "../graphql/queries";
+import { CREATE_USER, UPDATE_USER, RESET_USER_PASSWORD } from "../graphql/mutations";
 import { Header } from "../components";
 
-const PAGE_SIZE = 10; 
+const PAGE_SIZE = 10; // syncfusion paging size(예시)
 
 const Users = () => {
   const gridRef = useRef(null);
 
-
-  // 1) summaryData 로컬 스토리지에서 읽기
-  const summaryDataStr = localStorage.getItem('summaryData');
-  let totalCount = 200; // 디폴트
-  if (summaryDataStr) {
-    try {
-      const parsed = JSON.parse(summaryDataStr);
-      // parsed = { callLogsCount, usersCount, customersCount }
-      if (parsed?.usersCount) {
-        totalCount = parseInt(parsed.usersCount, 10) || 200;
-      }
-    } catch (err) {
-      // parse 실패 시 그냥 200 유지
-    }
-  }
-
-
-  // ----------------- GRAPHQL: List Query -----------------
-  const { loading, error, data, refetch } = useQuery(GET_USER_LIST, {
-    variables: { start: 1, end: PAGE_SIZE },
+  // (1) getAllUsers
+  const { data, loading, error, refetch } = useQuery(GET_ALL_USERS, {
     fetchPolicy: 'network-only',
   });
 
-  // ----------------- STATES -----------------
+  // (2) create / update / reset
+  const [createUserMutation] = useMutation(CREATE_USER);
+  const [updateUserMutation] = useMutation(UPDATE_USER);
+  const [resetUserPasswordMutation] = useMutation(RESET_USER_PASSWORD);
+
+  // (3) getUserRecords (lazy)
+  const [getUserRecordsLazy, { data: recordsData }] = useLazyQuery(GET_USER_RECORDS);
+
+  // ========== State ==========
   const [users, setUsers] = useState([]);
 
   // 모달 제어
-  const [showModal, setShowModal] = useState(false);   // create
-  const [showEditModal, setShowEditModal] = useState(false); // edit
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editUser, setEditUser] = useState(null);
 
-  // form 입력값
+  // 기록 모달
+  const [showRecordsModal, setShowRecordsModal] = useState(false);
+  const [recordUser, setRecordUser] = useState(null);
+  const [phoneRecords, setPhoneRecords] = useState([]);
+
+  // 생성 폼
   const [formPhone, setFormPhone] = useState('');
   const [formName, setFormName] = useState('');
-  const [formMemo, setFormMemo] = useState('');
-  const [formValidUntil, setFormValidUntil] = useState(''); // string "YYYY-MM-DD"
 
-  // 뮤테이션
-  const [createUserMutation] = useMutation(CREATE_USER);
-  const [updateUserMutation] = useMutation(UPDATE_USER);
+  // 수정 폼
+  const [editPhone, setEditPhone] = useState('');
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState(0);
+  const [editValidUntil, setEditValidUntil] = useState('');
 
-  // 검색
-  const [searchValue, setSearchValue] = useState('');
-  const [searchType, setSearchType] = useState('phone');
-
-  // lazy query
-  const [getUserByPhoneLazy, { data: phoneData }] = useLazyQuery(GET_USER_BY_PHONE, { fetchPolicy: 'network-only' });
-  const [getUserByNameLazy, { data: nameData }] = useLazyQuery(GET_USER_BY_NAME, { fetchPolicy: 'network-only' });
-
-  // ===================== useEffect =====================
-  // 메인 목록
+  // ================= useEffect =================
+  // getAllUsers 결과 -> users
   useEffect(() => {
-    if (data?.getUserList) {
-      setUsers(data.getUserList);
-      localStorage.setItem('users', JSON.stringify(data.getUserList));
+    if (data?.getAllUsers) {
+      setUsers(data.getAllUsers);
     }
   }, [data]);
 
-  // 검색: phone
+  // getUserRecords 결과 -> recordUser, phoneRecords
   useEffect(() => {
-    if (phoneData?.getUserByPhone) {
-      setUsers(phoneData.getUserByPhone);
-      localStorage.setItem('users', JSON.stringify(phoneData.getUserByPhone));
+    if (recordsData?.getUserRecords) {
+      const { user, records } = recordsData.getUserRecords;
+      setRecordUser(user);
+      setPhoneRecords(records);
+      setShowRecordsModal(true);
     }
-  }, [phoneData]);
+  }, [recordsData]);
 
-  // 검색: name
-  useEffect(() => {
-    if (nameData?.getUserByName) {
-      setUsers(nameData.getUserByName);
-      localStorage.setItem('users', JSON.stringify(nameData.getUserByName));
-    }
-  }, [nameData]);
-
-  // users가 바뀔 때마다 Grid 강제 refresh
+  // users 바뀌면 syncfusion grid refresh
   useEffect(() => {
     if (gridRef.current) {
       gridRef.current.dataSource = users;
@@ -106,262 +85,213 @@ const Users = () => {
     }
   }, [users]);
 
-  // ============= Grid Paging =============
-  const handleActionBegin = async (args) => {
-    if (args.requestType === 'paging') {
-      args.cancel = true;
-      const currentPage = args.currentPage;
-      const start = (currentPage - 1) * PAGE_SIZE + 1;
-      const end   = currentPage * PAGE_SIZE;
-      try {
-        const res = await refetch({ start, end });
-        if (res.data?.getUserList) {
-          setUsers(res.data.getUserList);
-          localStorage.setItem('users', JSON.stringify(res.data.getUserList));
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    }
-  };
-
-  // ============= 새로고침 =============
-  const handleRefresh = async () => {
-    try {
-      const res = await refetch({ start:1, end: PAGE_SIZE });
-      if (res.data?.getUserList) {
-        setUsers(res.data.getUserList);
-        localStorage.setItem('users', JSON.stringify(res.data.getUserList));
-      }
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  // ============= 검색 =============
-  const handleSearch = async () => {
-    if (!searchValue) {
-      handleRefresh();
-      return;
-    }
-    try {
-      if (searchType === 'phone') {
-        await getUserByPhoneLazy({ variables: { phone: searchValue } });
-      } else {
-        await getUserByNameLazy({ variables: { name: searchValue } });
-      }
-    } catch (err) {
-      alert(err.message);
-    }
-  };
-
-  // ============= CREATE USER =============
-  const handleCreateClick = () => {
+  // ============= CREATE =============
+  const handleCreate = () => {
     setFormPhone('');
     setFormName('');
-    setFormMemo('');
-    setFormValidUntil('');   // "YYYY-MM-DD"
-    setShowModal(true);
+    setShowCreateModal(true);
   };
 
   const handleCreateSubmit = async () => {
     try {
-      // formValidUntil => UTC
-      let validIso = null;
-      if (formValidUntil) {
-        const dt = new Date(`${formValidUntil}T00:00:00`); // local midnight
-        validIso = dt.toISOString();
-      }
-      await createUserMutation({
+      const res = await createUserMutation({
         variables: {
-          phone: formPhone,
+          phoneNumber: formPhone,
           name: formName,
-          memo: formMemo,
-          validUntil: validIso,
-        }
+        },
       });
-      alert('User created!');
-      setShowModal(false);
+      const tempPass = res.data?.createUser?.tempPassword;
+      alert(`유저 생성 완료! 임시비번: ${tempPass}`);
 
-      // 목록 재조회
-      const res = await refetch({ start:1, end: PAGE_SIZE });
-      if (res.data?.getUserList) {
-        setUsers(res.data.getUserList);
-        localStorage.setItem('users', JSON.stringify(res.data.getUserList));
-      }
+      setShowCreateModal(false);
+      handleRefresh(); // 목록 재조회
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // ============= UPDATE USER =============
-  const handleEditClick = (user) => {
-    setEditUser(user);
-    setFormPhone(user.phone || '');
-    setFormName(user.name || '');
-    setFormMemo(user.memo || '');
-
-    // user.validUntil => "YYYY-MM-DD"
-    let dateStr = '';
-    if (user.validUntil) {
-      const dt = new Date(parseInt(user.validUntil));
-      if (!isNaN(dt.getTime())) {
-        dateStr = dt.toISOString().slice(0,10);
-      }
+  // ============= REFRESH =============
+  const handleRefresh = async () => {
+    try {
+      await refetch();
+    } catch (err) {
+      alert(err.message);
     }
-    setFormValidUntil(dateStr);
+  };
+
+  // ============= EDIT =============
+  const handleEditClick = (u) => {
+    setEditUser(u);
+    setEditPhone(u.phoneNumber || '');
+    setEditName(u.name || '');
+    setEditType(u.type || 0);
+
+    // validUntil => "YYYY-MM-DD"
+    let dtStr = '';
+    if (u.validUntil) {
+      // u.validUntil가 "YYYY-MM-DDTHH:MM:SSZ" 형식일 수도, epoch일 수도
+      // 여기서는 ISO string 가정
+      try {
+        const dt = new Date(u.validUntil);
+        if (!isNaN(dt.getTime())) {
+          dtStr = dt.toISOString().slice(0,10);
+        }
+      } catch (err) {}
+    }
+    setEditValidUntil(dtStr);
 
     setShowEditModal(true);
   };
 
-  const handleUpdateSubmit = async () => {
+  const handleEditSubmit = async () => {
+    if (!editUser) return;
     try {
-      let validIso = null;
-      if (formValidUntil) {
-        const dt = new Date(`${formValidUntil}T00:00:00`);
-        validIso = dt.toISOString();
+      let validStr = null;
+      if (editValidUntil) {
+        const dt = new Date(`${editValidUntil}T00:00:00`);
+        validStr = dt.toISOString();
       }
       await updateUserMutation({
         variables: {
-          userId: editUser.userId,
-          phone: formPhone,
-          name: formName,
-          memo: formMemo,
-          validUntil: validIso,
+          userId: editUser.id,  // or editUser.userId if server expects userId
+          phoneNumber: editPhone,
+          name: editName,
+          type: parseInt(editType, 10),
+          validUntil: validStr,
         }
       });
-      alert('User updated!');
+      alert('수정 완료!');
       setShowEditModal(false);
       setEditUser(null);
-
-      // 재조회
-      const res = await refetch({ start:1, end: PAGE_SIZE });
-      if (res.data?.getUserList) {
-        setUsers(res.data.getUserList);
-        localStorage.setItem('users', JSON.stringify(res.data.getUserList));
-      }
+      handleRefresh();
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // ============= COLUMN HELPER =============
-  const validUntilAccessor = (field, data) => {
-    if (!data.validUntil) return '';
-    const d = new Date(parseInt(data.validUntil));
-    if (isNaN(d.getTime())) return data.validUntil;
-    return d.toISOString().slice(0,10); // "YYYY-MM-DD"
+  // ============= RESET PASSWORD =============
+  const handleResetPassword = async (u) => {
+    try {
+      const res = await resetUserPasswordMutation({
+        variables: { userId: u.id }, // or u.userId, depending on server
+      });
+      const newPass = res.data?.resetUserPassword;
+      alert(`임시비번: ${newPass}`);
+    } catch (err) {
+      alert(err.message);
+    }
   };
 
+  // ============= RECORDS =============
+  const handleRecordsClick = async (u) => {
+    try {
+      await getUserRecordsLazy({ variables: { userId: u.id } }); // or u.userId
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // ============= SYNCFUSION HANDLERS (옵션) =============
+  const handleActionBegin = (args) => {
+    // 만약 Paging 쓸거면 설정
+    // 여기서는 한방에 getAllUsers 하므로 페이징 로직 생략 or custom
+  };
+
+  // ============= RENDER =============
   return (
     <div className="m-2 md:m-10 p-2 md:p-10 bg-white rounded-3xl shadow-2xl">
-      <Header category="Page" title="유저 목록 (서버 페이징)" />
+      <Header category="Page" title="유저 목록" />
 
-      {/* TOP CONTROLS */}
       <div className="flex gap-2 mb-4">
-        <button 
-          className="bg-blue-500 text-white px-4 py-2 rounded"
-          onClick={handleCreateClick}
-        >
+        <button onClick={handleCreate} className="bg-blue-500 text-white px-3 py-1 rounded">
           유저 생성
         </button>
-        <button 
-          className="bg-green-500 text-white px-4 py-2 rounded"
-          onClick={handleRefresh}
-        >
+        <button onClick={handleRefresh} className="bg-green-500 text-white px-3 py-1 rounded">
           새로고침
-        </button>
-
-        <select 
-          value={searchType} 
-          onChange={(e) => setSearchType(e.target.value)}
-          className="border p-1 rounded"
-        >
-          <option value="phone">Phone</option>
-          <option value="name">Name</option>
-        </select>
-        <input 
-          type="text"
-          placeholder={`Search ${searchType}...`}
-          value={searchValue}
-          onChange={(e) => setSearchValue(e.target.value)}
-          className="border p-1 rounded"
-        />
-        <button 
-          className="bg-gray-500 text-white px-4 py-2 rounded"
-          onClick={handleSearch}
-        >
-          검색
         </button>
       </div>
 
-      {loading && <p>Loading users...</p>}
-      {error && <p className="text-red-500">Error: {error.message}</p>}
+      {loading && <p>Loading...</p>}
+      {error && <p className="text-red-500">{error.message}</p>}
 
-      {/* GRID */}
       {!loading && !error && (
         <GridComponent
           ref={gridRef}
           dataSource={users}
+          enableHover={true}
           allowPaging={true}
-          allowSorting={true}
-          pageSettings={{
-            pageSize: PAGE_SIZE,
-            totalRecordsCount: totalCount,
-            pageCount: 5,
-          }}
+          pageSettings={{ pageSize: PAGE_SIZE }}
+          toolbar={['Search']}
           actionBegin={handleActionBegin}
+          allowSorting={true}
         >
           <ColumnsDirective>
-            <ColumnDirective field="_id" headerText="ID" width="90" textAlign="Center" />
-            <ColumnDirective field="userId" headerText="UserID" width="110" textAlign="Center" />
+            <ColumnDirective field="id" headerText="ID" width="80" />
+            <ColumnDirective field="loginId" headerText="LoginId" width="100" />
             <ColumnDirective field="name" headerText="Name" width="100" />
-            <ColumnDirective field="phone" headerText="Phone" width="120" />
-            <ColumnDirective field="memo" headerText="Memo" width="120" />
+            <ColumnDirective field="phoneNumber" headerText="Phone" width="120" />
+            <ColumnDirective field="type" headerText="Type" width="60" textAlign="Center" />
             <ColumnDirective
               field="validUntil"
               headerText="ValidUntil"
-              width="110"
+              width="100"
               textAlign="Center"
-              valueAccessor={validUntilAccessor}
             />
+            {/* Edit */}
             <ColumnDirective
               headerText="Edit"
               width="80"
               textAlign="Center"
-              template={(user) => (
+              template={(u) => (
                 <button
                   className="bg-orange-500 text-white px-2 py-1 rounded"
-                  onClick={() => handleEditClick(user)}
+                  onClick={() => handleEditClick(u)}
                 >
                   수정
                 </button>
               )}
             />
+            {/* Reset PW */}
+            <ColumnDirective
+              headerText="Reset"
+              width="80"
+              textAlign="Center"
+              template={(u) => (
+                <button
+                  className="bg-red-500 text-white px-2 py-1 rounded"
+                  onClick={() => handleResetPassword(u)}
+                >
+                  PW
+                </button>
+              )}
+            />
+            {/* Records */}
+            <ColumnDirective
+              headerText="기록"
+              width="80"
+              textAlign="Center"
+              template={(u) => (
+                <button
+                  className="bg-purple-500 text-white px-2 py-1 rounded"
+                  onClick={() => handleRecordsClick(u)}
+                >
+                  기록
+                </button>
+              )}
+            />
           </ColumnsDirective>
-
-          <Inject
-            services={[
-              Resize,
-              Sort,
-              ContextMenu,
-              Filter,
-              Page,
-              ExcelExport,
-              PdfExport,
-            ]}
-          />
+          <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
         </GridComponent>
       )}
 
       {/* CREATE MODAL */}
-      {showModal && (
+      {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-4 rounded shadow w-80">
+          <div className="bg-white p-4 w-80 rounded shadow">
             <h2 className="text-xl font-bold mb-2">유저 생성</h2>
             <div className="flex flex-col gap-2">
               <input
-                placeholder="Phone"
+                placeholder="PhoneNumber"
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
                 className="border p-1"
@@ -372,23 +302,7 @@ const Users = () => {
                 onChange={(e) => setFormName(e.target.value)}
                 className="border p-1"
               />
-              <input
-                placeholder="Memo"
-                value={formMemo}
-                onChange={(e) => setFormMemo(e.target.value)}
-                className="border p-1"
-              />
-
-              {/* HTML Date input */}
-              <input
-                type="date"
-                placeholder="ValidUntil"
-                value={formValidUntil}
-                onChange={(e) => setFormValidUntil(e.target.value)}
-                className="border p-1"
-              />
             </div>
-
             <div className="mt-4 flex gap-2">
               <button
                 className="bg-blue-500 text-white px-3 py-1 rounded"
@@ -398,7 +312,7 @@ const Users = () => {
               </button>
               <button
                 className="bg-gray-300 px-3 py-1 rounded"
-                onClick={() => setShowModal(false)}
+                onClick={() => setShowCreateModal(false)}
               >
                 닫기
               </button>
@@ -408,44 +322,43 @@ const Users = () => {
       )}
 
       {/* EDIT MODAL */}
-      {showEditModal && (
+      {showEditModal && editUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-4 rounded shadow w-80">
+          <div className="bg-white p-4 w-80 rounded shadow">
             <h2 className="text-xl font-bold mb-2">유저 수정</h2>
-            <p className="mb-1">UserID: {editUser?.userId}</p>
+            <p className="mb-2">UserID: {editUser.loginId}</p>
             <div className="flex flex-col gap-2">
               <input
-                placeholder="Phone"
-                value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
+                placeholder="PhoneNumber"
+                value={editPhone}
+                onChange={(e) => setEditPhone(e.target.value)}
                 className="border p-1"
               />
               <input
                 placeholder="Name"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
                 className="border p-1"
               />
               <input
-                placeholder="Memo"
-                value={formMemo}
-                onChange={(e) => setFormMemo(e.target.value)}
+                placeholder="Type (정수)"
+                type="number"
+                value={editType}
+                onChange={(e) => setEditType(e.target.value)}
                 className="border p-1"
               />
-
               <input
+                placeholder="ValidUntil YYYY-MM-DD"
                 type="date"
-                placeholder="ValidUntil"
-                value={formValidUntil}
-                onChange={(e) => setFormValidUntil(e.target.value)}
+                value={editValidUntil}
+                onChange={(e) => setEditValidUntil(e.target.value)}
                 className="border p-1"
               />
             </div>
-
             <div className="mt-4 flex gap-2">
               <button
                 className="bg-orange-500 text-white px-3 py-1 rounded"
-                onClick={handleUpdateSubmit}
+                onClick={handleEditSubmit}
               >
                 수정
               </button>
@@ -454,6 +367,43 @@ const Users = () => {
                 onClick={() => {
                   setShowEditModal(false);
                   setEditUser(null);
+                }}
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RECORDS MODAL */}
+      {showRecordsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white p-4 w-96 rounded shadow max-h-[80vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-2">유저 기록</h2>
+            {recordUser && (
+              <p className="mb-1">
+                {recordUser.loginId} ({recordUser.name})
+              </p>
+            )}
+            <div className="flex flex-col gap-2">
+              {phoneRecords.map((r, idx) => (
+                <div key={idx} className="border p-2 rounded">
+                  <p>Phone: {r.phoneNumber}</p>
+                  <p>Name: {r.name}</p>
+                  <p>Memo: {r.memo}</p>
+                  <p>Type: {r.type}</p>
+                  <p>CreatedAt: {r.createdAt}</p>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                className="bg-gray-300 px-3 py-1 rounded"
+                onClick={() => {
+                  setShowRecordsModal(false);
+                  setRecordUser(null);
+                  setPhoneRecords([]);
                 }}
               >
                 닫기

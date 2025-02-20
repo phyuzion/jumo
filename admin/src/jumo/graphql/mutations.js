@@ -11,28 +11,54 @@ export const ADMIN_LOGIN = gql`
   }
 `;
 
+// (1) 유저 생성
 export const CREATE_USER = gql`
-  mutation createUser($phone: String!, $name: String, $memo: String, $validUntil: String) {
-    createUser(phone: $phone, name: $name, memo: $memo, validUntil: $validUntil) {
-      _id
-      userId
-      phone
+  mutation createUser($phoneNumber: String!, $name: String!) {
+    createUser(phoneNumber: $phoneNumber, name: $name) {
+      user {
+        id
+        systemId
+        loginId
+        name
+        phoneNumber
+        type
+        validUntil
+      }
+      tempPassword
+    }
+  }
+`;
+
+// (2) 유저 정보 업데이트
+export const UPDATE_USER = gql`
+  mutation updateUser(
+    $userId: ID!
+    $name: String
+    $phoneNumber: String
+    $validUntil: String
+    $type: Int
+  ) {
+    updateUser(
+      userId: $userId
+      name: $name
+      phoneNumber: $phoneNumber
+      validUntil: $validUntil
+      type: $type
+    ) {
+      id
+      systemId
+      loginId
       name
-      memo
+      phoneNumber
+      type
       validUntil
     }
   }
 `;
 
-export const UPDATE_USER = gql`
-  mutation updateUser($userId: String!, $phone: String, $name: String, $memo: String, $validUntil: String) {
-    updateUser(userId: $userId, phone: $phone, name: $name, memo: $memo, validUntil: $validUntil) {
-      _id
-      userId
-      phone
-      name
-      memo
-      validUntil
-    }
+// (3) 유저 비밀번호 리셋
+export const RESET_USER_PASSWORD = gql`
+  mutation resetUserPassword($userId: ID!) {
+    resetUserPassword(userId: $userId)
   }
 `;

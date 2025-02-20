@@ -11,123 +11,43 @@ export const GET_SUMMARY = gql`
   }
 `;
 
-
-
-export const GET_USER_LIST = gql`
-    query getUserList($start: Int!, $end: Int!) {
-        getUserList(start: $start, end: $end) {
-            _id
-            userId
-            name
-            phone
-            memo
-            validUntil
-        }
-    }
-`;
-
-
-export const GET_USER_BY_PHONE = gql`
-  query getUserByPhone($phone: String!) {
-    getUserByPhone(phone: $phone) {
-      _id
-      userId
+// (1) 모든 유저 조회
+export const GET_ALL_USERS = gql`
+  query {
+    getAllUsers {
+      id
+      systemId
+      loginId
       name
-      phone
-      memo
+      phoneNumber
+      type
+      createdAt
       validUntil
     }
   }
 `;
 
-export const GET_USER_BY_NAME = gql`
-  query getUserByName($name: String!) {
-    getUserByName(name: $name) {
-      _id
-      userId
-      name
-      phone
-      memo
-      validUntil
-    }
-  }
-`;
-
-
-// 어드민 전용 callLogs 조회
-export const GET_CALL_LOGS = gql`
-    query GetCallLogs($start: Int!, $end: Int!) {
-        getCallLogs(start: $start, end: $end) {
-            _id
-            timestamp
-            userId {
-                name
-                phone
-            }
-            customerId {
-            phone
-            averageScore
-            }
-            memo
-            score
-        }
-    }
-`;
-
-// queries.js
-export const GET_CALL_LOGS_BY_PHONE = gql`
-  query getCallLogByPhone($customerPhone: String!, $userId: String, $userPhone: String) {
-    getCallLogByPhone(customerPhone: $customerPhone, userId: $userId, userPhone: $userPhone) {
-      _id
-      timestamp
-      userId {
+// (2) 특정 유저 + 전화번호부 기록
+export const GET_USER_RECORDS = gql`
+  query getUserRecords($userId: ID!) {
+    getUserRecords(userId: $userId) {
+      user {
+        id
+        systemId
+        loginId
         name
-        phone
+        phoneNumber
+        type
+        createdAt
+        validUntil
       }
-      customerId {
-        phone
-        averageScore
-      }
-      memo
-      score
-    }
-  }
-`;
-
-
-export const GET_CUSTOMERS = gql`
-    query GetCustomers($start: Int!, $end: Int!) {
-        getCustomers(start: $start, end: $end) {
-            _id
-            phone
-            averageScore
-            totalCalls
-        }
-    }
-`;
-
-export const GET_CUSTOMER_BY_PHONE = gql`
-  query getCustomerByPhone($searchPhone: String!, $userId: String, $phone: String) {
-    getCustomerByPhone(userId: $userId, phone: $phone, searchPhone: $searchPhone) {
-      customer {
-        _id
-        phone
-        averageScore
-        totalCalls
-      }
-      callLogs {
-        _id
-        score
+      records {
+        phoneNumber
+        name
         memo
-        timestamp
-        userId {
-          userId
-          phone
-        }
+        type
+        createdAt
       }
     }
   }
 `;
-
-
-
