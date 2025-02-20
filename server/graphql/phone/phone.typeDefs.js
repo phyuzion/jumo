@@ -9,6 +9,7 @@ module.exports = gql`
     memo: String
     type: Int
     createdAt: String
+  createdAt: String
   }
 
   type PhoneNumber {
@@ -26,6 +27,7 @@ module.exports = gql`
     name: String
     memo: String
     type: Int
+    createdAt: String
   }
 
   extend type Query {

@@ -1,7 +1,7 @@
 // RoutesConfig.js
-import { Summary, Users, } from './pages';
+import { PhoneRecords, Summary, Users, } from './pages';
 import { FiShoppingBag } from 'react-icons/fi';
-import { AiOutlineCalendar } from 'react-icons/ai';
+import { AiOutlineCalendar, AiOutlinePhone } from 'react-icons/ai';
 
 export const routes = [
   {
@@ -23,6 +23,12 @@ export const routes = [
         name: "유저",
         component: <Users />,
         icon: <AiOutlineCalendar />,
+      },
+      {
+        path: "records",
+        name: "전화번호부",
+        component: <PhoneRecords />,
+        icon: <AiOutlinePhone />,
       },
     ],
   },

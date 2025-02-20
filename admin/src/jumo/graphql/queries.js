@@ -51,3 +51,23 @@ export const GET_USER_RECORDS = gql`
     }
   }
 `;
+
+// (A) 전화번호로 1개 문서 조회
+export const GET_PHONE_NUMBER = gql`
+  query getPhoneNumber($phoneNumber: String!) {
+    getPhoneNumber(phoneNumber: $phoneNumber) {
+      id
+      phoneNumber
+      type
+      records {
+        userName
+        userType
+        name
+        memo
+        type
+        createdAt
+      }
+    }
+  }
+`;
+

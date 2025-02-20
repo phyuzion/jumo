@@ -74,14 +74,14 @@ module.exports = {
             name: record.name || '',
             memo: record.memo || '',
             type: record.type || 0,
-            createdAt: new Date(),
+            createdAt: record.createdAt ? new Date(record.createdAt) : new Date(),
           });
         } else {
           // 업데이트
           if (record.name !== undefined)  existingRecord.name = record.name;
           if (record.memo !== undefined)  existingRecord.memo = record.memo;
           if (record.type !== undefined)  existingRecord.type = record.type;
-          existingRecord.createdAt = new Date(); // 갱신 시간
+          existing.createdAt = record.createdAt ? new Date(record.createdAt) : new Date();
         }
 
         // 4) 위험 번호 로직

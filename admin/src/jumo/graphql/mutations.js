@@ -62,3 +62,11 @@ export const RESET_USER_PASSWORD = gql`
     resetUserPassword(userId: $userId)
   }
 `;
+
+
+// (A) 여러 Record 업서트 (하나만 보낼 수도 있음)
+export const UPSERT_PHONE_RECORDS = gql`
+  mutation upsertPhoneRecords($records: [PhoneRecordInput!]!) {
+    upsertPhoneRecords(records: $records)
+  }
+`;
