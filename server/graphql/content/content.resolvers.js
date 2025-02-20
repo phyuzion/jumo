@@ -52,7 +52,7 @@ module.exports = {
         type: doc.type,
         title: doc.title,
         createdAt: doc.createdAt,
-        content: '',
+        content: {},
         comments: [],
       }));
     },
@@ -79,18 +79,26 @@ module.exports = {
       } else {
         // 일반 유저 -> checkUserValid
         const user = await checkUserValid(tokenData);
-        userIdForThis = user._id; 
+        userIdForThis = user._id.toString(); 
       }
 
       if (!content) {
         throw new UserInputError('content는 필수입니다.');
       }
 
+      let parsedDelta = {};
+      try {
+        parsedDelta = JSON.parse(content); 
+        // 클라이언트에서 string으로 넘겼다면 parse
+      } catch(e) {
+        throw new UserInputError('Quill Delta JSON parse error');
+      }
+
       const newDoc = new Content({
         userId: userIdForThis,
         type: type || 0,
         title: title || '',
-        content,
+        content: parsedDelta,
         createdAt: new Date(),
         comments: [],
       });
@@ -109,7 +117,16 @@ module.exports = {
       await checkAuthorOrAdmin(tokenData, found);
 
       if (title !== undefined) found.title = title;
-      if (content !== undefined) found.content = content;
+      if (content !== undefined) {
+        // Delta JSON parse
+        let parsed = {};
+        try {
+          parsed = JSON.parse(content);
+        } catch(e) {
+          throw new UserInputError('Delta parse fail');
+        }
+        doc.content = parsed;
+      }
       if (type !== undefined) found.type = type; // admin or author
       await found.save();
       return found;
@@ -150,26 +167,23 @@ module.exports = {
 
     // 댓글 삭제(index)
     deleteReply: async (_, { contentId, index }, { tokenData }) => {
-      const user = await checkUserValid(tokenData);
-
-      const found = await Content.findById(contentId);
-      if (!found) {
-        throw new UserInputError('글이 존재하지 않습니다.');
+      const doc = await Content.findById(contentId);
+      if (!doc) throw new UserInputError('글 없음');
+      if (index < 0 || index >= doc.comments.length) {
+        throw new UserInputError('해당 댓글 없음');
       }
-      if (index < 0 || index >= found.comments.length) {
-        throw new UserInputError('해당 댓글이 존재하지 않습니다.');
-      }
-
-      // 댓글 작성자 or admin
-      const commentObj = found.comments[index];
+      const cObj = doc.comments[index];
+      // admin or same user
       if (tokenData?.adminId) {
-        // admin ok
-      } else if (commentObj.userId.toString() !== user._id.toString()) {
-        throw new ForbiddenError('댓글 삭제 권한이 없습니다.');
+        // pass
+      } else {
+        const user = await checkUserValid(tokenData);
+        if (cObj.userId !== user._id.toString()) {
+          throw new ForbiddenError('댓글 삭제 권한 없음');
+        }
       }
-
-      found.comments.splice(index, 1);
-      await found.save();
+      doc.comments.splice(index, 1);
+      await doc.save();
       return true;
     },
   },
