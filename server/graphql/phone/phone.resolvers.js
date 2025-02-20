@@ -81,7 +81,7 @@ module.exports = {
           if (record.name !== undefined)  existingRecord.name = record.name;
           if (record.memo !== undefined)  existingRecord.memo = record.memo;
           if (record.type !== undefined)  existingRecord.type = record.type;
-          existing.createdAt = record.createdAt ? new Date(record.createdAt) : new Date();
+          existingRecord.createdAt = record.createdAt ? new Date(record.createdAt) : new Date();
         }
 
         // 4) 위험 번호 로직

@@ -11,6 +11,8 @@ const phoneTypeDefs = require('./phone/phone.typeDefs');
 const phoneResolvers = require('./phone/phone.resolvers');
 const contentTypeDefs = require('./content/content.typeDefs');
 const contentResolvers = require('./content/content.resolvers');
+const authTypeDefs = require('./auth/auth.typeDefs');
+const authResolvers = require('./auth/auth.resolvers');
 
 /*
   루트 스키마에 최소 1개씩 Query, Mutation 이 필요.
@@ -39,6 +41,7 @@ const typeDefs = mergeTypeDefs([
   userTypeDefs,
   phoneTypeDefs,
   contentTypeDefs,
+  authTypeDefs,
 ]);
 
 // 모든 resolvers 합치기
@@ -47,6 +50,7 @@ const resolvers = mergeResolvers([
   userResolvers,
   phoneResolvers,
   contentResolvers,
+  authResolvers,
 ]);
 
 module.exports = {
