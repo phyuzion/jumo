@@ -7,6 +7,12 @@ module.exports = gql`
     username: String!
   }
 
+  type SummaryPayload {
+    usersCount: Int!
+    phoneCount: Int!
+    dangerPhoneCount: Int!
+  }
+
   extend type Mutation {
     """
     Admin 생성
