@@ -24,4 +24,14 @@ module.exports = gql`
     """
     adminLogin(username: String!, password: String!): AuthPayload
   }
+
+  extend type Query {
+    """
+    (Admin 전용) 대시보드 요약 정보
+    - 총 유저 수
+    - 총 전화번호 문서 수
+    - type=99(위험) 전화번호 문서 수
+    """
+    getSummary: SummaryPayload!
+  }
 `;
