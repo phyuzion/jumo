@@ -60,6 +60,7 @@ const Navbar = () => {
   // 로그아웃 함수
   const handleLogout = () => {
     localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminRefreshToken');
     navigate('/login'); // 또는 window.location.href = '/login';
   };
 

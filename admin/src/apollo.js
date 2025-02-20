@@ -1,46 +1,104 @@
 // src/apollo.js
-import { ApolloClient, InMemoryCache, createHttpLink } from '@apollo/client';
+import { ApolloClient, InMemoryCache, createHttpLink, from } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { TokenRefreshLink } from 'apollo-link-token-refresh';
+import { jwtDecode } from 'jwt-decode';
 import { onError } from '@apollo/client/link/error';
 
-// 1) HTTP Link: GraphQL 서버 URL
 const httpLink = createHttpLink({
-  uri: 'https://jumo-vs8e.onrender.com/graphql', // 예시
+  uri: 'https://jumo-vs8e.onrender.com/graphql',
 });
 
-// 2) Auth Link: 로컬 스토리지에서 Access Token 읽어서 Authorization 헤더에 삽입
+// TokenRefreshLink
+const tokenRefreshLink = new TokenRefreshLink({
+  isTokenValidOrUndefined: async () => {
+    const token = localStorage.getItem('adminToken');
+    if (!token) return true; // not logged in
+    try {
+      const { exp } = jwtDecode(token);
+      if (!exp) return true;
+      const now = Date.now() / 1000;
+      return exp > now; // exp가 현재보다 크면 유효
+    } catch (err) {
+      return false;
+    }
+  },
+  fetchAccessToken: async () => {
+    const refreshToken = localStorage.getItem('adminRefreshToken');
+    if (!refreshToken) {
+      return Promise.reject('No refresh token');
+    }
+    // refreshToken Mutation
+    const res = await fetch('https://jumo-vs8e.onrender.com/graphql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: `
+          mutation refreshToken($refreshToken: String!) {
+            refreshToken(refreshToken:$refreshToken) {
+              accessToken
+              refreshToken
+            }
+          }
+        `,
+        variables: { refreshToken },
+      }),
+    });
+    return await res.json();
+  },
+  handleFetch: (response) => {
+    const newAcc = response.data.refreshToken.accessToken;
+    const newRef = response.data.refreshToken.refreshToken;
+    localStorage.setItem('adminToken', newAcc);
+    localStorage.setItem('adminRefreshToken', newRef);
+  },
+  handleError: (err) => {
+    console.error('Failed to refresh token:', err);
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminRefreshToken');
+    window.location.href = '/login';
+  },
+});
+
+// Auth Link
 const authLink = setContext((_, { headers }) => {
-  const accessToken = localStorage.getItem('adminToken');
+  const token = localStorage.getItem('adminToken');
   return {
     headers: {
       ...headers,
-      Authorization: accessToken ? `Bearer ${accessToken}` : '',
+      Authorization: token ? `Bearer ${token}` : '',
     },
   };
 });
 
-// 3) Error Link: 인증 에러 시 처리
+// Error Link
 const errorLink = onError(({ graphQLErrors, networkError }) => {
+  // Refresh Token도 만료 or 기타?
   if (graphQLErrors) {
     for (let err of graphQLErrors) {
       if (err.extensions?.code === 'UNAUTHENTICATED') {
-        // 만료 or 무효 토큰 → 토큰 제거 → 로그인 페이지로
-        localStorage.removeItem('adminAccessToken');
+        console.log('UNAUTHENTICATED -> forced logout');
+        localStorage.removeItem('adminToken');
         localStorage.removeItem('adminRefreshToken');
         window.location.href = '/login';
       }
     }
   }
   if (networkError && networkError.statusCode === 401) {
-    localStorage.removeItem('adminAccessToken');
+    console.log('401 -> forced logout');
+    localStorage.removeItem('adminToken');
     localStorage.removeItem('adminRefreshToken');
     window.location.href = '/login';
   }
 });
 
-// 4) Apollo Client 생성
 const client = new ApolloClient({
-  link: errorLink.concat(authLink).concat(httpLink),
+  link: from([
+    tokenRefreshLink,
+    errorLink,
+    authLink,
+    httpLink,
+  ]),
   cache: new InMemoryCache(),
 });
 
