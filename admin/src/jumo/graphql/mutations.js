@@ -131,3 +131,27 @@ export const DELETE_REPLY = gql`
     deleteReply(contentId: $contentId, index: $index)
   }
 `;
+
+
+export const CREATE_NOTIFICATION = gql`
+  mutation createNotification(
+    $title: String!,
+    $message: String!,
+    $validUntil: String,
+    $userId: ID
+  ) {
+    createNotification(
+      title: $title,
+      message: $message,
+      validUntil: $validUntil,
+      userId: $userId
+    ) {
+      id
+      title
+      message
+      validUntil
+      createdAt
+      targetUserId
+    }
+  }
+`;

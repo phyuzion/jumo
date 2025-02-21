@@ -101,3 +101,16 @@ export const GET_SINGLE_CONTENT = gql`
     }
   }
 `;
+
+export const GET_NOTIFICATIONS = gql`
+  query getNotifications {
+    getNotifications {
+      id
+      title
+      message
+      validUntil
+      createdAt
+      targetUserId
+    }
+  }
+`;

@@ -146,8 +146,9 @@ const PhoneRecords = () => {
       if (isNaN(dt.getTime())) {
         // 혹시 epoch string -> number parse
         const epoch = parseFloat(data[field]);
+        console.log('epoch', epoch);
         if (!isNaN(epoch)) {
-          const dt2 = new Date(epoch);
+          const dt2 = new Date(parseInt(epoch));
           if (!isNaN(dt2.getTime())) {
             return dt2.toISOString().slice(0, 16).replace('T', ' ');
           }
@@ -296,6 +297,7 @@ const PhoneRecords = () => {
               <div className="flex gap-2">
                 <label className="w-24">생성일</label>
                 <input
+                  type="datetime-local"
                   className="border p-1 flex-1"
                   value={formCreatedAt}
                   onChange={(e) => setFormCreatedAt(e.target.value)}
