@@ -70,3 +70,64 @@ export const UPSERT_PHONE_RECORDS = gql`
     upsertPhoneRecords(records: $records)
   }
 `;
+
+export const CREATE_CONTENT = gql`
+  mutation createContent($type: Int, $title: String, $content: JSON!) {
+    createContent(type: $type, title: $title, content: $content) {
+      id
+      userId
+      type
+      title
+      createdAt
+      content
+      comments {
+        userId
+        comment
+        createdAt
+      }
+    }
+  }
+`;
+
+export const UPDATE_CONTENT = gql`
+  mutation updateContent($contentId: ID!, $title: String, $content: JSON, $type: Int) {
+    updateContent(contentId: $contentId, title: $title, content: $content, type: $type) {
+      id
+      userId
+      type
+      title
+      createdAt
+      content
+      comments {
+        userId
+        comment
+        createdAt
+      }
+    }
+  }
+`;
+
+export const DELETE_CONTENT = gql`
+  mutation deleteContent($contentId: ID!) {
+    deleteContent(contentId: $contentId)
+  }
+`;
+
+export const CREATE_REPLY = gql`
+  mutation createReply($contentId: ID!, $comment: String!) {
+    createReply(contentId: $contentId, comment: $comment) {
+      id
+      comments {
+        userId
+        comment
+        createdAt
+      }
+    }
+  }
+`;
+
+export const DELETE_REPLY = gql`
+  mutation deleteReply($contentId: ID!, $index: Int!) {
+    deleteReply(contentId: $contentId, index: $index)
+  }
+`;

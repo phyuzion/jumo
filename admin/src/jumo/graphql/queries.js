@@ -71,3 +71,33 @@ export const GET_PHONE_NUMBER = gql`
   }
 `;
 
+export const GET_CONTENTS = gql`
+  query getContents($type: Int) {
+    getContents(type: $type) {
+      id
+      userId
+      type
+      title
+      createdAt
+    }
+  }
+`;
+
+export const GET_SINGLE_CONTENT = gql`
+  query getSingleContent($contentId: ID!) {
+    getSingleContent(contentId: $contentId) {
+      id
+      userId
+      type
+      title
+      createdAt
+      # content: Delta(JSON) -> we'll get it as an object string?
+      content
+      comments {
+        userId
+        comment
+        createdAt
+      }
+    }
+  }
+`;
