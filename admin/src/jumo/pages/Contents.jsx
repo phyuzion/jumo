@@ -74,7 +74,8 @@ function ContentsWithQuill() {
 
   // ============ 상세 LazyQuery ============
   const [getSingleLazy, { data: singleData }] = useLazyQuery(GET_SINGLE_CONTENT, {
-    fetchPolicy: 'network-only',
+    fetchPolicy: 'no-cache',
+    notifyOnNetworkStatusChange: true,
   });
 
   // ============ Mutation ============
@@ -171,7 +172,8 @@ function ContentsWithQuill() {
   // ============ 상세 열기 ============
   const handleDetailOpen = async (row) => {
     try {
-      await getSingleLazy({ variables: { contentId: row.id } });
+      await getSingleLazy({ variables: { contentId: row.id, 
+        _ts: Date.now() } });
     } catch (err) {
       alert(err.message);
     }
