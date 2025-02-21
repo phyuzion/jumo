@@ -180,7 +180,7 @@ const PhoneRecords = () => {
   };
 
   return (
-    <div className="m-2 md:m-10 p-2 md:p-10 bg-white rounded-3xl shadow-2xl">
+    <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
       <Header category="Page" title="전화번호 레코드 관리" />
 
       <div className="mb-4 flex gap-2 items-center">

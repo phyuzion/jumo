@@ -209,7 +209,8 @@ const Users = () => {
 
   // ============= RENDER =============
   return (
-    <div className="m-2 md:m-10 p-2 md:p-10 bg-white rounded-3xl shadow-2xl">
+    
+    <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
       <Header category="Page" title="유저 목록" />
 
       <div className="flex gap-2 mb-4">

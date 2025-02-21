@@ -10,6 +10,9 @@ import {
   Inject,
 } from '@syncfusion/ej2-react-grids';
 
+import { Header } from '../components';
+
+
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Quill from 'quill'; // Delta -> HTML 변환용
@@ -59,7 +62,7 @@ function formatDate(dateStr) {
   return d.toLocaleString();
 }
 
-function ContentsWithQuill() {
+function Contents() {
   const gridRef = useRef(null);
 
   // ============ 목록 필터 ============
@@ -265,9 +268,9 @@ function ContentsWithQuill() {
   };
 
   return (
-    <div className="p-4">
-      <h1 className="font-bold text-xl mb-2">게시판 (Syncfusion + Quill) - defaultValue 사용 예시</h1>
-
+    <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
+      <Header category="Page" title="게시판" />
+      
       {/* Filter */}
       <div className="flex gap-2 mb-4">
         <select value={typeFilter} onChange={handleTypeChange} className="border p-1 rounded">
@@ -532,4 +535,4 @@ function ContentsWithQuill() {
   );
 }
 
-export default ContentsWithQuill;
+export default Contents;

@@ -15,6 +15,7 @@ import {
 
 import { CREATE_NOTIFICATION } from '../graphql/mutations';
 import { GET_NOTIFICATIONS } from '../graphql/queries';
+import { Header } from '../components';
 
 const PAGE_SIZE = 10;
 
@@ -117,9 +118,10 @@ export default function Notifications() {
 
   // ====== render ======
   return (
-    <div className="m-2 md:m-10 p-2 md:p-10 bg-white rounded-3xl shadow-2xl">
+    
+    <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
+    <Header category="Page" title="알림" />
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold">알림 목록</h2>
         <button
           className="bg-blue-500 text-white px-3 py-1 rounded"
           onClick={handleCreateClick}
