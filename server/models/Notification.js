@@ -6,6 +6,7 @@ const notificationSchema = new mongoose.Schema({
   message: { type: String, default: '' },
   validUntil: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
+  targetUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 });
 
 module.exports = mongoose.model('Notification', notificationSchema);
