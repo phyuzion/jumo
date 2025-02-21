@@ -54,7 +54,7 @@ function deltaToHtml(deltaObj) {
 /** 날짜 포맷 */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d = new Date(parseInt(dateStr));
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleString();
 }
