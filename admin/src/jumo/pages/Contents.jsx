@@ -1,3 +1,5 @@
+// src/pages/ContentsWithQuill.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useLazyQuery, useMutation } from '@apollo/client';
 
@@ -13,6 +15,7 @@ import {
 
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
+import Quill from 'quill'; // 실시간 Delta -> HTML 변환용 (npm install quill)
 
 import { GET_CONTENTS, GET_SINGLE_CONTENT } from '../graphql/queries';
 import { CREATE_CONTENT,
@@ -21,7 +24,7 @@ import { CREATE_CONTENT,
     CREATE_REPLY,
     DELETE_REPLY, } from '../graphql/mutations';
 
-// Quill Toolbar 설정
+// Quill toolbar 설정
 const quillModules = {
   toolbar: [
     [{ size: [] }],
@@ -40,6 +43,21 @@ const quillFormats = [
 
 const PAGE_SIZE = 10;
 
+/** Delta -> HTML 변환(실제 Quill 사용) */
+function deltaToHtml(deltaObj) {
+  if (!deltaObj || !deltaObj.ops) {
+    return '<p>(비어있음)</p>';
+  }
+  // 임시 div
+  const tempDiv = document.createElement('div');
+  // Quill 인스턴스 생성(해당 div 에 연결)
+  const tempQuill = new Quill(tempDiv);
+  // Delta 세팅
+  tempQuill.setContents(deltaObj);
+  // 최종 HTML 추출
+  return tempQuill.root.innerHTML;
+}
+
 function ContentsWithQuill() {
   const gridRef = useRef(null);
 
@@ -53,8 +71,11 @@ function ContentsWithQuill() {
   });
   const [list, setList] = useState([]);
 
-  // 상세 lazy
-  const [getSingleLazy, { data: singleData }] = useLazyQuery(GET_SINGLE_CONTENT);
+  // 상세 lazyQuery
+  // fetchPolicy:'network-only' => 매번 서버에서 fresh data
+  const [getSingleLazy, { data: singleData }] = useLazyQuery(GET_SINGLE_CONTENT, {
+    fetchPolicy: 'network-only',
+  });
 
   // Mutation
   const [createContentMut] = useMutation(CREATE_CONTENT);
@@ -67,17 +88,17 @@ function ContentsWithQuill() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newType, setNewType] = useState(0);
   const [newTitle, setNewTitle] = useState('');
-  const [newDeltaStr, setNewDeltaStr] = useState(''); // Delta JSON string
+  const [newDelta, setNewDelta] = useState(null); // Delta 객체
 
   // 상세/수정 모달
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailItem, setDetailItem] = useState(null);
+  const [detailItem, setDetailItem] = useState(null); // { id, userId, content(Delta), createdAt, ... }
   const [editMode, setEditMode] = useState(false);
 
-  // 수정시
+  // 수정 시
   const [editType, setEditType] = useState(0);
   const [editTitle, setEditTitle] = useState('');
-  const [editDeltaStr, setEditDeltaStr] = useState('');
+  const [editDelta, setEditDelta] = useState(null); // Delta 객체
 
   // 댓글
   const [replyText, setReplyText] = useState('');
@@ -99,16 +120,15 @@ function ContentsWithQuill() {
       setDetailItem(singleData.getSingleContent);
       setShowDetailModal(true);
       setEditMode(false);
-      // 초기값
       setReplyText('');
+      // 초기값
       setEditTitle(singleData.getSingleContent.title || '');
       setEditType(singleData.getSingleContent.type || 0);
-      // Delta object -> JSON string
       if (singleData.getSingleContent.content) {
-        const deltaObj = singleData.getSingleContent.content; 
-        setEditDeltaStr(deltaObj);
+        // Delta 객체
+        setEditDelta(singleData.getSingleContent.content);
       } else {
-        setEditDeltaStr('');
+        setEditDelta(null);
       }
     }
   }, [singleData]);
@@ -120,19 +140,23 @@ function ContentsWithQuill() {
     refetch({ type: val });
   };
 
+  // 새글
   const handleCreateClick = () => {
     setNewType(typeFilter);
     setNewTitle('');
-    setNewDeltaStr('');
+    setNewDelta(null);
     setShowCreateModal(true);
   };
   const handleCreateSubmit = async () => {
     try {
+      // Delta 객체 -> 서버: content: JSON
+      // if null => { ops: [] } 로 대체
+      const finalDelta = newDelta || { ops: [] };
       await createContentMut({
         variables: {
           type: newType,
           title: newTitle,
-          content: newDeltaStr,
+          content: finalDelta,
         },
       });
       alert('작성 완료!');
@@ -143,6 +167,7 @@ function ContentsWithQuill() {
     }
   };
 
+  // 상세 열기
   const handleDetailOpen = async (row) => {
     try {
       await getSingleLazy({ variables: { contentId: row.id } });
@@ -151,6 +176,7 @@ function ContentsWithQuill() {
     }
   };
 
+  // 글 삭제
   const handleDeleteContent = async (row) => {
     if (!window.confirm('정말 삭제?')) return;
     try {
@@ -164,7 +190,7 @@ function ContentsWithQuill() {
     }
   };
 
-  // 댓글 작성
+  // 댓글 등록
   const handleReplySubmit = async () => {
     if (!detailItem) return;
     if (!replyText.trim()) return;
@@ -173,7 +199,6 @@ function ContentsWithQuill() {
         variables: { contentId: detailItem.id, comment: replyText },
       });
       if (res.data.createReply) {
-        // 새 댓글 목록
         setDetailItem({
           ...detailItem,
           comments: res.data.createReply.comments,
@@ -195,41 +220,64 @@ function ContentsWithQuill() {
       });
       if (res.data.deleteReply) {
         // 수동 제거
-        const newArr = [...detailItem.comments];
-        newArr.splice(idx, 1);
-        setDetailItem({ ...detailItem, comments: newArr });
+        const newCom = [...detailItem.comments];
+        newCom.splice(idx, 1);
+        setDetailItem({ ...detailItem, comments: newCom });
       }
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // 수정모드 -> 저장
+  // 수정 저장
   const handleUpdateSubmit = async () => {
     if (!detailItem) return;
     try {
+      const finalDelta = editDelta || { ops: [] };
       const res = await updateContentMut({
         variables: {
           contentId: detailItem.id,
           title: editTitle,
           type: editType,
-          content: editDeltaStr,
+          content: finalDelta,
         },
       });
       alert('수정 완료!');
       setEditMode(false);
       setDetailItem(res.data.updateContent);
-      // refetch
       refetch({ type: typeFilter });
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // =========== RENDER ===========
+  // 닫기 (상세)
+  const handleCloseDetail = () => {
+    setShowDetailModal(false);
+    setDetailItem(null);
+  };
+
+  // 닫기 (새글)
+  const handleCloseCreate = () => {
+    setShowCreateModal(false);
+  };
+
+  // Delta -> HTML
+  const renderDeltaAsHtml = (deltaObj) => {
+    return { __html: deltaToHtml(deltaObj) };
+  };
+
+  // 포맷된 Date
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    return d.toLocaleString();
+  };
+
   return (
     <div className="p-4">
-      <h1 className="font-bold text-xl mb-2">게시판 (Syncfusion + Quill)</h1>
+      <h1 className="font-bold text-xl mb-2">게시판 (Syncfusion + Quill) - 개선버전</h1>
 
       {/* Filter */}
       <div className="flex gap-2 mb-4">
@@ -238,7 +286,10 @@ function ContentsWithQuill() {
           <option value={1}>CONTENT_1</option>
           <option value={2}>CONTENT_2</option>
         </select>
-        <button className="bg-blue-500 text-white px-3 py-1 rounded" onClick={handleCreateClick}>
+        <button
+          className="bg-blue-500 text-white px-3 py-1 rounded"
+          onClick={handleCreateClick}
+        >
           새글 작성
         </button>
       </div>
@@ -246,6 +297,7 @@ function ContentsWithQuill() {
       {loading && <p>로딩중...</p>}
       {error && <p className="text-red-500">{error.message}</p>}
 
+      {/* 목록(Grid) */}
       <GridComponent
         ref={gridRef}
         dataSource={list}
@@ -258,7 +310,15 @@ function ContentsWithQuill() {
           <ColumnDirective field="userId" headerText="User" width="100" />
           <ColumnDirective field="title" headerText="Title" width="200" />
           <ColumnDirective field="type" headerText="Type" width="60" textAlign="Center" />
-          <ColumnDirective field="createdAt" headerText="Date" width="120" textAlign="Center" />
+          <ColumnDirective
+            field="createdAt"
+            headerText="Date"
+            width="140"
+            textAlign="Center"
+            template={(rowData) => (
+              <span>{formatDate(rowData.createdAt)}</span>
+            )}
+          />
           <ColumnDirective
             headerText="Detail"
             width="80"
@@ -296,9 +356,8 @@ function ContentsWithQuill() {
             className="bg-white rounded shadow-2xl p-4 overflow-hidden flex flex-col"
             style={{ width: '80%', height: '80%' }}
           >
-            <h2 className="text-xl font-bold mb-2">새글 작성 (Delta)</h2>
+            <h2 className="text-xl font-bold mb-2">새글 작성</h2>
 
-            {/* 상단: Type, Title */}
             <div className="flex-none mb-2">
               <label>Type: </label>
               <select
@@ -310,6 +369,7 @@ function ContentsWithQuill() {
                 <option value={1}>CONTENT_1</option>
                 <option value={2}>CONTENT_2</option>
               </select>
+
               <label>Title: </label>
               <input
                 className="border p-1 ml-2"
@@ -318,22 +378,19 @@ function ContentsWithQuill() {
               />
             </div>
 
-            {/* 중간: Quill */}
             <div className="flex-auto overflow-auto border mb-2">
               <ReactQuill
                 modules={quillModules}
                 formats={quillFormats}
                 onChange={(html, delta, source, editor) => {
-                  // delta = editor.getContents();
+                  // deltaObj
                   const deltaObj = editor.getContents();
-                  
-                  setNewDeltaStr(deltaObj);
+                  setNewDelta(deltaObj); // Delta 객체 그대로
                 }}
                 style={{ height: '100%' }}
               />
             </div>
 
-            {/* 하단 버튼 */}
             <div className="flex-none flex gap-2 justify-end">
               <button
                 className="bg-blue-500 text-white px-4 py-2 rounded"
@@ -360,7 +417,7 @@ function ContentsWithQuill() {
             style={{ width: '80%', height: '80%' }}
           >
             {!editMode ? (
-              // VIEW MODE
+              // 뷰 모드
               <>
                 <h2 className="text-xl font-bold mb-2">상세 보기</h2>
                 <div className="flex-none mb-2">
@@ -368,21 +425,22 @@ function ContentsWithQuill() {
                   <p>User: {detailItem.userId}</p>
                   <p>Type: {detailItem.type}</p>
                   <p>Title: {detailItem.title}</p>
+                  <p>CreatedAt: {formatDate(detailItem.createdAt)}</p>
                 </div>
 
-                {/* 본문 Delta -> HTML */}
                 <div className="flex-auto border overflow-auto mb-2 p-2">
-                  <div dangerouslySetInnerHTML={{ __html: deltaToHtml(detailItem.content) }} />
+                  {/* Delta -> HTML */}
+                  <div dangerouslySetInnerHTML={renderDeltaAsHtml(detailItem.content)} />
                 </div>
 
                 {/* 댓글 */}
-                <div className="flex-none border p-2 mb-2 overflow-auto" style={{maxHeight:'150px'}}>
-                  <h3 className="font-semibold">댓글({detailItem.comments.length})</h3>
+                <div className="flex-none border p-2 mb-2 overflow-auto" style={{ maxHeight:'150px' }}>
+                  <h3 className="font-semibold">댓글 ({detailItem.comments.length})</h3>
                   {detailItem.comments.map((c, idx) => (
                     <div key={idx} className="border p-1 my-1">
                       <p>작성자: {c.userId}</p>
                       <p>{c.comment}</p>
-                      <p>{c.createdAt}</p>
+                      <p>{formatDate(c.createdAt)}</p>
                       <button
                         className="bg-red-500 text-white px-2 py-1 rounded"
                         onClick={() => handleDeleteReply(idx)}
@@ -391,7 +449,6 @@ function ContentsWithQuill() {
                       </button>
                     </div>
                   ))}
-                  {/* 댓글 입력 */}
                   <div className="mt-2 flex gap-2">
                     <input
                       className="border p-1 flex-1"
@@ -408,14 +465,13 @@ function ContentsWithQuill() {
                   </div>
                 </div>
 
-                {/* 버튼 */}
                 <div className="flex-none flex gap-2 justify-end">
                   <button
                     className="bg-orange-500 text-white px-3 py-1 rounded"
                     onClick={() => {
                       setEditTitle(detailItem.title);
                       setEditType(detailItem.type);
-                      setEditDeltaStr(JSON.stringify(detailItem.content || {}));
+                      setEditDelta(detailItem.content || { ops:[] });
                       setEditMode(true);
                     }}
                   >
@@ -433,7 +489,7 @@ function ContentsWithQuill() {
                 </div>
               </>
             ) : (
-              // EDIT MODE
+              // 수정 모드
               <>
                 <h2 className="text-xl font-bold mb-2">글 수정</h2>
                 <div className="flex-none mb-2">
@@ -459,19 +515,15 @@ function ContentsWithQuill() {
                   <ReactQuill
                     modules={quillModules}
                     formats={quillFormats}
-                    defaultValue=""
+                    style={{ height: '100%' }}
                     onChange={(html, delta, source, editor) => {
                       const deltaObj = editor.getContents();
-                      setEditDeltaStr(JSON.stringify(deltaObj));
+                      setEditDelta(deltaObj);
                     }}
-                    style={{ height: '100%' }}
                     onReady={(quill) => {
-                      // quill이 준비되면, 기존 Delta 주입
-                      try {
-                        const deltaObj = JSON.parse(editDeltaStr);
-                        quill.setContents(deltaObj);
-                      } catch(e) {
-                        // ...
+                      // Quill 초기화 후, 기존 Delta 세팅
+                      if (editDelta) {
+                        quill.setContents(editDelta);
                       }
                     }}
                   />
@@ -498,15 +550,6 @@ function ContentsWithQuill() {
       )}
     </div>
   );
-}
-
-// Delta -> HTML 변환(임시)
-function deltaToHtml(deltaObj) {
-  if (!deltaObj || !deltaObj.ops) {
-    return '<p>(비어있음)</p>';
-  }
-  // 실제론 quilljs convert or readOnly Quill
-  return `<pre>${JSON.stringify(deltaObj, null, 2)}</pre>`;
 }
 
 export default ContentsWithQuill;
