@@ -2,6 +2,8 @@
 const { gql } = require('apollo-server-express');
 
 module.exports = gql`
+  scalar JSON
+
   type Comment {
     userId: ID!
     comment: String
@@ -10,11 +12,14 @@ module.exports = gql`
 
   type Content {
     id: ID!
-    userId: ID!
+    userId: String
     type: Int
     title: String
-    content: String
     createdAt: String
+
+    # content를 JSON으로 선언
+    content: JSON
+
     comments: [Comment!]!
   }
 
@@ -24,8 +29,12 @@ module.exports = gql`
   }
 
   extend type Mutation {
-    createContent(type: Int, title: String, content: String!): Content
-    updateContent(contentId: ID!, title: String, content: String): Content
+    """
+    content: JSON 으로 전송 가능
+    클라이언트에서 Delta 객체 통째로 전송 가능
+    """
+    createContent(type: Int, title: String, content: JSON!): Content
+    updateContent(contentId: ID!, title: String, content: JSON, type: Int): Content
     deleteContent(contentId: ID!): Boolean
 
     createReply(contentId: ID!, comment: String!): Content

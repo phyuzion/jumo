@@ -13,6 +13,7 @@
     "express-rate-limit": "^7.5.0",
     "graphql": "^16.10.0",
     "graphql-tools": "^9.0.13",
+    "graphql-type-json": "^0.3.2",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5"
   }

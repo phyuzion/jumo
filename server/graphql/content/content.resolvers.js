@@ -1,5 +1,6 @@
 // graphql/content/content.resolvers.js
 const { UserInputError, AuthenticationError, ForbiddenError } = require('apollo-server-errors');
+const { GraphQLJSON } = require('graphql-type-json'); // 추가
 const Content = require('../../models/Content');
 const User = require('../../models/User');
 
@@ -35,70 +36,52 @@ async function checkAuthorOrAdmin(tokenData, content) {
 }
 
 module.exports = {
+  JSON: GraphQLJSON,
+
   Query: {
-    // 목록(부분 필드)
     getContents: async (_, { type }) => {
+      // 부분 필드만 가져오기
       const filter = {};
-      if (type !== undefined) {
-        filter.type = type;
-      }
-      const contents = await Content.find(filter)
+      if (type !== undefined) filter.type = type;
+      const docs = await Content.find(filter)
         .select('_id userId type title createdAt')
         .sort({ createdAt: -1 });
-      // GraphQL: id, userId, type, title, createdAt, content="", comments=[]
-      return contents.map(doc => ({
+
+      // content, comments 생략 => 빈 값
+      return docs.map(doc => ({
         id: doc._id,
-        userId: doc.userId,
+        userId: doc.userId, // string
         type: doc.type,
         title: doc.title,
         createdAt: doc.createdAt,
-        content: {},
+        content: {}, // empty object
         comments: [],
       }));
     },
-
-    // 상세
     getSingleContent: async (_, { contentId }) => {
-      const content = await Content.findById(contentId);
-      if (!content) {
-        throw new UserInputError('해당 글을 찾을 수 없습니다.');
-      }
-      // 그대로 반환 (content, comments 전부)
-      return content;
+      const doc = await Content.findById(contentId);
+      if (!doc) throw new UserInputError('해당 글 없음');
+      return doc; // doc.content는 Mixed(JSON)
     },
   },
 
   Mutation: {
-    // 글 생성
     createContent: async (_, { type, title, content }, { tokenData }) => {
-      // 관리자 or 유저 구분
-      let userIdForThis = null;
+      // content는 이미 JSON 형태로 GraphQL이 파싱해 줌!
+      // 관리자 or 유저
+      let userIdStr = '';
       if (tokenData?.adminId) {
-        // admin
-        userIdForThis = 'admin'; // 문자열 표시 or tokenData.adminId
+        userIdStr = 'admin';
       } else {
-        // 일반 유저 -> checkUserValid
         const user = await checkUserValid(tokenData);
-        userIdForThis = user._id.toString(); 
-      }
-
-      if (!content) {
-        throw new UserInputError('content는 필수입니다.');
-      }
-
-      let parsedDelta = {};
-      try {
-        parsedDelta = JSON.parse(content); 
-        // 클라이언트에서 string으로 넘겼다면 parse
-      } catch(e) {
-        throw new UserInputError('Quill Delta JSON parse error');
+        userIdStr = user._id.toString();
       }
 
       const newDoc = new Content({
-        userId: userIdForThis,
+        userId: userIdStr,
         type: type || 0,
         title: title || '',
-        content: parsedDelta,
+        content: content, // 그대로 JSON 객체
         createdAt: new Date(),
         comments: [],
       });
@@ -106,30 +89,19 @@ module.exports = {
       return newDoc;
     },
 
-    // 글 수정
     updateContent: async (_, { contentId, title, content, type }, { tokenData }) => {
-      // 글 찾기
-      const found = await Content.findById(contentId);
-      if (!found) {
-        throw new UserInputError('수정할 글이 없습니다.');
-      }
-      // 작성자 or admin
-      await checkAuthorOrAdmin(tokenData, found);
+      const doc = await Content.findById(contentId);
+      if (!doc) throw new UserInputError('글 없음');
+      await checkAuthorOrAdmin(tokenData, doc);
 
-      if (title !== undefined) found.title = title;
+      if (title !== undefined) doc.title = title;
+      if (type !== undefined) doc.type = type;
       if (content !== undefined) {
-        // Delta JSON parse
-        let parsed = {};
-        try {
-          parsed = JSON.parse(content);
-        } catch(e) {
-          throw new UserInputError('Delta parse fail');
-        }
-        doc.content = parsed;
+        // content는 이미 JSON 객체
+        doc.content = content;
       }
-      if (type !== undefined) found.type = type; // admin or author
-      await found.save();
-      return found;
+      await doc.save();
+      return doc;
     },
 
     // 글 삭제

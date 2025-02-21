@@ -1,6 +1,7 @@
 // graphql/index.js
 
 const { mergeTypeDefs, mergeResolvers } = require('@graphql-tools/merge');
+const { GraphQLJSON } = require('graphql-type-json');
 
 // 도메인별 import
 const adminTypeDefs = require('./admin/admin.typeDefs');
@@ -49,6 +50,9 @@ const resolvers = mergeResolvers([
   adminResolvers,
   userResolvers,
   phoneResolvers,
+  {
+    JSON: GraphQLJSON,
+  },
   contentResolvers,
   authResolvers,
 ]);
