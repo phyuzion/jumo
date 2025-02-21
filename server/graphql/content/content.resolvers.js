@@ -118,8 +118,15 @@ module.exports = {
 
     // 댓글 생성
     createReply: async (_, { contentId, comment }, { tokenData }) => {
-      // 로그인 유저 필요
-      const user = await checkUserValid(tokenData);
+
+      // 관리자 or 유저
+      let userIdStr = '';
+      if (tokenData?.adminId) {
+        userIdStr = 'admin';
+      } else {
+        const user = await checkUserValid(tokenData);
+        userIdStr = user._id.toString();
+      }
 
       const found = await Content.findById(contentId);
       if (!found) {
@@ -128,7 +135,7 @@ module.exports = {
 
       // 댓글 작성
       found.comments.push({
-        userId: user._id, 
+        userId: userIdStr, 
         comment,
         createdAt: new Date(),
       });

@@ -5,7 +5,7 @@ module.exports = gql`
   scalar JSON
 
   type Comment {
-    userId: ID!
+    userId: String!
     comment: String
     createdAt: String
   }
@@ -16,10 +16,7 @@ module.exports = gql`
     type: Int
     title: String
     createdAt: String
-
-    # content를 JSON으로 선언
     content: JSON
-
     comments: [Comment!]!
   }
 
