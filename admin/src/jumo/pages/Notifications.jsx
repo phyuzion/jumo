@@ -66,7 +66,14 @@ export default function Notifications() {
   const handleCreateClick = () => {
     setTitle('');
     setMessage('');
-    setValidDate('');      // "" => "기본 1일" 서버 정책
+
+    const now = new Date();
+    let year = now.getFullYear();
+    let mon  = String(now.getMonth()).padStart(2, '0');
+    let day  = String(now.getDate()+1).padStart(2, '0');
+    let hh   = String(now.getHours()).padStart(2, '0');
+    let mm   = String(now.getMinutes()).padStart(2, '0');
+    setValidDate(`${year}-${mon}-${day}T${hh}:${mm}`);      // "" => "기본 1일" 서버 정책
     setTargetUserId('');
     setShowCreateModal(true);
   };

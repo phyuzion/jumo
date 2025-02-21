@@ -77,7 +77,13 @@ const PhoneRecords = () => {
     setFormType(0);
     setFormUserName('');
     setFormUserType(0);
-    setFormCreatedAt(String(Date.now())); // 현재 epoch(ms) 문자열
+    const now = new Date();
+    let year = now.getFullYear();
+    let mon  = String(now.getMonth()).padStart(2, '0');
+    let day  = String(now.getDate()).padStart(2, '0');
+    let hh   = String(now.getHours()).padStart(2, '0');
+    let mm   = String(now.getMinutes()).padStart(2, '0');
+    setFormCreatedAt(`${year}-${mon}-${day}T${hh}:${mm}`);
     setShowModal(true);
   };
 
@@ -97,14 +103,27 @@ const PhoneRecords = () => {
 
     if (rec.createdAt) {
       // epoch or iso
-      const dt = new Date(rec.createdAt);
+      const dt = new Date(parseInt(rec.createdAt));
       if (!isNaN(dt)) {
-        setFormCreatedAt(String(dt.getTime())); // epoch
+        let year = dt.getFullYear();
+        let mon  = String(dt.getMonth()).padStart(2, '0');
+        let day  = String(dt.getDate()).padStart(2, '0');
+        let hh   = String(dt.getHours()).padStart(2, '0');
+        let mm   = String(dt.getMinutes()).padStart(2, '0');
+
+        const localStr = `${year}-${mon}-${day}T${hh}:${mm}`;
+        setFormCreatedAt(localStr); // epoch
       } else {
-        setFormCreatedAt(rec.createdAt);
+        setFormCreatedAt('');
       }
     } else {
-      setFormCreatedAt(String(Date.now()));
+        const now = new Date();
+        let year = now.getFullYear();
+        let mon  = String(now.getMonth()).padStart(2, '0');
+        let day  = String(now.getDate()).padStart(2, '0');
+        let hh   = String(now.getHours()).padStart(2, '0');
+        let mm   = String(now.getMinutes()).padStart(2, '0');
+        setFormCreatedAt(`${year}-${mon}-${day}T${hh}:${mm}`);
     }
 
     setShowModal(true);
@@ -146,7 +165,6 @@ const PhoneRecords = () => {
       if (isNaN(dt.getTime())) {
         // 혹시 epoch string -> number parse
         const epoch = parseFloat(data[field]);
-        console.log('epoch', epoch);
         if (!isNaN(epoch)) {
           const dt2 = new Date(parseInt(epoch));
           if (!isNaN(dt2.getTime())) {
@@ -301,6 +319,8 @@ const PhoneRecords = () => {
                   className="border p-1 flex-1"
                   value={formCreatedAt}
                   onChange={(e) => setFormCreatedAt(e.target.value)}
+
+                  valueAccessor={createdAtAccessor}
                 />
                 {/* epoch or ISO string */}
               </div>
