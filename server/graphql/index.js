@@ -12,6 +12,8 @@ const phoneTypeDefs = require('./phone/phone.typeDefs');
 const phoneResolvers = require('./phone/phone.resolvers');
 const contentTypeDefs = require('./content/content.typeDefs');
 const contentResolvers = require('./content/content.resolvers');
+const notificationTypeDefs = require('./notification/notification.typeDefs');
+const notificationResolvers = require('./notification/notification.resolvers');
 const authTypeDefs = require('./auth/auth.typeDefs');
 const authResolvers = require('./auth/auth.resolvers');
 
@@ -42,6 +44,7 @@ const typeDefs = mergeTypeDefs([
   userTypeDefs,
   phoneTypeDefs,
   contentTypeDefs,
+  notificationTypeDefs,
   authTypeDefs,
 ]);
 
@@ -54,6 +57,7 @@ const resolvers = mergeResolvers([
     JSON: GraphQLJSON,
   },
   contentResolvers,
+  notificationResolvers,
   authResolvers,
 ]);
 
