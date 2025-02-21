@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useLazyQuery, useMutation } from '@apollo/client';
-
 import {
   GridComponent,
   ColumnsDirective,
@@ -13,7 +12,7 @@ import {
 
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
-import Quill from 'quill'; // Delta -> HTML 변환용 (npm install quill if needed)
+import Quill from 'quill'; // Delta -> HTML 변환용
 
 import { GET_CONTENTS, GET_SINGLE_CONTENT } from '../graphql/queries';
 import { CREATE_CONTENT,
@@ -22,7 +21,7 @@ import { CREATE_CONTENT,
     CREATE_REPLY,
     DELETE_REPLY, } from '../graphql/mutations';
 
-// Quill toolbar 설정
+// Quill 설정
 const quillModules = {
   toolbar: [
     [{ size: [] }],
@@ -57,58 +56,56 @@ function formatDate(dateStr) {
   if (!dateStr) return '';
   const d = new Date(dateStr);
   if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleString(); // '2023-09-12 10:23:45' 등
+  return d.toLocaleString();
 }
 
 function ContentsWithQuill() {
   const gridRef = useRef(null);
 
-  // 목록 필터
+  // ============ 목록 필터 ============
   const [typeFilter, setTypeFilter] = useState(0);
 
-  // 목록
+  // ============ 목록 Query ============
   const { data, loading, error, refetch } = useQuery(GET_CONTENTS, {
     variables: { type: typeFilter },
     fetchPolicy: 'network-only',
   });
-
   const [list, setList] = useState([]);
 
-  // 상세 LazyQuery (fetchPolicy: network-only -> 매번 서버 fresh)
+  // ============ 상세 LazyQuery ============
   const [getSingleLazy, { data: singleData }] = useLazyQuery(GET_SINGLE_CONTENT, {
     fetchPolicy: 'network-only',
   });
 
-  // Mutation
+  // ============ Mutation ============
   const [createContentMut] = useMutation(CREATE_CONTENT);
   const [updateContentMut] = useMutation(UPDATE_CONTENT);
   const [deleteContentMut] = useMutation(DELETE_CONTENT);
-  const [createReplyMut] = useMutation(CREATE_REPLY);
-  const [deleteReplyMut] = useMutation(DELETE_REPLY);
+  const [createReplyMut]   = useMutation(CREATE_REPLY);
+  const [deleteReplyMut]   = useMutation(DELETE_REPLY);
 
-  // 새글 모달
+  // ============ 새글 모달 ============
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newType, setNewType] = useState(0);
+  const [newType,  setNewType]  = useState(0);
   const [newTitle, setNewTitle] = useState('');
-  const [newDelta, setNewDelta] = useState(null); // Delta 객체
+  const [newDelta, setNewDelta] = useState(null); // Delta
 
-  // 상세/수정 모달
+  // ============ 상세/수정 모달 ============
   const [showDetailModal, setShowDetailModal] = useState(false);
-  const [detailItem, setDetailItem] = useState(null);
-  const [editMode, setEditMode] = useState(false);
+  const [detailItem,      setDetailItem]      = useState(null);
+  const [editMode,        setEditMode]        = useState(false);
 
   // 수정 시
-  const [editType, setEditType] = useState(0);
-  const [editTitle, setEditTitle] = useState('');
-  const [editDelta, setEditDelta] = useState(null); // Delta 객체
-
-  // ReactQuill ref (수정 모드용)
+  const [editType,   setEditType]   = useState(0);
+  const [editTitle,  setEditTitle]  = useState('');
+  // 굳이 editDelta state를 관리하지 않고, 최종 저장 시점에 getContents()를 해올 수도 있음
+  // 여기서는 일단 string/any를 둠
   const editQuillRef = useRef(null);
 
   // 댓글
   const [replyText, setReplyText] = useState('');
 
-  // 목록 로딩
+  // ============ 목록 로딩 ============
   useEffect(() => {
     if (data?.getContents) {
       setList(data.getContents);
@@ -119,7 +116,7 @@ function ContentsWithQuill() {
     }
   }, [data]);
 
-  // 상세 로딩 후
+  // ============ 상세 로딩 ============
   useEffect(() => {
     if (singleData?.getSingleContent) {
       const item = singleData.getSingleContent;
@@ -127,30 +124,21 @@ function ContentsWithQuill() {
       setShowDetailModal(true);
       setEditMode(false);
 
+      // 초기값
       setReplyText('');
       setEditTitle(item.title || '');
       setEditType(item.type || 0);
-      setEditDelta(item.content || { ops: [] });
     }
   }, [singleData]);
 
-  // [중요] 수정 모드에서 Quill에 기존 Delta 세팅
-  // editDelta가 바뀌거나 editMode가 true가 되는 순간에 세팅
-  useEffect(() => {
-    if (editMode && editDelta && editQuillRef.current) {
-      const quillEditor = editQuillRef.current.getEditor(); 
-      quillEditor.setContents(editDelta);
-    }
-  }, [editMode, editDelta]);
-
-  // 핸들러: select filter
+  // ============ 목록 필터 ============
   const handleTypeChange = (e) => {
     const val = parseInt(e.target.value, 10);
     setTypeFilter(val);
     refetch({ type: val });
   };
 
-  // ============= 새글 작성 ============
+  // ============ 새글 ============
   const handleCreateClick = () => {
     setNewType(typeFilter);
     setNewTitle('');
@@ -165,7 +153,7 @@ function ContentsWithQuill() {
         variables: {
           type: newType,
           title: newTitle,
-          content: finalDelta, // JSON(Delta)
+          content: finalDelta,
         },
       });
       alert('작성 완료!');
@@ -180,23 +168,28 @@ function ContentsWithQuill() {
     setShowCreateModal(false);
   };
 
-  // ============= 상세 열기 ============
+  // ============ 상세 열기 ============
   const handleDetailOpen = async (row) => {
     try {
       await getSingleLazy({ variables: { contentId: row.id } });
-      // onCompleted -> effect -> setDetailItem
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // 글 삭제
+  // 닫기
+  const handleCloseDetail = () => {
+    setShowDetailModal(false);
+    setDetailItem(null);
+  };
+
+  // 삭제
   const handleDeleteContent = async (row) => {
     if (!window.confirm('정말 삭제?')) return;
     try {
       const res = await deleteContentMut({ variables: { contentId: row.id } });
       if (res.data.deleteContent) {
-        alert('삭제 성공');
+        alert('삭제 완료');
         refetch({ type: typeFilter });
       }
     } catch (err) {
@@ -204,13 +197,7 @@ function ContentsWithQuill() {
     }
   };
 
-  // 닫기 (상세)
-  const handleCloseDetail = () => {
-    setShowDetailModal(false);
-    setDetailItem(null);
-  };
-
-  // ============= 댓글 =============
+  // ============ 댓글 ============
   const handleReplySubmit = async () => {
     if (!detailItem) return;
     if (!replyText.trim()) return;
@@ -219,9 +206,9 @@ function ContentsWithQuill() {
         variables: { contentId: detailItem.id, comment: replyText },
       });
       if (res.data.createReply) {
-        setDetailItem({
+        setDetailItem({ 
           ...detailItem,
-          comments: res.data.createReply.comments,
+          comments: res.data.createReply.comments 
         });
         setReplyText('');
       }
@@ -238,19 +225,25 @@ function ContentsWithQuill() {
         variables: { contentId: detailItem.id, index: idx },
       });
       if (res.data.deleteReply) {
-        const newCom = [...detailItem.comments];
-        newCom.splice(idx, 1);
-        setDetailItem({ ...detailItem, comments: newCom });
+        const arr = [...detailItem.comments];
+        arr.splice(idx, 1);
+        setDetailItem({ ...detailItem, comments: arr });
       }
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // ============= 수정 모드 ============
+  // ============ 수정 모드 ============
   const handleUpdateSubmit = async () => {
     if (!detailItem) return;
-    const finalDelta = editDelta || { ops: [] };
+    // (1) Quill에서 최종 Delta 얻기
+    let finalDelta = { ops: [] };
+    if (editQuillRef.current) {
+      const editor = editQuillRef.current.getEditor();
+      finalDelta = editor.getContents();
+    }
+
     try {
       const res = await updateContentMut({
         variables: {
@@ -271,20 +264,16 @@ function ContentsWithQuill() {
 
   return (
     <div className="p-4">
-      <h1 className="font-bold text-xl mb-2">게시판 (Syncfusion + Quill)</h1>
+      <h1 className="font-bold text-xl mb-2">게시판 (Syncfusion + Quill) - defaultValue 사용 예시</h1>
 
       {/* Filter */}
       <div className="flex gap-2 mb-4">
-        <select
-          value={typeFilter}
-          onChange={handleTypeChange}
-          className="border p-1 rounded"
-        >
+        <select value={typeFilter} onChange={handleTypeChange} className="border p-1 rounded">
           <option value={0}>CONTENT_0</option>
           <option value={1}>CONTENT_1</option>
           <option value={2}>CONTENT_2</option>
         </select>
-        <button
+        <button 
           className="bg-blue-500 text-white px-3 py-1 rounded"
           onClick={handleCreateClick}
         >
@@ -292,9 +281,10 @@ function ContentsWithQuill() {
         </button>
       </div>
 
-      {loading && <p>Loading...</p>}
+      {loading && <p>로딩중...</p>}
       {error && <p className="text-red-500">{error.message}</p>}
 
+      {/* 목록 */}
       <GridComponent
         ref={gridRef}
         dataSource={list}
@@ -305,12 +295,12 @@ function ContentsWithQuill() {
         <ColumnsDirective>
           <ColumnDirective field="id" headerText="ID" width="80" />
           <ColumnDirective field="userId" headerText="User" width="100" />
-          <ColumnDirective field="title" headerText="Title" width="180" />
+          <ColumnDirective field="title" headerText="Title" width="150" />
           <ColumnDirective field="type" headerText="Type" width="60" textAlign="Center" />
           <ColumnDirective
             field="createdAt"
             headerText="Created"
-            width="140"
+            width="130"
             textAlign="Center"
             template={(row) => <span>{formatDate(row.createdAt)}</span>}
           />
@@ -344,7 +334,7 @@ function ContentsWithQuill() {
         <Inject services={[Page, Sort, Filter]} />
       </GridComponent>
 
-      {/* CREATE MODAL */}
+      {/* ========== CREATE MODAL ========== */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div
@@ -356,7 +346,7 @@ function ContentsWithQuill() {
             <div className="flex-none mb-2">
               <label>Type:</label>
               <select
-                className="border p-1 rounded w-32 ml-1 mr-3"
+                className="border p-1 rounded w-32 ml-1 mr-2"
                 value={newType}
                 onChange={(e) => setNewType(parseInt(e.target.value, 10))}
               >
@@ -379,8 +369,7 @@ function ContentsWithQuill() {
                 formats={quillFormats}
                 style={{ height: '100%' }}
                 onChange={(html, delta, source, editor) => {
-                  const deltaObj = editor.getContents();
-                  setNewDelta(deltaObj);
+                  setNewDelta(editor.getContents());
                 }}
               />
             </div>
@@ -403,7 +392,7 @@ function ContentsWithQuill() {
         </div>
       )}
 
-      {/* DETAIL MODAL */}
+      {/* ========== DETAIL MODAL ========== */}
       {showDetailModal && detailItem && (
         <div className="fixed inset-0 bg-black bg-opacity-40 flex justify-center items-center z-50">
           <div
@@ -411,7 +400,7 @@ function ContentsWithQuill() {
             style={{ width: '80%', height: '80%' }}
           >
             {!editMode ? (
-              // ======= VIEW MODE =======
+              // ===== VIEW MODE =====
               <>
                 <h2 className="text-xl font-bold mb-2">상세 보기</h2>
                 <div className="flex-none mb-2">
@@ -423,18 +412,12 @@ function ContentsWithQuill() {
                 </div>
 
                 <div className="flex-auto border overflow-auto mb-2 p-2">
-                  {/* Delta -> HTML */}
                   <div dangerouslySetInnerHTML={{ __html: deltaToHtml(detailItem.content) }} />
                 </div>
 
                 {/* 댓글 */}
-                <div
-                  className="flex-none border p-2 mb-2 overflow-auto"
-                  style={{ maxHeight: '150px' }}
-                >
-                  <h3 className="font-semibold">
-                    댓글 ({detailItem.comments.length})
-                  </h3>
+                <div className="flex-none border p-2 mb-2 overflow-auto" style={{ maxHeight:'150px' }}>
+                  <h3>댓글 ({detailItem.comments.length})</h3>
                   {detailItem.comments.map((c, idx) => (
                     <div key={idx} className="border p-1 my-1">
                       <p>작성자: {c.userId}</p>
@@ -448,7 +431,6 @@ function ContentsWithQuill() {
                       </button>
                     </div>
                   ))}
-                  {/* 댓글 작성 */}
                   <div className="mt-2 flex gap-2">
                     <input
                       className="border p-1 flex-1"
@@ -470,9 +452,9 @@ function ContentsWithQuill() {
                     className="bg-orange-500 text-white px-3 py-1 rounded"
                     onClick={() => {
                       setEditMode(true);
+                      // 기존 필드들 세팅
                       setEditTitle(detailItem.title);
                       setEditType(detailItem.type);
-                      setEditDelta(detailItem.content || { ops: [] });
                     }}
                   >
                     수정
@@ -486,7 +468,7 @@ function ContentsWithQuill() {
                 </div>
               </>
             ) : (
-              // ======= EDIT MODE =======
+              // ===== EDIT MODE =====
               <>
                 <h2 className="text-xl font-bold mb-2">글 수정</h2>
                 <div className="flex-none mb-2">
@@ -515,9 +497,12 @@ function ContentsWithQuill() {
                     modules={quillModules}
                     formats={quillFormats}
                     style={{ height: '100%' }}
+                    // 기존 Delta -> defaultValue
+                    defaultValue={detailItem.content} 
                     onChange={(html, delta, source, editor) => {
+                      // 실시간으로 Delta 보려면
                       const deltaObj = editor.getContents();
-                      setEditDelta(deltaObj);
+                      console.log('Edit in progress:', deltaObj);
                     }}
                   />
                 </div>
