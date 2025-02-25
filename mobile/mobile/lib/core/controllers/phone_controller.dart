@@ -1,5 +1,7 @@
 // lib/core/controllers/phone_controller.dart
 
+import 'dart:developer';
+
 import 'package:flutter_callkit_incoming/entities/entities.dart';
 import 'package:flutter_callkit_incoming/flutter_callkit_incoming.dart';
 import '../../navigation/app_router.dart';
@@ -47,6 +49,14 @@ class PhoneController {
       AppRoute.incomingCallPage,
       args: data,
     );
+  }
+
+  /// 네이티브 PhoneStateListener -> onIncomingNumber
+  void onIncomingNumber(String incomingNum) {
+    // 예: 별도 UI or DB Lookup...
+    log('[PhoneController] onIncomingNumber: $incomingNum');
+    // 만약 callkit UI를 강제로 띄우고 싶다면 showCallkitIncoming(...) 호출 가능
+    // or store this number in a variable for next steps
   }
 
   // OS 알림으로 Accept 시, 바로 통화중 페이지를 띄우고 싶으면 사용
