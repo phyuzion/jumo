@@ -3,6 +3,8 @@ package com.jumo.mobile
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import android.content.Context
+import android.telephony.TelephonyManager
 
 object NativeBridge {
     private const val CHANNEL_NAME = "com.jumo.mobile/native"
@@ -40,12 +42,25 @@ object NativeBridge {
                     PhoneInCallService.toggleHold(hold)
                     result.success(true)
                 }
+                "getMyPhoneNumber" -> {
+                    val number = getMyPhoneNumberFromTelephony()
+                    result.success(number) 
+                }
                 else -> result.notImplemented()
             }
         }
     }
     
-    // 안드로이드 → Flutter
+
+    fun getMyPhoneNumberFromTelephony(): String {
+        return try {
+            val telephony = JumoApp.context.getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+            telephony.line1Number ?: ""
+        } catch (e: Exception) {
+            "you can not brought your phone number"
+        }
+    }
+
     fun notifyIncomingNumber(number: String) {
         Log.d("NativeBridge", "notifyIncomingNumber($number)")
         methodChannel?.invokeMethod("onIncomingNumber", number)

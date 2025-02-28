@@ -43,6 +43,8 @@ class MainActivity : FlutterFragmentActivity() {
         super.onCreate(savedInstanceState)
         checkCallPermission()
         handleDialIntent(intent)
+
+        
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -55,11 +57,6 @@ class MainActivity : FlutterFragmentActivity() {
 
             val number = intent.getStringExtra("incoming_number") ?: ""
             Log.d(TAG, "Incoming call number = $number")
-
-            // Flutter에게 "/incoming" 라우트로 이동 + 번호 전달
-            // 1) MethodChannel 로 보내거나,
-            // 2) static GlobalKey<NavigatorState> 로 pushNamed,
-            //    => 아래 'NativeBridge.notifyIncomingNumber' 예시
 
             NativeBridge.notifyIncomingNumber(number)
         }
