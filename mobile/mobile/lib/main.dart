@@ -1,6 +1,7 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controller.dart/app_controller.dart';
+import 'package:mobile/screens/setting_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'screens/dialer_screen.dart';
 import 'screens/incoming_call_screen.dart';
@@ -54,8 +55,9 @@ class JumoPhoneApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navKey,
-      initialRoute: '/dialer',
+      initialRoute: '/settings',
       routes: {
+        '/settings': (_) => const SettingsScreen(),
         '/dialer': (_) => const DialerScreen(),
         '/incoming': (ctx) {
           final number =

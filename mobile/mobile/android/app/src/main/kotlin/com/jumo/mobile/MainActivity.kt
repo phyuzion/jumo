@@ -15,15 +15,27 @@ import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 
+import io.flutter.plugin.common.MethodChannel
+
+
 class MainActivity : FlutterFragmentActivity() {
 
     private val TAG = "MainActivity"
+
+
+    private val ACTIVITY_CHANNEL_NAME = "com.jumo.mobile/nativeDefaultDialer"
+
+    // roleRequest + permissionLauncher 결과를 Flutter 로 전달하기 위한 임시 보관
+    private var methodResultForDialer: MethodChannel.Result? = null
+
 
     private val callPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) {
             Toast.makeText(this, "CALL_PHONE 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+            methodResultForDialer?.success(false)
+            methodResultForDialer = null
         } else {
             requestSetDefaultDialer()
         }
@@ -34,9 +46,12 @@ class MainActivity : FlutterFragmentActivity() {
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             Log.d(TAG, "기본 전화앱 설정 완료")
+            methodResultForDialer?.success(true)
         } else {
             Log.d(TAG, "기본 전화앱 설정 거부")
+            methodResultForDialer?.success(false)
         }
+        methodResultForDialer = null
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -89,14 +104,30 @@ class MainActivity : FlutterFragmentActivity() {
     private fun requestSetDefaultDialer() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER) &&
-                !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)
+                && !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+
                 val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
                 roleRequestLauncher.launch(intent)
+            } else {
+                // 이미 기본 전화앱인 경우
+                methodResultForDialer?.success(true)
+                methodResultForDialer = null
             }
         } else {
-            // 구버전: TelecomManager.ACTION_CHANGE_DEFAULT_DIALER
+            // 구버전...
+            methodResultForDialer?.success(false)
+            methodResultForDialer = null
         }
+    }
+
+    private fun isDefaultDialer(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
+            return roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
+        }
+        // else ...
+        return false
     }
 
     // ACTION_DIAL / ACTION_VIEW(tel:) 인텐트 => Flutter로 전달
@@ -116,5 +147,30 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         NativeBridge.setupChannel(flutterEngine)
+    
+        // 2) 새로 추가: "com.jumo.mobile/nativeDefaultDialer"
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            ACTIVITY_CHANNEL_NAME
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "requestDefaultDialerManually" -> {
+                    // Flutter wants to request default dialer
+                    Log.d(TAG, "[MethodChannel] requestDefaultDialerManually")
+                    methodResultForDialer = result
+                    checkCallPermission() // => if permission ok => requestSetDefaultDialer()
+                }
+
+                "isDefaultDialer" -> {
+                    val isDefault = isDefaultDialer()
+                    result.success(isDefault)
+                }
+
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
     }
+
 }
