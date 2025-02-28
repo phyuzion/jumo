@@ -1,6 +1,5 @@
 package com.jumo.mobile
 
-import android.content.Intent
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -12,11 +11,11 @@ object NativeBridge {
     fun setupChannel(flutterEngine: FlutterEngine) {
         methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_NAME)
         methodChannel?.setMethodCallHandler { call, result ->
-            when(call.method) {
+            when (call.method) {
                 "makeCall" -> {
                     val number = call.argument<String>("phoneNumber") ?: ""
                     Log.d("NativeBridge", "makeCall($number)")
-                    // 실제 발신: ACTION_CALL or TelecomManager
+                    // ACTION_CALL or TelecomManager.placeCall
                     result.success(true)
                 }
                 "acceptCall" -> {
@@ -45,24 +44,16 @@ object NativeBridge {
             }
         }
     }
-
-    // 수신 시 잠금화면 플래그 설정 + Flutter에서 call_screen 띄우기
-    fun showIncomingCall() {
-        Log.d("NativeBridge", "showIncomingCall()")
-        // MainActivity 를 통해 잠금화면 플래그 + Navigator.push(call_screen)
-        // 간단히: MainActivity 띄우고 -> onCreate에서 enableLockScreenFlags
-        val context = /* applicationContext or activity ref */ 
-            com.jumo.mobile.MainActivity() // (예시로는 불가, 실제론 Activity를 얻어야 함)
-
-        // 더 정확히는, 이미 MainActivity가 떠 있는 상태라면 `onNewIntent` 형태로 전달
-        val intent = Intent(context, MainActivity::class.java).apply {
-            addFlags(
-                Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-            )
-            putExtra("incoming_call", true)
-        }
-        context.startActivity(intent)
+    
+    // 안드로이드 → Flutter
+    fun notifyIncomingNumber(number: String) {
+        Log.d("NativeBridge", "notifyIncomingNumber($number)")
+        methodChannel?.invokeMethod("onIncomingNumber", number)
     }
+
+    fun notifyCallEnded() {
+        Log.d("NativeBridge", "notifyCallEnded()")
+        methodChannel?.invokeMethod("onCallEnded", null)
+    }
+
 }

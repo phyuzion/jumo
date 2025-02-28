@@ -1,7 +1,8 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+package="com.jumo.mobile">
     <application
+        android:name=".JumoApp"
         android:label="mobile"
-        android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
 
@@ -52,7 +53,7 @@
                 android:name="android.telecom.IN_CALL_SERVICE_UI"
                 android:value="true" />
         </service>
-        
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -63,6 +64,8 @@
 
     <!-- 권한(필요 시) -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE"/>
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.CALL_PHONE"/>
     <uses-permission android:name="android.permission.BIND_INCALL_SERVICE" />
     <uses-permission android:name="android.permission.READ_CONTACTS"/>

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/native_methods.dart';
 
 class DialerScreen extends StatefulWidget {
-  const DialerScreen({Key? key}) : super(key: key);
+  const DialerScreen({super.key});
 
   @override
   State<DialerScreen> createState() => _DialerScreenState();
@@ -11,8 +11,8 @@ class DialerScreen extends StatefulWidget {
 class _DialerScreenState extends State<DialerScreen> {
   String _number = '';
 
-  void _onDigit(String digit) => setState(() => _number += digit);
-  void _backspace() {
+  void _onDigit(String d) => setState(() => _number += d);
+  void _onBackspace() {
     if (_number.isNotEmpty) {
       setState(() => _number = _number.substring(0, _number.length - 1));
     }
@@ -21,8 +21,6 @@ class _DialerScreenState extends State<DialerScreen> {
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
       await NativeMethods.makeCall(_number);
-      // 발신 → PhoneInCallService onCallAdded (OUTGOING) → 대기 or ACTIVE
-      // Navigator.pushNamed(context, '/onCalling'); // 통화중 화면?
     }
   }
 
@@ -34,22 +32,20 @@ class _DialerScreenState extends State<DialerScreen> {
         children: [
           Expanded(
             child: Center(
-              child: Text(_number, style: const TextStyle(fontSize: 32)),
+              child: Text(_number, style: const TextStyle(fontSize: 36)),
             ),
           ),
           GridView.count(
             crossAxisCount: 3,
             shrinkWrap: true,
             children: [
-              ...List.generate(9, (i) {
-                final digit = '${i + 1}';
-                return ElevatedButton(
-                  onPressed: () => _onDigit(digit),
-                  child: Text(digit, style: const TextStyle(fontSize: 24)),
-                );
-              }),
+              for (int i = 1; i <= 9; i++)
+                ElevatedButton(
+                  onPressed: () => _onDigit('$i'),
+                  child: Text('$i', style: const TextStyle(fontSize: 24)),
+                ),
               IconButton(
-                onPressed: _backspace,
+                onPressed: _onBackspace,
                 icon: const Icon(Icons.backspace),
               ),
               ElevatedButton(

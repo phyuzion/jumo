@@ -17,47 +17,62 @@ import io.flutter.embedding.engine.FlutterEngine
 
 class MainActivity : FlutterFragmentActivity() {
 
-    companion object {
-        private const val REQUEST_CODE_SET_DEFAULT_DIALER = 1001
-    }
+    private val TAG = "MainActivity"
 
     private val callPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) {
-            requestSetDefaultDialerIfNeeded()
-        } else {
+        if (!granted) {
             Toast.makeText(this, "CALL_PHONE 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+        } else {
+            requestSetDefaultDialer()
         }
     }
 
-    private val roleDialerLauncher = registerForActivityResult(
+    private val roleRequestLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
-            Log.d("MainActivity", "기본 전화앱 설정 완료")
+            Log.d(TAG, "기본 전화앱 설정 완료")
         } else {
-            Log.d("MainActivity", "기본 전화앱 설정 거부됨")
+            Log.d(TAG, "기본 전화앱 설정 거부")
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 안드로이드 Q 이상 가정: RoleManager 사용
-        checkCallPermissionAndSetDialer()
+        checkCallPermission()
         handleDialIntent(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        Log.d(TAG, "onNewIntent: $intent")
+
+        if (intent.getBooleanExtra("incoming_call", false)) {
+            Log.d(TAG, "Incoming call intent received")
+            enableLockScreenFlags()
+
+            val number = intent.getStringExtra("incoming_number") ?: ""
+            Log.d(TAG, "Incoming call number = $number")
+
+            // Flutter에게 "/incoming" 라우트로 이동 + 번호 전달
+            // 1) MethodChannel 로 보내거나,
+            // 2) static GlobalKey<NavigatorState> 로 pushNamed,
+            //    => 아래 'NativeBridge.notifyIncomingNumber' 예시
+
+            NativeBridge.notifyIncomingNumber(number)
+        }
+        else if (intent.getBooleanExtra("call_ended", false)) {
+            Log.d(TAG, "Call ended intent received")
+            // Flutter에 통화종료 알림
+            NativeBridge.notifyCallEnded()
+        }
+
         handleDialIntent(intent)
     }
 
-    /**
-     * 잠금화면 플래그: 필요할 때만 추가
-     * 예: 수신 전화 화면을 이 액티비티로 띄운다면?
-     */
-    fun enableLockScreenFlags() {
+    private fun enableLockScreenFlags() {
         window.addFlags(
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
             WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
@@ -65,27 +80,29 @@ class MainActivity : FlutterFragmentActivity() {
         )
     }
 
-    private fun checkCallPermissionAndSetDialer() {
+    private fun checkCallPermission() {
         val callPerm = android.Manifest.permission.CALL_PHONE
-        if (ContextCompat.checkSelfPermission(this, callPerm) == PackageManager.PERMISSION_GRANTED) {
-            requestSetDefaultDialerIfNeeded()
-        } else {
+        if (ContextCompat.checkSelfPermission(this, callPerm) != PackageManager.PERMISSION_GRANTED) {
             callPermissionLauncher.launch(callPerm)
+        } else {
+            requestSetDefaultDialer()
         }
     }
 
-    private fun requestSetDefaultDialerIfNeeded() {
+    private fun requestSetDefaultDialer() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
-                if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
-                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
-                    roleDialerLauncher.launch(intent)
-                }
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER) &&
+                !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+                val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
+                roleRequestLauncher.launch(intent)
             }
+        } else {
+            // 구버전: TelecomManager.ACTION_CHANGE_DEFAULT_DIALER
         }
     }
 
+    // ACTION_DIAL / ACTION_VIEW(tel:) 인텐트 => Flutter로 전달
     private fun handleDialIntent(intent: Intent?) {
         if (intent == null) return
         val action = intent.action
@@ -93,9 +110,8 @@ class MainActivity : FlutterFragmentActivity() {
             val data: Uri? = intent.data
             if (data != null && data.scheme == "tel") {
                 val phoneNumber = data.schemeSpecificPart
-                Log.d("MainActivity", "Dial intent with number: $phoneNumber")
-                // TODO: Flutter 로 전달 → DialerScreen 에서 표시
-                // NativeBridge.passDialNumber(phoneNumber) 등
+                Log.d(TAG, "Dial intent with number: $phoneNumber")
+                // Flutter 에 전달 => ex: NativeBridge.notifyDialNumber(phoneNumber)
             }
         }
     }
