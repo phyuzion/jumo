@@ -11,10 +11,10 @@ import 'package:mobile/screens/call_ended_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1) NavigationController init => setMethodCallHandler(...) for incoming calls
+  // 1) 네비 컨트롤러 init
   await NavigationController.init();
 
-  // 2) 앱 컨트롤러
+  // 2) 앱 컨트롤러 init
   final appController = AppController();
   await appController.initializeApp();
 
