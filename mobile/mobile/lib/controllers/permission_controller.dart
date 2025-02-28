@@ -3,11 +3,10 @@ import 'package:permission_handler/permission_handler.dart';
 
 class PermissionController {
   static final List<Permission> essentialPermissions = [
-    Permission.phone, // covers CALL_PHONE, READ_PHONE_STATE
-    Permission.contacts,
-    Permission.sms,
-    // If you want readCallLog: Permission.activityRecognition?
-    // or some other approach
+    Permission.phone, // CALL_PHONE, READ_PHONE_STATE
+    Permission.contacts, // READ_CONTACTS
+    Permission.sms, // READ_SMS, RECEIVE_SMS
+    // If needed, add readCallLog or readPhoneNumbers
   ];
 
   static Future<bool> requestAllEssentialPermissions() async {

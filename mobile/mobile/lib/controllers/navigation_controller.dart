@@ -9,24 +9,23 @@ class NavigationController {
     NativeMethods.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'onIncomingNumber':
-          final number = call.arguments as String;
-          goToIncomingScreen(number);
+          _goToIncoming(call.arguments as String);
           break;
         case 'onCallEnded':
-          goToCallEnded();
+          _goToCallEnded();
           break;
       }
     });
   }
 
-  static void goToIncomingScreen(String number) {
+  static void _goToIncoming(String number) {
     final ctx = navKey.currentContext;
     if (ctx != null) {
       Navigator.of(ctx).pushNamed('/incoming', arguments: number);
     }
   }
 
-  static void goToCallEnded() {
+  static void _goToCallEnded() {
     final ctx = navKey.currentContext;
     if (ctx != null) {
       Navigator.of(ctx).pushNamed('/callEnded');
