@@ -1,31 +1,25 @@
-// lib/main.dart
-
 import 'package:flutter/material.dart';
-import 'package:mobile/shared/themes/app_theme.dart';
-import 'navigation/app_router.dart';
-import 'navigation/navigation_service.dart';
-import 'core/controllers/phone_controller.dart';
+import 'package:mobile/screens/call_screen.dart';
+import 'package:mobile/screens/on_calling_screen.dart';
+import 'screens/dialer_screen.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-
-  // 전화 컨트롤러 초기화: CallKit 이벤트 리스너 등록, etc.
-  PhoneController().initPhoneLogic();
-
-  runApp(const JumoApp());
+  runApp(const MyApp());
 }
 
-class JumoApp extends StatelessWidget {
-  const JumoApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: NavigationService.instance.navigationKey,
-      onGenerateRoute: AppRoute.generateRoute,
-      initialRoute: AppRoute.splashPage,
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      title: 'JumoPhone',
+      initialRoute: '/',
+      routes: {
+        '/': (ctx) => const DialerScreen(),
+        '/call': (ctx) => const CallScreen(),
+        '/onCalling': (ctx) => const OnCallingScreen(),
+      },
     );
   }
 }

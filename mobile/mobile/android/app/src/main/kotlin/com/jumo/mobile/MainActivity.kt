@@ -1,156 +1,107 @@
 package com.jumo.mobile
 
-import android.Manifest
+import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
-import android.telecom.TelecomManager
-import android.telephony.PhoneStateListener
-import android.telephony.TelephonyManager
+import android.util.Log
 import android.view.WindowManager
-import androidx.core.app.ActivityCompat
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.plugin.common.MethodChannel
 
-class MainActivity: FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
-    // 이미 존재하는: 기본 전화앱 채널
-    private val CHANNEL_DIALER = "custom.dialer.channel"
+    companion object {
+        private const val REQUEST_CODE_SET_DEFAULT_DIALER = 1001
+    }
 
-    // 추가: 전화번호 관련 채널
-    private val CHANNEL_PHONE = "com.jumo.mobile/phone"
+    private val callPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            requestSetDefaultDialerIfNeeded()
+        } else {
+            Toast.makeText(this, "CALL_PHONE 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-    private lateinit var telephonyManager: TelephonyManager
-
-    // PhoneStateListener: 전화가 울릴 때(CALL_STATE_RINGING) phoneNumber를 받을 수 있음
-    private val phoneStateListener = object : PhoneStateListener() {
-        override fun onCallStateChanged(state: Int, phoneNumber: String?) {
-            super.onCallStateChanged(state, phoneNumber)
-            if (state == TelephonyManager.CALL_STATE_RINGING) {
-                // 전화가 울리는 중
-                val incomingNum = phoneNumber ?: ""
-                sendIncomingNumberToFlutter(incomingNum)
-            }
+    private val roleDialerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Log.d("MainActivity", "기본 전화앱 설정 완료")
+        } else {
+            Log.d("MainActivity", "기본 전화앱 설정 거부됨")
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // 잠금화면 위 표시 (화면 켜기, 키가드 해제 등)
-        window.addFlags(
-            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
-            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-        )
+        // 안드로이드 Q 이상 가정: RoleManager 사용
+        checkCallPermissionAndSetDialer()
+        handleDialIntent(intent)
+    }
 
-        // TelephonyManager 초기화
-        telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleDialIntent(intent)
+    }
+
+    /**
+     * 잠금화면 플래그: 필요할 때만 추가
+     * 예: 수신 전화 화면을 이 액티비티로 띄운다면?
+     */
+    fun enableLockScreenFlags() {
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+    }
+
+    private fun checkCallPermissionAndSetDialer() {
+        val callPerm = android.Manifest.permission.CALL_PHONE
+        if (ContextCompat.checkSelfPermission(this, callPerm) == PackageManager.PERMISSION_GRANTED) {
+            requestSetDefaultDialerIfNeeded()
+        } else {
+            callPermissionLauncher.launch(callPerm)
+        }
+    }
+
+    private fun requestSetDefaultDialerIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)) {
+                if (!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+                    val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
+                    roleDialerLauncher.launch(intent)
+                }
+            }
+        }
+    }
+
+    private fun handleDialIntent(intent: Intent?) {
+        if (intent == null) return
+        val action = intent.action
+        if (action == Intent.ACTION_DIAL || action == Intent.ACTION_VIEW) {
+            val data: Uri? = intent.data
+            if (data != null && data.scheme == "tel") {
+                val phoneNumber = data.schemeSpecificPart
+                Log.d("MainActivity", "Dial intent with number: $phoneNumber")
+                // TODO: Flutter 로 전달 → DialerScreen 에서 표시
+                // NativeBridge.passDialNumber(phoneNumber) 등
+            }
+        }
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        // ===== 1) 기존 "기본 전화앱" 채널 설정 =====
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_DIALER)
-            .setMethodCallHandler { call, result ->
-                when(call.method) {
-                    "setDefaultDialer" -> {
-                        setDefaultDialer()
-                        result.success(null)
-                    }
-                    "isDefaultDialer" -> {
-                        result.success(isDefaultDialer())
-                    }
-                    else -> {
-                        result.notImplemented()
-                    }
-                }
-            }
-
-        // ===== 2) 새로 추가: 전화번호 관련 채널 설정 =====
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL_PHONE)
-            .setMethodCallHandler { call, result ->
-                when(call.method) {
-                    "startPhoneStateListener" -> {
-                        startPhoneStateListener()
-                        result.success(null)
-                    }
-                    "stopPhoneStateListener" -> {
-                        stopPhoneStateListener()
-                        result.success(null)
-                    }
-                    "getMyPhoneNumber" -> {
-                        val myNum = getMyPhoneNumber()
-                        result.success(myNum)
-                    }
-                    else -> {
-                        result.notImplemented()
-                    }
-                }
-            }
-    }
-
-    // ------------------------------//
-    //   "기본 전화앱" 로직
-    // ------------------------------//
-    private fun setDefaultDialer() {
-        val telecomManager = getSystemService(TELECOM_SERVICE) as TelecomManager
-        val pkgName = applicationContext.packageName
-        if (telecomManager.defaultDialerPackage != pkgName) {
-            val intent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
-            intent.putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, pkgName)
-            startActivity(intent)
-        }
-    }
-
-    private fun isDefaultDialer(): Boolean {
-        val telecomManager = getSystemService(TELECOM_SERVICE) as TelecomManager
-        return (telecomManager.defaultDialerPackage == applicationContext.packageName)
-    }
-
-    // ------------------------------//
-    //   전화번호 / PhoneState 로직
-    // ------------------------------//
-    private fun startPhoneStateListener() {
-        val permissionCheck = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
-        if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
-            // 권한이 없다면 요청
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.READ_PHONE_STATE),
-                999
-            )
-        } else {
-            telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_CALL_STATE)
-        }
-    }
-
-    private fun stopPhoneStateListener() {
-        telephonyManager.listen(phoneStateListener, PhoneStateListener.LISTEN_NONE)
-    }
-
-    private fun getMyPhoneNumber(): String? {
-        // 권한이 있어야만 line1Number를 가져올 수 있음
-        val permissionCheck = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_PHONE_STATE)
-        return if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
-            telephonyManager.line1Number // 통신사/기기 따라 null or empty
-        } else {
-            null
-        }
-    }
-
-    private fun sendIncomingNumberToFlutter(phoneNumber: String) {
-        // 전화가 울릴 때(CALL_STATE_RINGING) -> 이 메서드 호출 -> Dart 측에 알림
-        val dataMap = mapOf(
-            "event" to "onIncomingNumber",
-            "number" to phoneNumber
-        )
-        // 동일한 CHANNEL_PHONE 사용
-        MethodChannel(flutterEngine!!.dartExecutor.binaryMessenger, CHANNEL_PHONE)
-            .invokeMethod("onIncomingNumber", dataMap)
+        NativeBridge.setupChannel(flutterEngine)
     }
 }
