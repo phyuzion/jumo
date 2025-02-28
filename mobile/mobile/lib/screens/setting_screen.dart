@@ -1,5 +1,3 @@
-// lib/screens/settings_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 
@@ -16,10 +14,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _checkDefaultDialer();
+    _checkIsDefaultDialer();
   }
 
-  Future<void> _checkDefaultDialer() async {
+  Future<void> _checkIsDefaultDialer() async {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
     setState(() => _isDefaultDialer = isDef);
   }
@@ -29,35 +27,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (ok) {
       setState(() => _isDefaultDialer = true);
     } else {
-      // 실패/거부
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('기본 전화앱 설정이 거부되었습니다.')));
+      ).showSnackBar(const SnackBar(content: Text('기본 전화앱 설정 거부됨')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _isDefaultDialer ? '현재 이 앱이 기본 전화앱입니다.' : '기본 전화앱이 아닙니다.',
-              style: const TextStyle(fontSize: 20),
+      appBar: AppBar(title: const Text('SettingsScreen')),
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(_isDefaultDialer ? '현재 이 앱이 기본 전화앱입니다.' : '현재 기본 전화앱이 아닙니다.'),
+          if (!_isDefaultDialer)
+            ElevatedButton(
+              onPressed: _onTapSetDefaultDialer,
+              child: const Text('기본 전화앱으로 설정'),
             ),
-            const SizedBox(height: 20),
-            if (!_isDefaultDialer)
-              ElevatedButton(
-                onPressed: _onTapSetDefaultDialer,
-                child: const Text('기본 전화앱으로 설정'),
-              )
-            else
-              const Text('이미 설정되었습니다.'),
-          ],
-        ),
+          ElevatedButton(
+            onPressed: () => Navigator.pushNamed(context, '/dialer'),
+            child: const Text('Go to Dialer'),
+          ),
+        ],
       ),
     );
   }

@@ -1,60 +1,33 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
-import 'package:mobile/controller.dart/app_controller.dart';
+import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/screens/setting_screen.dart';
-import 'package:mobile/services/native_methods.dart';
-import 'screens/dialer_screen.dart';
-import 'screens/incoming_call_screen.dart';
-import 'screens/on_call_screen.dart';
-import 'screens/call_ended_screen.dart';
-
-// 전역
-final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
+import 'package:mobile/screens/dialer_screen.dart';
+import 'package:mobile/screens/incoming_call_screen.dart';
+import 'package:mobile/screens/on_call_screen.dart';
+import 'package:mobile/screens/call_ended_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 안드로이드 -> Flutter 이벤트
-  NativeMethods.setMethodCallHandler((call) async {
-    switch (call.method) {
-      case 'onIncomingNumber':
-        final number = call.arguments as String;
-        _goToIncomingScreen(number);
-        break;
-      case 'onCallEnded':
-        _goToCallEnded();
-        break;
-    }
-  });
+  // 1) NavigationController init => setMethodCallHandler(...) for incoming calls
+  await NavigationController.init();
 
-  // 앱 초기화 (my_number 불러오기, 로그인 등)
+  // 2) 앱 컨트롤러
   final appController = AppController();
   await appController.initializeApp();
 
-  runApp(const JumoPhoneApp());
+  // 3) runApp
+  runApp(const MyApp());
 }
 
-void _goToIncomingScreen(String number) {
-  final ctx = navKey.currentContext;
-  if (ctx != null) {
-    Navigator.of(ctx).pushNamed('/incoming', arguments: number);
-  }
-}
-
-void _goToCallEnded() {
-  final ctx = navKey.currentContext;
-  if (ctx != null) {
-    Navigator.of(ctx).pushNamed('/callEnded');
-  }
-}
-
-class JumoPhoneApp extends StatelessWidget {
-  const JumoPhoneApp({super.key});
-
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: navKey,
+      navigatorKey: NavigationController.navKey,
       initialRoute: '/settings',
       routes: {
         '/settings': (_) => const SettingsScreen(),
