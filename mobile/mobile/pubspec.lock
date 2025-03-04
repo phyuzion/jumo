@@ -17,6 +17,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  call_log:
+    dependency: "direct main"
+    description:
+      name: call_log
+      sha256: a92d0c8f335d83464dd14a5c77cf9fd26e2be8f5ae1a3265ef3c64932432346a
+      url: "https://pub.dev"
+    source: hosted
+    version: "5.0.1"
   characters:
     dependency: transitive
     description:
@@ -78,6 +86,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.0.0"
+  flutter_sms_inbox:
+    dependency: "direct main"
+    description:
+      name: flutter_sms_inbox
+      sha256: fc1c069225916418bcd4e8b4999d2f5e1216db3394c8b86c8440a5a5b0ec4bd2
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.0.3"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -264,6 +280,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.2.1"
+  phone_state:
+    dependency: "direct main"
+    description:
+      name: phone_state
+      sha256: "291f7444e68f9a504afa8c7ceee42a5bbfe7131f059439e4e8d23d9d347f1157"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.1"
   platform:
     dependency: transitive
     description:

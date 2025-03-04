@@ -1,10 +1,13 @@
 // lib/controllers/app_controller.dart
 import 'dart:developer';
 import 'package:mobile/controllers/permission_controller.dart';
+import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:get_storage/get_storage.dart';
 
 class AppController {
+  final phoneStateController = PhoneStateController();
+
   Future<bool> checkEssentialPermissions() async {
     return await PermissionController.requestAllEssentialPermissions();
   }
@@ -13,6 +16,8 @@ class AppController {
     await GetStorage.init();
     final myNumber = await NativeMethods.getMyPhoneNumber();
     log('myNumber=$myNumber');
-    // etc...
+    GetStorage().write('myNumber', myNumber);
+
+    phoneStateController.startListening();
   }
 }

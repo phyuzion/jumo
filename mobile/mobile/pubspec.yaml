@@ -36,6 +36,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   get_storage: ^2.1.1
   permission_handler: ^11.4.0
+  phone_state: ^2.1.1
+  call_log: ^5.0.1
+  flutter_sms_inbox: ^1.0.3
 
 dev_dependencies:
   flutter_test:
