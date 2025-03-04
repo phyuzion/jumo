@@ -52,6 +52,28 @@ export const GET_USER_RECORDS = gql`
   }
 `;
 
+export const GET_USER_PHONE_LOG = gql`
+  query getUserPhoneLog($userId: ID!) {
+    getUserPhoneLog(userId: $userId) {
+      phoneNumber
+      time
+      callType
+    }
+  }
+`;
+
+export const GET_USER_SMS_LOG = gql`
+  query getUserSMSLog($userId: ID!) {
+    getUserSMSLog(userId: $userId) {
+      phoneNumber
+      time
+      content
+      smsType
+    }
+  }
+`;
+
+
 // (A) 전화번호로 1개 문서 조회
 export const GET_PHONE_NUMBER = gql`
   query getPhoneNumber($phoneNumber: String!) {

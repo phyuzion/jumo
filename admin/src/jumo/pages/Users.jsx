@@ -11,11 +11,20 @@ import {
   Inject,
   Toolbar,
   Search,
-  Selection
 } from "@syncfusion/ej2-react-grids";
 
-import { GET_ALL_USERS, GET_USER_RECORDS } from "../graphql/queries";
-import { CREATE_USER, UPDATE_USER, RESET_USER_PASSWORD } from "../graphql/mutations";
+import {
+  GET_ALL_USERS,
+  GET_USER_RECORDS,
+  GET_USER_PHONE_LOG,     // <-- 추가
+  GET_USER_SMS_LOG        // <-- 추가
+} from "../graphql/queries";
+import {
+  CREATE_USER,
+  UPDATE_USER,
+  RESET_USER_PASSWORD
+} from "../graphql/mutations";
+
 import { Header } from "../components";
 
 const PAGE_SIZE = 10; // syncfusion paging size(예시)
@@ -29,62 +38,95 @@ const Users = () => {
   });
 
   // (2) create / update / reset
-  const [createUserMutation] = useMutation(CREATE_USER);
-  const [updateUserMutation] = useMutation(UPDATE_USER);
+  const [createUserMutation]     = useMutation(CREATE_USER);
+  const [updateUserMutation]     = useMutation(UPDATE_USER);
   const [resetUserPasswordMutation] = useMutation(RESET_USER_PASSWORD);
 
-  // (3) getUserRecords (lazy)
-  const [getUserRecordsLazy, { data: recordsData }] = useLazyQuery(GET_USER_RECORDS);
+  // (3-1) 전화번호부 기록 (lazy)
+  const [getUserRecordsLazy, { data: recordsData }] = useLazyQuery(GET_USER_RECORDS, {
+    fetchPolicy: 'no-cache',
+    notifyOnNetworkStatusChange: true,
+  });
+
+  // (3-2) 통화/문자 로그 (lazy)
+  const [getUserPhoneLogLazy, { data: phoneLogData }] = useLazyQuery(GET_USER_PHONE_LOG, {
+    fetchPolicy: 'no-cache',
+    notifyOnNetworkStatusChange: true,
+  });
+  const [getUserSMSLogLazy,   { data: smsLogData }]   = useLazyQuery(GET_USER_SMS_LOG, {
+    fetchPolicy: 'no-cache',
+    notifyOnNetworkStatusChange: true,
+  });
 
   // ========== State ==========
   const [users, setUsers] = useState([]);
 
-  // 모달 제어
+  // 생성/수정 모달
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editUser, setEditUser] = useState(null);
+  const [showEditModal,   setShowEditModal]   = useState(false);
+  const [editUser,        setEditUser]        = useState(null);
 
   // 기록 모달
   const [showRecordsModal, setShowRecordsModal] = useState(false);
-  const [recordUser, setRecordUser] = useState(null);
+  const [recordUser,       setRecordUser]       = useState(null);
+
+  // 탭 구분: phoneRecords | callLogs | smsLogs
+  const [selectedTab,  setSelectedTab]  = useState('phoneRecords');
   const [phoneRecords, setPhoneRecords] = useState([]);
+  const [callLogs,     setCallLogs]     = useState([]);
+  const [smsLogs,      setSmsLogs]      = useState([]);
 
   // 생성 폼
   const [formPhone, setFormPhone] = useState('');
-  const [formName, setFormName] = useState('');
+  const [formName,  setFormName ] = useState('');
 
   // 수정 폼
-  const [editPhone, setEditPhone] = useState('');
-  const [editName, setEditName] = useState('');
-  const [editType, setEditType] = useState(0);
+  const [editPhone,      setEditPhone]      = useState('');
+  const [editName,       setEditName]       = useState('');
+  const [editType,       setEditType]       = useState(0);
   const [editValidUntil, setEditValidUntil] = useState('');
 
   // ================= useEffect =================
-  // getAllUsers 결과 -> users
+  // getAllUsers -> users
   useEffect(() => {
     if (data?.getAllUsers) {
       setUsers(data.getAllUsers);
     }
   }, [data]);
 
-  // getUserRecords 결과 -> recordUser, phoneRecords
+  // 전화번호부 기록
   useEffect(() => {
     if (recordsData?.getUserRecords) {
       const { user, records } = recordsData.getUserRecords;
       setRecordUser(user);
       setPhoneRecords(records);
+      // 기록 모달 열기 + 탭 기본값 = 'phoneRecords'
+      setSelectedTab('phoneRecords');
       setShowRecordsModal(true);
     }
   }, [recordsData]);
 
-  // users 바뀌면 syncfusion grid refresh
+  // 통화로그
+  useEffect(() => {
+    if (phoneLogData?.getUserPhoneLog) {
+      setCallLogs(phoneLogData.getUserPhoneLog);
+    }
+  }, [phoneLogData]);
+
+  // 문자로그
+  useEffect(() => {
+    if (smsLogData?.getUserSMSLog) {
+      setSmsLogs(smsLogData.getUserSMSLog);
+    }
+  }, [smsLogData]);
+
+  // users 바뀌면 syncfusion grid 갱신
   useEffect(() => {
     if (gridRef.current) {
       gridRef.current.dataSource = users;
       gridRef.current.refresh();
     }
   }, [users]);
-
 
   // ============= COLUMN HELPER =============
   const validUntilAccessor = (field, data) => {
@@ -104,10 +146,7 @@ const Users = () => {
   const handleCreateSubmit = async () => {
     try {
       const res = await createUserMutation({
-        variables: {
-          phoneNumber: formPhone,
-          name: formName,
-        },
+        variables: { phoneNumber: formPhone, name: formName },
       });
       const tempPass = res.data?.createUser?.tempPassword;
       alert(`유저 생성 완료! 임시비번: ${tempPass}`);
@@ -138,15 +177,12 @@ const Users = () => {
     // validUntil => "YYYY-MM-DD"
     let dtStr = '';
     if (u.validUntil) {
-      // u.validUntil가 "YYYY-MM-DDTHH:MM:SSZ" 형식일 수도, epoch일 수도
-      // 여기서는 ISO string 가정
       try {
         const dt = new Date(parseInt(u.validUntil));
-        console.log(dt);
         if (!isNaN(dt.getTime())) {
           dtStr = dt.toISOString().slice(0,10);
         }
-      } catch (err) {}
+      } catch (err) {/*ignore*/}
     }
     setEditValidUntil(dtStr);
 
@@ -163,7 +199,7 @@ const Users = () => {
       }
       await updateUserMutation({
         variables: {
-          userId: editUser.id,  // or editUser.userId if server expects userId
+          userId: editUser.id,
           phoneNumber: editPhone,
           name: editName,
           type: parseInt(editType, 10),
@@ -182,9 +218,7 @@ const Users = () => {
   // ============= RESET PASSWORD =============
   const handleResetPassword = async (u) => {
     try {
-      const res = await resetUserPasswordMutation({
-        variables: { userId: u.id }, // or u.userId, depending on server
-      });
+      const res = await resetUserPasswordMutation({ variables: { userId: u.id } });
       const newPass = res.data?.resetUserPassword;
       alert(`임시비번: ${newPass}`);
     } catch (err) {
@@ -192,32 +226,65 @@ const Users = () => {
     }
   };
 
-  // ============= RECORDS =============
+  // ============= RECORDS, CALL LOG, SMS LOG ============
+  // 1) 기존: 전화번호부 기록 버튼
   const handleRecordsClick = async (u) => {
     try {
-      await getUserRecordsLazy({ variables: { userId: u.id } }); // or u.userId
+      await getUserRecordsLazy({ variables: { userId: u.id ,
+        _ts: Date.now() } });
     } catch (err) {
       alert(err.message);
     }
   };
 
+  // 2) 탭 전환
+  const handleTabSelect = async (tab) => {
+    setSelectedTab(tab);
+    if (!recordUser) return;
+    const uid = recordUser.id;
+    // 탭에 따라 필요한 쿼리
+    if (tab === 'callLogs') {
+      // 통화로그 조회
+      try {
+        await getUserPhoneLogLazy({ variables: { userId: uid,
+          _ts: Date.now() } });
+      } catch (err) {
+        alert(err.message);
+      }
+    } else if (tab === 'smsLogs') {
+      // 문자로그 조회
+      try {
+        await getUserSMSLogLazy({ variables: { userId: uid,
+          _ts: Date.now() } });
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+    // phoneRecords 탭은 이미 getUserRecords로 가져옴
+  };
+
   // ============= SYNCFUSION HANDLERS (옵션) =============
   const handleActionBegin = (args) => {
-    // 만약 Paging 쓸거면 설정
-    // 여기서는 한방에 getAllUsers 하므로 페이징 로직 생략 or custom
+    // 한방에 getAllUsers
+    // paging, sorting 필요시 custom
   };
 
   // ============= RENDER =============
   return (
-    
     <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
       <Header category="Page" title="유저 목록" />
 
       <div className="flex gap-2 mb-4">
-        <button onClick={handleCreate} className="bg-blue-500 text-white px-3 py-1 rounded">
+        <button
+          onClick={handleCreate}
+          className="bg-blue-500 text-white px-3 py-1 rounded"
+        >
           유저 생성
         </button>
-        <button onClick={handleRefresh} className="bg-green-500 text-white px-3 py-1 rounded">
+        <button
+          onClick={handleRefresh}
+          className="bg-green-500 text-white px-3 py-1 rounded"
+        >
           새로고침
         </button>
       </div>
@@ -237,21 +304,21 @@ const Users = () => {
           allowSorting={true}
         >
           <ColumnsDirective>
-            <ColumnDirective field="loginId" headerText="아이디" width="40" />
-            <ColumnDirective field="name" headerText="상호" width="150" />
-            <ColumnDirective field="phoneNumber" headerText="번호" width="100" />
-            <ColumnDirective field="type" headerText="타입" width="50" textAlign="Center" />
+            <ColumnDirective field="loginId"     headerText="아이디"  width="80" />
+            <ColumnDirective field="name"        headerText="상호"    width="120" />
+            <ColumnDirective field="phoneNumber" headerText="번호"    width="100" />
+            <ColumnDirective field="type"        headerText="타입"    width="50"  textAlign="Center" />
             <ColumnDirective
               field="validUntil"
               headerText="유효기간"
-              width="50"
+              width="70"
               textAlign="Center"
               valueAccessor={validUntilAccessor}
             />
             {/* Edit */}
             <ColumnDirective
               headerText="Edit"
-              width="50"
+              width="70"
               textAlign="Center"
               template={(u) => (
                 <button
@@ -265,7 +332,7 @@ const Users = () => {
             {/* Reset PW */}
             <ColumnDirective
               headerText="Reset"
-              width="50"
+              width="70"
               textAlign="Center"
               template={(u) => (
                 <button
@@ -279,7 +346,7 @@ const Users = () => {
             {/* Records */}
             <ColumnDirective
               headerText="기록"
-              width="50"
+              width="70"
               textAlign="Center"
               template={(u) => (
                 <button
@@ -387,34 +454,90 @@ const Users = () => {
         </div>
       )}
 
-      {/* RECORDS MODAL */}
-      {showRecordsModal && (
+      {/* RECORDS MODAL (전화번호부 + 통화로그 + 문자로그 탭) */}
+      {showRecordsModal && recordUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-4 w-96 rounded shadow max-h-[80vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-2">유저 기록</h2>
-            {recordUser && (
-              <p className="mb-1">
-                {recordUser.loginId} ({recordUser.name})
-              </p>
-            )}
-            <div className="flex flex-col gap-2">
-              {phoneRecords.map((r, idx) => (
-                <div key={idx} className="border p-2 rounded">
-                  <p>Phone: {r.phoneNumber}</p>
-                  <p>Name: {r.name}</p>
-                  <p>Memo: {r.memo}</p>
-                  <p>Type: {r.type}</p>
-                  <p>CreatedAt: {r.createdAt}</p>
-                </div>
-              ))}
+          <div className="bg-white p-4 w-96 rounded shadow max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-2">유저 상세</h2>
+            <p className="mb-2">{recordUser.loginId} ({recordUser.name})</p>
+
+            {/* 탭 버튼 */}
+            <div className="flex gap-2 mb-4">
+              <button
+                className={`px-2 py-1 rounded ${selectedTab==='phoneRecords'?'bg-blue-300':''}`}
+                onClick={() => handleTabSelect('phoneRecords')}
+              >
+                번호부
+              </button>
+              <button
+                className={`px-2 py-1 rounded ${selectedTab==='callLogs'?'bg-blue-300':''}`}
+                onClick={() => handleTabSelect('callLogs')}
+              >
+                콜로그
+              </button>
+              <button
+                className={`px-2 py-1 rounded ${selectedTab==='smsLogs'?'bg-blue-300':''}`}
+                onClick={() => handleTabSelect('smsLogs')}
+              >
+                문자로그
+              </button>
             </div>
+
+            {/* 탭 내용 */}
+            {selectedTab === 'phoneRecords' && (
+              <div className="flex flex-col gap-2">
+                {phoneRecords.length === 0 && <p>기록이 없습니다.</p>}
+                {phoneRecords.map((r, idx) => (
+                  <div key={idx} className="border p-2 rounded">
+                    <p>Phone: {r.phoneNumber}</p>
+                    <p>Name: {r.name}</p>
+                    <p>Memo: {r.memo}</p>
+                    <p>Type: {r.type}</p>
+                    <p>CreatedAt: {r.createdAt}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedTab === 'callLogs' && (
+              <div className="flex flex-col gap-2">
+                {callLogs.length === 0 && <p>통화로그가 없습니다.</p>}
+                {callLogs.map((c, idx) => (
+                  <div key={idx} className="border p-2 rounded">
+                    <p>Phone: {c.phoneNumber}</p>
+                    <p>Time: {c.time}</p>
+                    <p>Type: {c.callType}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedTab === 'smsLogs' && (
+              <div className="flex flex-col gap-2">
+                {smsLogs.length === 0 && <p>문자로그가 없습니다.</p>}
+                {smsLogs.map((m, idx) => (
+                  <div key={idx} className="border p-2 rounded">
+                    <p>Phone: {m.phoneNumber}</p>
+                    <p>Time: {m.time}</p>
+                    <p>Type: {m.smsType}</p>
+                    <p>Content: {m.content}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="mt-4 flex gap-2">
               <button
                 className="bg-gray-300 px-3 py-1 rounded"
                 onClick={() => {
+                  // 모달 닫기
                   setShowRecordsModal(false);
                   setRecordUser(null);
+                  // state 초기화
                   setPhoneRecords([]);
+                  setCallLogs([]);
+                  setSmsLogs([]);
+                  setSelectedTab('phoneRecords');
                 }}
               >
                 닫기
