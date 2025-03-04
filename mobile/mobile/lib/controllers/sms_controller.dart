@@ -1,4 +1,6 @@
 // lib/controllers/sms_controller.dart
+import 'dart:developer';
+
 import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
 import 'package:get_storage/get_storage.dart';
 
@@ -28,6 +30,8 @@ class SmsController {
         // "inbox" or "sent"
         'type': msg.kind,
       };
+      log('sms: $map');
+
       newList.add(map);
     }
 
@@ -41,6 +45,8 @@ class SmsController {
           final key = _makeUniqueKey(map);
           return diffKeys.contains(key);
         }).toList();
+
+    log('sms newlist: $newList');
 
     // 4) 저장
     await box.write(storageKey, newList);

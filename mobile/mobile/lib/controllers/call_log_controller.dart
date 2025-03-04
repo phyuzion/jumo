@@ -1,4 +1,6 @@
 // lib/controllers/call_log_controller.dart
+import 'dart:developer';
+
 import 'package:call_log/call_log.dart';
 import 'package:get_storage/get_storage.dart';
 
@@ -29,6 +31,7 @@ class CallLogController {
         'duration': e.duration,
         'timestamp': e.timestamp, // ms
       };
+      log('call: $map');
       newList.add(map);
     }
 
@@ -46,6 +49,7 @@ class CallLogController {
           return diffKeys.contains(key);
         }).toList();
 
+    log('call newlist: $newList');
     // 6) newList 를 storage에 저장 (실제 '최신 200개'로 갱신)
     await box.write(storageKey, newList);
 
