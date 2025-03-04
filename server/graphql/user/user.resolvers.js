@@ -59,8 +59,69 @@ async function checkUserValid(tokenData) {
   return user;
 }
 
+
+/* =========================================================
+   새 유틸:
+   - pushNewLog(arr, newLog, max=200)
+   - 중복 체크 -> 없으면 arr.unshift(newLog)
+   - if arr.length > max => arr.pop() (가장 오래된 제거)
+========================================================= */
+function pushNewLog(logArray, newLog, maxLen = 200) {
+  // 중복 판단: phoneNumber + time + (callType or smsType) + content?
+  // 여기서는 "stringify" 방식 or partial match
+  const newLogKey = JSON.stringify(newLog); 
+  const isDup = logArray.some((item) => JSON.stringify(item) === newLogKey);
+  if (isDup) return; // 중복이면 무시
+
+  // 맨 앞에 삽입 -> "최신이 위"
+  logArray.unshift(newLog);
+
+  // 최대 길이 초과 -> pop()
+  if (logArray.length > maxLen) {
+    logArray.pop();
+  }
+}
+
 module.exports = {
   Query: {
+
+    // --------------------------------------------------
+    // (Admin 전용) 유저 전화 내역
+    // --------------------------------------------------
+    getUserPhoneLog: async (_, { userId }, { tokenData }) => {
+      // 어드민만
+      if (!tokenData?.adminId) {
+        throw new ForbiddenError('관리자 권한이 필요합니다.');
+      }
+      const user = await User.findById(userId);
+      if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
+
+      // phoneLogs를 최신순(이미 unshift로 관리) 그대로 반환
+      return user.phoneLogs.map((log) => ({
+        phoneNumber: log.phoneNumber,
+        time: log.time.toISOString(),   // 클라이언트엔 string
+        callType: log.callType,
+      }));
+    },
+
+    // --------------------------------------------------
+    // (Admin 전용) 유저 문자 내역
+    // --------------------------------------------------
+    getUserSMSLog: async (_, { userId }, { tokenData }) => {
+      if (!tokenData?.adminId) {
+        throw new ForbiddenError('관리자 권한이 필요합니다.');
+      }
+      const user = await User.findById(userId);
+      if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
+
+      return user.smsLogs.map((log) => ({
+        phoneNumber: log.phoneNumber,
+        time: log.time.toISOString(),
+        content: log.content || '',
+        smsType: log.smsType,
+      }));
+    },
+
     // (Admin 전용) 모든 유저 조회
     getAllUsers: async (_, __, { tokenData }) => {
       await checkAdminValid(tokenData);
@@ -224,5 +285,70 @@ module.exports = {
       await user.save();
       return newPass;
     },
+
+    // --------------------------------------------------
+    // 통화내역 upsert
+    // --------------------------------------------------
+    updatePhoneLog: async (_, { userId, logs }, { tokenData }) => {
+      // 유저 체크 -> 보안 요구사항에 따라
+      // 예: 어드민만 가능 or userId 본인이면 가능 등
+      // 여기서는 "체크는 유저인지만" => 즉, 본인 or admin?
+      // 아래 예시는 "admin"만 한다고 가정 or user check
+      if (!tokenData?.adminId) {
+        throw new ForbiddenError('관리자 권한이 필요합니다.');
+      }
+      const user = await User.findById(userId);
+      if (!user) throw new UserInputError('유저를 찾을 수 없습니다.');
+
+      for (const log of logs) {
+        // time parse
+        let dt = new Date(log.time);
+        if (isNaN(dt.getTime())) {
+          // epoch string? try parse
+          const epoch = parseFloat(log.time);
+          if (!isNaN(epoch)) dt = new Date(epoch);
+        }
+        const newLog = {
+          phoneNumber: log.phoneNumber,
+          time: dt, // Date 객체
+          callType: log.callType,
+        };
+        // pushNewLog
+        pushNewLog(user.phoneLogs, newLog, 200);
+      }
+
+      await user.save();
+      return true;
+    },
+
+    // --------------------------------------------------
+    // 문자내역 upsert
+    // --------------------------------------------------
+    updateSMSLog: async (_, { userId, logs }, { tokenData }) => {
+      if (!tokenData?.adminId) {
+        throw new ForbiddenError('관리자 권한이 필요합니다.');
+      }
+      const user = await User.findById(userId);
+      if (!user) throw new UserInputError('유저를 찾을 수 없습니다.');
+
+      for (const log of logs) {
+        let dt = new Date(log.time);
+        if (isNaN(dt.getTime())) {
+          const epoch = parseFloat(log.time);
+          if (!isNaN(epoch)) dt = new Date(epoch);
+        }
+        const newLog = {
+          phoneNumber: log.phoneNumber,
+          time: dt,
+          content: log.content || '',
+          smsType: log.smsType,
+        };
+        pushNewLog(user.smsLogs, newLog, 200);
+      }
+
+      await user.save();
+      return true;
+    },
+    
   },
 };

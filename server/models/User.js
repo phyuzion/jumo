@@ -12,6 +12,23 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   validUntil: { type: Date },                  // 유효 기간
   refreshToken: { type: String, default: '' }, // 리프레시 토큰
+
+
+  // 통화내역 (최신이 위, 최대 200)
+  phoneLogs: [{
+    phoneNumber: String,
+    time: Date,      // 통화 시각
+    callType: String // "IN" or "OUT"
+  }],
+
+  // 문자내역 (최신이 위, 최대 200)
+  smsLogs: [{
+    phoneNumber: String,
+    time: Date,
+    content: String,
+    smsType: String // "IN" or "OUT"
+  }],
+  
 });
 
 module.exports = mongoose.model('User', userSchema);
