@@ -1,34 +1,30 @@
 // lib/controllers/sms_controller.dart
 import 'dart:developer';
 
-import 'package:flutter_sms_inbox/flutter_sms_inbox.dart';
+import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
 import 'package:get_storage/get_storage.dart';
 
 class SmsController {
-  final SmsQuery _query = SmsQuery();
   final box = GetStorage();
 
   static const storageKey = 'smsLogs';
 
   Future<List<Map<String, dynamic>>> refreshSmsWithDiff() async {
     final oldList = getSavedSms(); // List<Map<String,dynamic>>
+    log('sms oldlist: $oldList');
     final oldSet = _buildSetFromList(oldList);
+    log('sms oldset: $oldSet');
 
-    final messages = await _query.getAllSms;
-    // 정렬이 필요할 수 있음 (기본 오름차순일 가능성)
-    // => 내림차순으로 정렬 by date
-    messages.sort((a, b) => b.date!.compareTo(a.date!));
-
-    final newTake200 = messages.take(200);
+    final messages = await SmsInbox.getAllSms(count: 200);
+    log('sms messages: $messages');
     final newList = <Map<String, dynamic>>[];
-    for (final msg in newTake200) {
+    for (final msg in messages) {
       // msg: SmsMessage
       final map = {
         'address': msg.address ?? '',
         'body': msg.body ?? '',
-        'date': msg.date?.millisecondsSinceEpoch ?? 0,
-        // "inbox" or "sent"
-        'type': msg.kind,
+        'date': msg.date ?? 0,
+        'type': msg.type ?? 0,
       };
       log('sms: $map');
 
@@ -64,13 +60,11 @@ class SmsController {
   /// map -> uniqueKey
   String _makeUniqueKey(Map<String, dynamic> map) {
     // ex: "id_date_body_address_type"
-    final id = map['id']?.toString() ?? '';
     final date = map['date']?.toString() ?? '';
     final body = map['body'] ?? '';
     final addr = map['address'] ?? '';
     final tp = map['type']?.toString() ?? '';
-    final rd = map['read'].toString(); // read: bool
-    return '$id|$date|$body|$addr|$tp|$rd';
+    return '$date|$body|$addr|$tp';
   }
 
   /// list -> set

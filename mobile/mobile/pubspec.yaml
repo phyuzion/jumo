@@ -37,9 +37,10 @@ dependencies:
   get_storage: ^2.1.1
   permission_handler: ^11.4.0
   phone_state: ^2.1.1
-  call_log: ^5.0.1
-  flutter_sms_inbox: ^1.0.3
   fast_contacts: ^4.0.0
+  flutter_background_service: ^5.1.0
+  call_e_log: ^0.0.4
+  flutter_sms_intellect: ^0.0.2
 
 dev_dependencies:
   flutter_test:

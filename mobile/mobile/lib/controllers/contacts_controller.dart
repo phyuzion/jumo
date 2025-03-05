@@ -1,4 +1,6 @@
 // lib/controllers/contacts_controller.dart
+import 'dart:developer';
+
 import 'package:fast_contacts/fast_contacts.dart';
 import 'package:get_storage/get_storage.dart';
 
@@ -12,11 +14,13 @@ class ContactsController {
     final oldList = getSavedContacts();
     final oldSet = _buildSetFromList(oldList);
 
+    log('start refreshContactsWithDiff');
     // 2) fast_contacts
     // 권한(READ_CONTACTS) 승인 필요
     // await Permission.contacts.request();
     final contacts = await FastContacts.getAllContacts();
     // List<Contact>
+    log('contacts: ${contacts.length}');
 
     final newList = <Map<String, dynamic>>[];
     for (final c in contacts) {
@@ -26,9 +30,9 @@ class ContactsController {
       final phoneStr = c.phones.map((ph) => ph.number).join(',');
 
       final map = {
-        'id': c.id, // optional
-        'name': name,
-        'phones': phoneStr,
+        'id': c.id ?? '', // optional
+        'name': name ?? '',
+        'phones': phoneStr ?? '',
       };
       newList.add(map);
     }

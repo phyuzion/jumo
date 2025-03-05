@@ -1,7 +1,7 @@
 // lib/controllers/call_log_controller.dart
 import 'dart:developer';
 
-import 'package:call_log/call_log.dart';
+import 'package:call_e_log/call_log.dart';
 import 'package:get_storage/get_storage.dart';
 
 class CallLogController {
@@ -16,6 +16,7 @@ class CallLogController {
     // 1) 이전 목록 읽기
     final oldList = getSavedCallLogs(); // List<Map<String,dynamic>>
     final oldSet = _buildSetFromList(oldList); // Set<String> of unique keys
+    log('oldSet: ${oldSet}');
 
     // 2) 새 목록 호출
     final newEntries =
@@ -25,13 +26,13 @@ class CallLogController {
     final newList = <Map<String, dynamic>>[];
     for (final e in newTake200) {
       final map = {
-        'number': e.number,
-        'name': e.name,
-        'callType': e.callType, // or e.callType.name
-        'duration': e.duration,
-        'timestamp': e.timestamp, // ms
+        'number': e.number ?? '',
+        'name': e.name ?? '',
+        // e.callType.name -> "incoming"/"outgoing"/"missed" etc. (string)
+        'callType': e.callType?.name ?? '',
+        'duration': e.duration ?? 0,
+        'timestamp': e.timestamp ?? 0,
       };
-      log('call: $map');
       newList.add(map);
     }
 
@@ -49,10 +50,14 @@ class CallLogController {
           return diffKeys.contains(key);
         }).toList();
 
-    log('call newlist: $newList');
     // 6) newList 를 storage에 저장 (실제 '최신 200개'로 갱신)
-    await box.write(storageKey, newList);
-
+    log('box add start for call');
+    try {
+      await box.write(storageKey, newList);
+    } catch (e) {
+      log('box write error: $e');
+    }
+    log('box add end for call');
     // 7) "새로 추가/변경된" 항목 리스트 반환
     return diffList;
   }
@@ -60,6 +65,7 @@ class CallLogController {
   /// get_storage 에서 이전 목록 읽기
   List<Map<String, dynamic>> getSavedCallLogs() {
     final list = box.read<List>(storageKey) ?? [];
+    log('box read for call: ${list.length}');
     return list.map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
