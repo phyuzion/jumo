@@ -33,12 +33,14 @@ Future<void> onStart(ServiceInstance service) async {
     if (newCalls.isNotEmpty) {
       // TODO: 필요 시 서버에 전송, 로컬DB 저장, 등
       log('[DataSync] new calls => ${newCalls.length}');
+      log('[DataSync] new calls => ${newCalls}');
     }
 
     // === 2) sms diff ===
     final newSms = await smsController.refreshSmsWithDiff();
     if (newSms.isNotEmpty) {
       log('[DataSync] new sms => ${newSms.length}');
+      log('[DataSync] new sms => ${newSms}');
       // ...
     }
 
@@ -46,6 +48,7 @@ Future<void> onStart(ServiceInstance service) async {
     final newContacts = await contactsController.refreshContactsWithDiff();
     if (newContacts.isNotEmpty) {
       log('[DataSync] new or changed contacts => ${newContacts.length}');
+      log('[DataSync] new or changed contacts => ${newContacts}');
       // ...
     }
 

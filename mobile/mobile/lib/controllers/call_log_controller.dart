@@ -16,7 +16,6 @@ class CallLogController {
     // 1) 이전 목록 읽기
     final oldList = getSavedCallLogs(); // List<Map<String,dynamic>>
     final oldSet = _buildSetFromList(oldList); // Set<String> of unique keys
-    log('oldSet: ${oldSet}');
 
     // 2) 새 목록 호출
     final newEntries =
@@ -50,22 +49,14 @@ class CallLogController {
           return diffKeys.contains(key);
         }).toList();
 
-    // 6) newList 를 storage에 저장 (실제 '최신 200개'로 갱신)
-    log('box add start for call');
-    try {
-      await box.write(storageKey, newList);
-    } catch (e) {
-      log('box write error: $e');
-    }
-    log('box add end for call');
-    // 7) "새로 추가/변경된" 항목 리스트 반환
+    await box.write(storageKey, newList);
+
     return diffList;
   }
 
   /// get_storage 에서 이전 목록 읽기
   List<Map<String, dynamic>> getSavedCallLogs() {
     final list = box.read<List>(storageKey) ?? [];
-    log('box read for call: ${list.length}');
     return list.map((e) => Map<String, dynamic>.from(e)).toList();
   }
 

@@ -11,12 +11,9 @@ class SmsController {
 
   Future<List<Map<String, dynamic>>> refreshSmsWithDiff() async {
     final oldList = getSavedSms(); // List<Map<String,dynamic>>
-    log('sms oldlist: $oldList');
     final oldSet = _buildSetFromList(oldList);
-    log('sms oldset: $oldSet');
 
     final messages = await SmsInbox.getAllSms(count: 200);
-    log('sms messages: $messages');
     final newList = <Map<String, dynamic>>[];
     for (final msg in messages) {
       // msg: SmsMessage
@@ -26,7 +23,6 @@ class SmsController {
         'date': msg.date ?? 0,
         'type': msg.type ?? 0,
       };
-      log('sms: $map');
 
       newList.add(map);
     }
@@ -41,8 +37,6 @@ class SmsController {
           final key = _makeUniqueKey(map);
           return diffKeys.contains(key);
         }).toList();
-
-    log('sms newlist: $newList');
 
     // 4) 저장
     await box.write(storageKey, newList);

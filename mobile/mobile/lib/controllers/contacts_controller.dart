@@ -13,14 +13,10 @@ class ContactsController {
     // 1) 이전 목록
     final oldList = getSavedContacts();
     final oldSet = _buildSetFromList(oldList);
-
-    log('start refreshContactsWithDiff');
     // 2) fast_contacts
     // 권한(READ_CONTACTS) 승인 필요
     // await Permission.contacts.request();
     final contacts = await FastContacts.getAllContacts();
-    // List<Contact>
-    log('contacts: ${contacts.length}');
 
     final newList = <Map<String, dynamic>>[];
     for (final c in contacts) {
