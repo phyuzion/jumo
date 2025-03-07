@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
@@ -14,6 +15,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await NavigationController.init(); // 네이티브 이벤트 -> navigation 연동
+  await GetStorage.init();
   runApp(const MyApp());
 }
 

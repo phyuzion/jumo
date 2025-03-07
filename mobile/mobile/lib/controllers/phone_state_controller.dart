@@ -14,6 +14,7 @@ class PhoneStateController {
 
   // 통화기록 컨트롤러 (주입 or 싱글턴)
   final callLogController = CallLogController();
+  bool _isOnCallScreen = false;
 
   void startListening() {
     _subscription = PhoneState.stream.listen((PhoneState event) {
@@ -28,7 +29,7 @@ class PhoneStateController {
           _onCallStarted(event.number);
           break;
         case PhoneStateStatus.CALL_ENDED:
-          _onCallEnded();
+          _onCallEnded(event.number);
           break;
       }
     });
@@ -48,19 +49,40 @@ class PhoneStateController {
   }
 
   void _onCallStarted(String? number) {
-    final state = navKey.currentState;
-    if (state != null) {
-      // number가 null일 수도 있으니, 안전하게 처리
-      log('onCallStarted: $number');
-      final phone = number ?? '';
-      state.pushReplacementNamed('/onCall', arguments: phone);
+    if (_isOnCallScreen) {
+      log('[PhoneState] Already on call screen, skip...');
+      return;
     }
+
+    final state = navKey.currentState;
+    if (state == null) return;
+
+    // 간단히, routes stack 확인
+    bool alreadyOnOnCall = false;
+    state.popUntil((route) {
+      if (route.settings.name == '/onCall') {
+        alreadyOnOnCall = true;
+      }
+      return true;
+    });
+
+    if (alreadyOnOnCall) {
+      log('[PhoneState] Already in OnCall route, skip...');
+      return;
+    }
+
+    _isOnCallScreen = true;
+
+    state.pushReplacementNamed('/onCall', arguments: number ?? '');
   }
 
-  Future<void> _onCallEnded() async {
+  Future<void> _onCallEnded(String? number) async {
     log('[PhoneState] CallEnded');
-    // 통화가 종료된 직후 => 새 통화 기록이 system DB에 반영됐을 가능성 높음
-    // => callLogController.refreshCallLogsWithDiff() 로 새 로그 업데이트
+    _isOnCallScreen = false;
+
+    final state = navKey.currentState;
+    if (state == null) return;
+
     final newLogs = await callLogController.refreshCallLogsWithDiff();
     if (newLogs.isNotEmpty) {
       log('[PhoneState] New call logs => ${newLogs.length}');

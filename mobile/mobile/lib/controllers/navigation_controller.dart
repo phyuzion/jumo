@@ -26,7 +26,7 @@ class NavigationController {
   static void _goToIncoming(String number) {
     final ctx = navKey.currentContext;
     if (ctx != null) {
-      Navigator.of(ctx).pushNamed('/incoming', arguments: number);
+      Navigator.of(ctx).pushReplacementNamed('/incoming', arguments: number);
     }
   }
 

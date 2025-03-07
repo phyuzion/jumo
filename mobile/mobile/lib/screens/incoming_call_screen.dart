@@ -64,23 +64,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1) 배경
-          _buildBackground(),
-
           // 2) 상단 정보
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 20),
-                Text(
-                  'Incoming call',
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 100),
                 Text(
                   contactName,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Colors.black,
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                   ),
@@ -88,21 +80,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                 const SizedBox(height: 5),
                 Text(
                   contactPhones,
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
+                  style: const TextStyle(color: Colors.black, fontSize: 16),
                 ),
-                const SizedBox(height: 30),
-
-                // 3) 가운데 원형 프로필 or Icon
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Colors.white54,
-                  child: Text(
-                    contactName.characters.first,
-                    style: const TextStyle(fontSize: 32, color: Colors.black),
-                  ),
-                ),
-
                 const SizedBox(height: 20),
+
                 // "리스트 들어갈 곳"
                 const Text(
                   '리스트 들어갈곳',

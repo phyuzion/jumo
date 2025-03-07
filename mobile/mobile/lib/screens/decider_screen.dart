@@ -1,9 +1,13 @@
 // lib/screens/decider_screen.dart
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/services/native_methods.dart';
 
 class DeciderScreen extends StatefulWidget {
-  const DeciderScreen({Key? key}) : super(key: key);
+  const DeciderScreen({super.key});
 
   @override
   State<DeciderScreen> createState() => _DeciderScreenState();
@@ -27,6 +31,11 @@ class _DeciderScreenState extends State<DeciderScreen> {
     if (ok) {
       if (!mounted) return;
       // 권한 + 초기화 끝 -> 로그인 화면
+
+      final myNumber = await NativeMethods.getMyPhoneNumber();
+      log('myNumber=$myNumber');
+      GetStorage().write('myNumber', myNumber);
+
       Navigator.pushReplacementNamed(context, '/login');
     } else {
       // 권한 거부
