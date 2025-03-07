@@ -51,7 +51,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
     // 하단 BottomNavigationBar는 HomeScreen(메인)에서 관리한다면,
     // 여기서는 body 부분만 구현
     return Scaffold(
-      appBar: AppBar(title: const Text('연락처')),
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
         child: ListView.builder(

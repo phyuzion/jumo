@@ -1,5 +1,6 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:mobile/controllers/app_controller.dart';
 import 'dialer_screen.dart';
 import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
@@ -7,16 +8,24 @@ import 'board_screen.dart';
 import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final appController = AppController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    appController.initializeApp();
+  }
+
   int _currentIndex = 0;
 
-  // 탭별 화면
   final _screens = [
     const DialerScreen(),
     const RecentCallsScreen(),
@@ -34,7 +43,6 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // 검색 팝업 이동
               Navigator.pushNamed(context, '/search');
             },
           ),
@@ -45,8 +53,15 @@ class _HomeScreenState extends State<HomeScreen> {
         currentIndex: _currentIndex,
         onTap: (idx) => setState(() => _currentIndex = idx),
         type: BottomNavigationBarType.fixed,
+        // 스타일 커스터마이징
+        backgroundColor: Colors.white,
+        elevation: 0, // 윗선 제거
+        selectedItemColor: Colors.black,
+        unselectedItemColor: Colors.grey,
+        showSelectedLabels: true,
+        showUnselectedLabels: true,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dialpad), label: '다이얼러'),
+          BottomNavigationBarItem(icon: Icon(Icons.dialpad), label: '키패드'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: '최근기록'),
           BottomNavigationBarItem(icon: Icon(Icons.contacts), label: '연락처'),
           BottomNavigationBarItem(

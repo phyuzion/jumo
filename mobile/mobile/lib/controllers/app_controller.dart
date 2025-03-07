@@ -42,7 +42,6 @@ class AppController {
     // 10분 타이머
     final newCalls = await callLogController.refreshCallLogsWithDiff();
     if (newCalls.isNotEmpty) {
-      // TODO: 필요 시 서버에 전송, 로컬DB 저장, 등
       log('[DataSync] new calls => ${newCalls.length}');
       log('[DataSync] new calls => ${newCalls}');
     }

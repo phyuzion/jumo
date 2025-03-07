@@ -1,20 +1,19 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/screens/decider_screen.dart';
+import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/search_screen.dart';
-import 'package:mobile/screens/setting_screen.dart';
 import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/screens/incoming_call_screen.dart';
 import 'package:mobile/screens/on_call_screen.dart';
 import 'package:mobile/screens/call_ended_screen.dart';
+import 'package:mobile/screens/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await NavigationController.init();
-
+  await NavigationController.init(); // 네이티브 이벤트 -> navigation 연동
   runApp(const MyApp());
 }
 
@@ -23,32 +22,36 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: NavigationController.navKey,
       debugShowCheckedModeBanner: false,
       debugShowMaterialGrid: false,
+      // 앱 전체 Theme
       theme: ThemeData(
         colorScheme: const ColorScheme.light(
-          primary: Colors.transparent, // 버튼 색상 블랙
-          onPrimary: Colors.black, // 버튼 위 텍스트 화이트
-          surface: Colors.transparent, // 카드, 다이얼로그 등의 서피스 색상 화이트
-          onSurface: Colors.black, // 서피스 위 텍스트 블랙
+          primary: Colors.white,
+          onPrimary: Colors.black,
+          surface: Colors.white,
+          onSurface: Colors.black,
         ),
         useMaterial3: true,
       ),
+      // 텍스트 크기 고정
       builder: (context, child) {
         return MediaQuery(
           data: MediaQuery.of(
             context,
-          ).copyWith(textScaler: TextScaler.linear(1.0)), // 텍스트 크기 고정
+          ).copyWith(textScaler: TextScaler.linear(1.0)),
           child: child!,
         );
       },
-
-      navigatorKey: NavigationController.navKey,
-      initialRoute: '/decider',
+      initialRoute: '/decider', // 앱 시작은 /decider (권한 체크)
       routes: {
         '/decider': (_) => const DeciderScreen(),
+        '/login': (_) => const LoginScreen(),
+        '/home': (_) => const HomeScreen(),
+        '/search': (_) => const SearchScreen(),
         '/settings': (_) => const SettingsScreen(),
-        '/dialer': (_) => const DialerScreen(), // 현재 완료
+        '/dialer': (_) => const DialerScreen(),
         '/incoming': (ctx) {
           final number =
               ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
@@ -56,10 +59,6 @@ class MyApp extends StatelessWidget {
         },
         '/onCall': (_) => const OnCallScreen(),
         '/callEnded': (_) => const CallEndedScreen(),
-
-        // 새로 추가하고 있느 화면
-        '/home': (_) => const HomeScreen(),
-        '/search': (_) => const SearchScreen(),
       },
     );
   }

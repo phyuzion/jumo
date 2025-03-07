@@ -1,6 +1,7 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import '../controllers/call_log_controller.dart';
 
@@ -32,25 +33,20 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     super.dispose();
   }
 
-  /// 이미 저장된 통화로그(최대 200개) 불러오기
   Future<void> _loadCalls() async {
     final logs = _callLogController.getSavedCallLogs();
     setState(() => _callLogs = logs);
   }
 
-  /// 새로고침해서 callLogController.refreshCallLogsWithDiff() 실행 → 저장된 목록 갱신
   Future<void> _refreshCalls() async {
-    // 새 통화 내역 가져와 diff 반영
     await _callLogController.refreshCallLogsWithDiff();
-    // 다시 로드
     await _loadCalls();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('최근기록')),
-      // Pull to Refresh 가능: 새로고침 시 _refreshCalls()
+      // 상단 AppBar 가 이미 HomeScreen(탭) 쪽에 있다면, 여기서는 body만
       body: RefreshIndicator(
         onRefresh: _refreshCalls,
         child: ListView.builder(
@@ -62,13 +58,11 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
             final callType = call['callType'] as String? ?? '';
             final ts = call['timestamp'] as int? ?? 0;
 
-            // timestamp → DateTime
             final date = DateTime.fromMillisecondsSinceEpoch(ts);
-            // 간단 포맷 (시간만 예시)
             final timeStr =
                 '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
-            // callType 에 따라 아이콘/색상 지정
+            // callType 에 따라 아이콘/색상
             IconData iconData;
             Color iconColor;
             switch (callType) {
@@ -85,25 +79,74 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 iconColor = Colors.red;
                 break;
               default:
-                iconData = Icons.phone; // unknown
+                iconData = Icons.phone;
                 iconColor = Colors.grey;
             }
 
-            return ListTile(
-              leading: Icon(iconData, color: iconColor),
-              title: Text(
-                name.isNotEmpty ? name : number,
-                style: const TextStyle(fontSize: 16),
+            // Slidable 사용
+            return Slidable(
+              key: ValueKey(index),
+              // 스와이프 방향
+              endActionPane: ActionPane(
+                motion: const BehindMotion(),
+                // or StretchMotion / DrawerMotion
+                children: [
+                  // 통화 아이콘
+                  SlidableAction(
+                    onPressed: (_) => _onTapCall(number),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    icon: Icons.call,
+                    autoClose: false,
+                    spacing: 0,
+                  ),
+                  // 검색 아이콘
+                  SlidableAction(
+                    onPressed: (_) => _onTapSearch(number),
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    icon: Icons.search,
+                    autoClose: false,
+                  ),
+                  // 편집 아이콘
+                  SlidableAction(
+                    onPressed: (_) => _onTapEdit(number),
+                    backgroundColor: Colors.blueGrey,
+                    foregroundColor: Colors.white,
+                    icon: Icons.edit,
+                    autoClose: false,
+                  ),
+                ],
               ),
-              // timeStr or date...
-              trailing: Text(
-                timeStr,
-                style: const TextStyle(fontSize: 14, color: Colors.grey),
+              child: ListTile(
+                leading: Icon(iconData, color: iconColor, size: 28),
+                title: Text(
+                  name.isNotEmpty ? name : number,
+                  style: const TextStyle(fontSize: 18), // 폰트 키우기
+                ),
+                trailing: Text(
+                  timeStr,
+                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                ),
               ),
             );
           },
         ),
       ),
     );
+  }
+
+  // 액션 버튼 로직
+  Future<void> _onTapCall(String number) async {
+    await NativeMethods.makeCall(number);
+  }
+
+  void _onTapSearch(String number) {
+    Navigator.pushNamed(context, '/search', arguments: number);
+  }
+
+  void _onTapEdit(String number) {
+    // ex) 편집 화면
+    debugPrint('Tap Edit => $number');
   }
 }

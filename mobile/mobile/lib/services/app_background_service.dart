@@ -59,9 +59,4 @@ Future<void> onStart(ServiceInstance service) async {
   service.on('stopService').listen((event) {
     service.stopSelf();
   });
-
-  // “stopService” event 수신 => self stop
-  service.on('stopService').listen((event) {
-    service.stopSelf();
-  });
 }

@@ -51,8 +51,9 @@ class PhoneStateController {
     final state = navKey.currentState;
     if (state != null) {
       // number가 null일 수도 있으니, 안전하게 처리
+      log('onCallStarted: $number');
       final phone = number ?? '';
-      state.pushNamed('/onCall', arguments: phone);
+      state.pushReplacementNamed('/onCall', arguments: phone);
     }
   }
 
