@@ -1,23 +1,23 @@
-// lib/controllers/phone_state_controller.dart
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:phone_state/phone_state.dart';
-import 'package:mobile/controllers/call_log_controller.dart'; // 예: callLogController
+import 'package:mobile/controllers/call_log_controller.dart';
 
 class PhoneStateController {
   final GlobalKey<NavigatorState> navKey;
-
   PhoneStateController(this.navKey);
 
   StreamSubscription<PhoneState>? _subscription;
-
-  // 통화기록 컨트롤러 (주입 or 싱글턴)
   final callLogController = CallLogController();
+
+  bool outgoingCallFromApp = false; // 앱 발신여부
   bool _isOnCallScreen = false;
+  bool _inCall = false;
 
   void startListening() {
-    _subscription = PhoneState.stream.listen((PhoneState event) {
+    _subscription = PhoneState.stream.listen((event) {
       switch (event.status) {
         case PhoneStateStatus.NOTHING:
           _onNothing();
@@ -41,53 +41,53 @@ class PhoneStateController {
   }
 
   void _onNothing() {
-    log('[PhoneState] status: NOTHING');
+    log('[PhoneState] NOTHING');
   }
 
-  void _onIncoming(String? incomingNumber) {
-    log('[PhoneState] Incoming: $incomingNumber');
+  Future<void> _onIncoming(String? number) async {
+    //nothing happend.
+    _inCall = true;
+    if (await NativeDefaultDialerMethods.isDefaultDialer()) {
+      log('[PhoneState] inCallService handles => skip');
+    } else {
+      log('[PhoneState] not default => skip UI');
+    }
   }
 
-  void _onCallStarted(String? number) {
-    if (_isOnCallScreen) {
-      log('[PhoneState] Already on call screen, skip...');
+  Future<void> _onCallStarted(String? number) async {
+    _inCall = true;
+    if (await NativeDefaultDialerMethods.isDefaultDialer()) {
+      log('[PhoneState] default dialer => skip phone_state UI');
       return;
     }
+    // 비기본앱 + 앱 발신
+    if (outgoingCallFromApp && !_isOnCallScreen) {
+      final state = navKey.currentState;
+      if (state == null) return;
 
-    final state = navKey.currentState;
-    if (state == null) return;
-
-    // 간단히, routes stack 확인
-    bool alreadyOnOnCall = false;
-    state.popUntil((route) {
-      if (route.settings.name == '/onCall') {
-        alreadyOnOnCall = true;
-      }
-      return true;
-    });
-
-    if (alreadyOnOnCall) {
-      log('[PhoneState] Already in OnCall route, skip...');
-      return;
+      _isOnCallScreen = true;
+      final phone = number ?? '';
+      log('[PhoneState] push /onCall => $phone');
+      state.pushNamed('/onCall', arguments: phone);
     }
-
-    _isOnCallScreen = true;
-
-    state.pushReplacementNamed('/onCall', arguments: number ?? '');
   }
 
   Future<void> _onCallEnded(String? number) async {
-    log('[PhoneState] CallEnded');
+    log('[PhoneState] callEnded => logs sync');
+    if (!_inCall) {
+      log('Ignore spurious CALL_ENDED because we were never in call');
+      return;
+    }
+    _inCall = false;
     _isOnCallScreen = false;
+    outgoingCallFromApp = false;
 
-    final state = navKey.currentState;
-    if (state == null) return;
-
+    // 갱신
     final newLogs = await callLogController.refreshCallLogsWithDiff();
     if (newLogs.isNotEmpty) {
-      log('[PhoneState] New call logs => ${newLogs.length}');
-      // TODO: UI update?
-      // ex) using a Stream/Provider to notify RecentScreen or etc.
+      log('[PhoneState] new logs => ${newLogs.length}');
     }
+    final nav = navKey.currentState;
+    nav?.pushReplacementNamed('/callEnded', arguments: number ?? '');
   }
 }

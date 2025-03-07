@@ -71,7 +71,7 @@ class _OnCallScreenState extends State<OnCallScreen> {
     // 통화 종료 -> phone_state_controller => CALL_ENDED => ...
     // 여기서는 화면만 닫거나, Navigator.pop(context)
     if (!mounted) return;
-    Navigator.pop(context);
+    //Navigator.pop(context);
   }
 
   @override

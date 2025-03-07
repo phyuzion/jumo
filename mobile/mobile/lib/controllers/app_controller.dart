@@ -7,17 +7,17 @@ import 'package:mobile/controllers/permission_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
-import 'package:mobile/controllers/navigation_controller.dart';
 
 class AppController {
-  late final PhoneStateController phoneStateController;
+  final PhoneStateController phoneStateController;
+
+  AppController(this.phoneStateController);
 
   Future<bool> checkEssentialPermissions() async {
     return await PermissionController.requestAllEssentialPermissions();
   }
 
   Future<void> initializeApp() async {
-    phoneStateController = PhoneStateController(NavigationController.navKey);
     phoneStateController.startListening();
 
     await initializeData();

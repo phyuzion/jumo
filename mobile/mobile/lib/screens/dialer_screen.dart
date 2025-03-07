@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../services/native_methods.dart';
+import 'package:mobile/controllers/phone_state_controller.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:provider/provider.dart';
 
 class DialerScreen extends StatefulWidget {
   const DialerScreen({super.key});
@@ -11,6 +13,16 @@ class DialerScreen extends StatefulWidget {
 class _DialerScreenState extends State<DialerScreen> {
   String _number = '';
 
+  Future<void> _makeCall() async {
+    if (_number.isNotEmpty) {
+      // 앱 발신임을 표시
+
+      final phoneState = context.read<PhoneStateController>();
+      phoneState.outgoingCallFromApp = true;
+      await NativeMethods.makeCall(_number);
+    }
+  }
+
   void _onDigit(String d) {
     setState(() => _number += d);
   }
@@ -21,61 +33,33 @@ class _DialerScreenState extends State<DialerScreen> {
     }
   }
 
-  Future<void> _makeCall() async {
-    if (_number.isNotEmpty) {
-      await NativeMethods.makeCall(_number);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Column(
         children: [
-          // 1) 상단 번호 표시 (남는 공간은 Expanded가 차지 -> 번호가 가운데 정렬)
-          Expanded(
-            child: Center(
-              child: Text(_number, style: const TextStyle(fontSize: 36)),
+          const SizedBox(height: 40),
+          Text(_number, style: const TextStyle(fontSize: 36)),
+          const SizedBox(height: 40),
+          Expanded(child: _buildDialPad()),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 30),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                shape: const CircleBorder(),
+                padding: const EdgeInsets.all(32),
+                backgroundColor: Colors.green,
+              ),
+              onPressed: _makeCall,
+              child: const Icon(Icons.call, color: Colors.white, size: 32),
             ),
           ),
-
-          // 2) 키패드
-          _buildDialPad(),
-          const SizedBox(height: 8),
-
-          // 3) 맨 아래쪽에 백버튼 + 통화버튼 (위에서부터 아래로 쌓음)
-          Column(
-            children: [
-              // 백버튼 (위)
-              IconButton(
-                icon: const Icon(Icons.backspace),
-                iconSize: 40,
-                color: Colors.black,
-                onPressed: _onBackspace,
-              ),
-              const SizedBox(height: 16),
-
-              // 통화 버튼 (아래)
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  shape: const CircleBorder(),
-                  padding: const EdgeInsets.all(25), // 크기 크게
-                  backgroundColor: Colors.green,
-                ),
-                onPressed: _makeCall,
-                child: const Icon(Icons.call, color: Colors.white, size: 32),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 20), // 아래쪽 여유 공간
         ],
       ),
     );
   }
 
   Widget _buildDialPad() {
-    // 각 줄
     final digits = [
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -83,37 +67,48 @@ class _DialerScreenState extends State<DialerScreen> {
       ['*', '0', '#'],
     ];
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children:
-          digits.map((row) {
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: row.map((d) => _buildDialButton(d)).toList(),
-            );
-          }).toList(),
-    );
-  }
-
-  Widget _buildDialButton(String digit) {
-    return Padding(
-      padding: const EdgeInsets.all(10.0),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(30),
-        onTap: () => _onDigit(digit),
-        child: Container(
-          width: 64,
-          height: 64,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.grey[200],
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            digit,
-            style: const TextStyle(fontSize: 32, color: Colors.black),
-          ),
-        ),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children:
+            digits.map((row) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children:
+                      row.map((d) {
+                        return Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: InkWell(
+                            onTap: () => _onDigit(d),
+                            child: Container(
+                              width: 64,
+                              height: 64,
+                              alignment: Alignment.center,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                d,
+                                style: const TextStyle(fontSize: 24),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                );
+              }).toList()
+              ..add(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.backspace, size: 32),
+                      onPressed: _onBackspace,
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }

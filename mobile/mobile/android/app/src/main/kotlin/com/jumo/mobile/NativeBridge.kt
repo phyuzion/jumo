@@ -1,10 +1,10 @@
 package com.jumo.mobile
 
+import android.content.Context
+import android.telephony.TelephonyManager
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-import android.content.Context
-import android.telephony.TelephonyManager
 
 object NativeBridge {
     private const val CHANNEL_NAME = "com.jumo.mobile/native"
@@ -18,6 +18,7 @@ object NativeBridge {
                     val number = call.argument<String>("phoneNumber") ?: ""
                     Log.d("NativeBridge", "makeCall($number)")
                     // ACTION_CALL or TelecomManager.placeCall
+                    // ...
                     result.success(true)
                 }
                 "acceptCall" -> {
@@ -46,11 +47,13 @@ object NativeBridge {
                     val number = getMyPhoneNumberFromTelephony()
                     result.success(number) 
                 }
-                else -> result.notImplemented()
+                else -> {
+                    result.notImplemented()
+                }
             }
         }
     }
-    
+
 
     fun getMyPhoneNumberFromTelephony(): String {
         return try {
@@ -62,13 +65,10 @@ object NativeBridge {
     }
 
     fun notifyIncomingNumber(number: String) {
-        Log.d("NativeBridge", "notifyIncomingNumber($number)")
         methodChannel?.invokeMethod("onIncomingNumber", number)
     }
 
-    fun notifyCallEnded() {
-        Log.d("NativeBridge", "notifyCallEnded()")
-        methodChannel?.invokeMethod("onCallEnded", null)
+    fun notifyCallEnded(endedNumber: String) {
+        methodChannel?.invokeMethod("onCallEnded", endedNumber)
     }
-
 }

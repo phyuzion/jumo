@@ -1,22 +1,50 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 
-class CallEndedScreen extends StatelessWidget {
-  const CallEndedScreen({super.key});
+class CallEndedScreen extends StatefulWidget {
+  final String callEndedNumber;
+  const CallEndedScreen({super.key, required this.callEndedNumber});
+
+  @override
+  State<CallEndedScreen> createState() => _CallEndedScreen();
+}
+
+class _CallEndedScreen extends State<CallEndedScreen> {
+  String? _displayName;
+  String? _phones;
+  // or additional contact info
+  // We'll search from contactsController
+
+  @override
+  void initState() {
+    super.initState();
+    _loadContactName();
+  }
+
+  /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
+  Future<void> _loadContactName() async {
+    final contactsController = ContactsController();
+    final contacts = contactsController.getSavedContacts();
+    // e.g. each: {'name':'홍길동','phones':'010-1234-5678,...'}
+
+    // 단순히 'phones' 에 widget.incomingNumber 가 포함되는지 검사 (문자열로)
+    for (final c in contacts) {
+      final phoneStr = c['phones'] as String? ?? '';
+      if (phoneStr.contains(widget.callEndedNumber)) {
+        setState(() {
+          _displayName = c['name'] as String?;
+          _phones = phoneStr;
+        });
+        break;
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    // 예: arguments 받기 (이름, 번호)
-    // final args = ModalRoute.of(context)?.settings.arguments;
-    // String name = '';
-    // String number = '';
-    // if(args is Map<String, String>) {
-    //   name = args['name'] ?? '';
-    //   number = args['number'] ?? '';
-    // }
-
-    // 여기서는 예시로 고정
-    final name = '홍길동';
-    final number = '010-1234-5678';
+    final number = widget.callEndedNumber;
+    final contactName = _displayName ?? number; // fallback to number
+    final contactPhones = _phones ?? number; //
 
     return Scaffold(
       body: SafeArea(
@@ -25,7 +53,7 @@ class CallEndedScreen extends StatelessWidget {
             const SizedBox(height: 100),
             // 상단: 이름 / 번호
             Text(
-              name,
+              contactName,
               style: const TextStyle(
                 color: Colors.black,
                 fontSize: 28,
@@ -34,7 +62,7 @@ class CallEndedScreen extends StatelessWidget {
             ),
             const SizedBox(height: 5),
             Text(
-              number,
+              contactPhones,
               style: const TextStyle(color: Colors.black, fontSize: 16),
             ),
             const SizedBox(height: 20),
@@ -90,7 +118,7 @@ class CallEndedScreen extends StatelessWidget {
               ),
               onPressed: () {
                 // 단순 종료 => pop
-                //Navigator.pop(context);
+                Navigator.pop(context);
 
                 // 또는 Navigator.pushNamedAndRemoveUntil(...)
               },

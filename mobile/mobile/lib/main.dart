@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
+import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
@@ -10,13 +12,31 @@ import 'package:mobile/screens/incoming_call_screen.dart';
 import 'package:mobile/screens/on_call_screen.dart';
 import 'package:mobile/screens/call_ended_screen.dart';
 import 'package:mobile/screens/settings_screen.dart';
+import 'package:provider/provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await NavigationController.init(); // 네이티브 이벤트 -> navigation 연동
   await GetStorage.init();
-  runApp(const MyApp());
+
+  // 1) phoneStateController
+  final phoneStateController = PhoneStateController(
+    NavigationController.navKey,
+  );
+
+  // 2) appController (의존성으로 phoneStateController 주입)
+  final appController = AppController(phoneStateController);
+
+  runApp(
+    MultiProvider(
+      providers: [
+        Provider<PhoneStateController>.value(value: phoneStateController),
+        Provider<AppController>.value(value: appController),
+      ],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -60,7 +80,11 @@ class MyApp extends StatelessWidget {
           return IncomingCallScreen(incomingNumber: number);
         },
         '/onCall': (_) => const OnCallScreen(),
-        '/callEnded': (_) => const CallEndedScreen(),
+        '/callEnded': (ctx) {
+          final number =
+              ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
+          return CallEndedScreen(callEndedNumber: number);
+        },
       },
     );
   }

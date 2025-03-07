@@ -15,13 +15,9 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final appController = AppController();
-
   @override
   void initState() {
     super.initState();
-
-    appController.initializeApp();
   }
 
   int _currentIndex = 0;

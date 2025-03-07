@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:provider/provider.dart';
 
 class DeciderScreen extends StatefulWidget {
   const DeciderScreen({super.key});
@@ -14,9 +15,9 @@ class DeciderScreen extends StatefulWidget {
 }
 
 class _DeciderScreenState extends State<DeciderScreen> {
-  final appController = AppController();
+  bool _checking = true;
 
-  bool _checking = true; // 권한 체크 중
+  bool _inited = false;
   bool _allPermsGranted = false;
 
   @override
@@ -26,8 +27,11 @@ class _DeciderScreenState extends State<DeciderScreen> {
   }
 
   Future<void> _checkPermissions() async {
+    final appController = context.read<AppController>();
     setState(() => _checking = true);
     final ok = await appController.checkEssentialPermissions();
+
+    appController.initializeApp();
     if (ok) {
       if (!mounted) return;
       // 권한 + 초기화 끝 -> 로그인 화면
