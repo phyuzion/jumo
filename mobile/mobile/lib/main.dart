@@ -1,10 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
-import 'package:mobile/screens/call_screen.dart';
 import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
-import 'package:mobile/screens/incoming_screen.dart';
 import 'package:mobile/screens/search_screen.dart';
 import 'package:mobile/screens/setting_screen.dart';
 import 'package:mobile/screens/dialer_screen.dart';
@@ -62,8 +60,6 @@ class MyApp extends StatelessWidget {
         // 새로 추가하고 있느 화면
         '/home': (_) => const HomeScreen(),
         '/search': (_) => const SearchScreen(),
-        '/callScreen': (_) => const CallScreen(),
-        //'/incoming': (_) => const IncomingScreen(),
       },
     );
   }

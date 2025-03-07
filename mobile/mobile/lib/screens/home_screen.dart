@@ -1,7 +1,7 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'dialer_screen.dart';
-import 'recent_call_screen.dart';
+import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
 import 'board_screen.dart';
 import 'settings_screen.dart';

@@ -9,9 +9,10 @@ import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/controllers/navigation_controller.dart';
 
 class AppController {
-  final phoneStateController = PhoneStateController();
+  late final PhoneStateController phoneStateController;
 
   Future<bool> checkEssentialPermissions() async {
     return await PermissionController.requestAllEssentialPermissions();
@@ -23,6 +24,7 @@ class AppController {
     log('myNumber=$myNumber');
     GetStorage().write('myNumber', myNumber);
 
+    phoneStateController = PhoneStateController(NavigationController.navKey);
     phoneStateController.startListening();
 
     await initializeData();
