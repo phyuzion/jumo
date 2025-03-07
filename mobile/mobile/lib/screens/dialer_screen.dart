@@ -21,78 +21,56 @@ class _DialerScreenState extends State<DialerScreen> {
 
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
+      // 1) 실제 전화 발신
       await NativeMethods.makeCall(_number);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      // 상단 AppBar 없이, 우상단에 검색 아이콘만
-      backgroundColor: Colors.white,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // 1) 상단 검색 아이콘
-            Align(
-              alignment: Alignment.topRight,
-              child: IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () {
-                  // TODO: 검색 화면으로 이동
-                },
-              ),
+    return SafeArea(
+      // Scaffold 없이도 가능.
+      // 만약 우상단 검색 아이콘이 필요하면 Row(...)로 배치
+      child: Column(
+        children: [
+          // 상단 우측 검색 아이콘
+          Align(
+            alignment: Alignment.topRight,
+            child: IconButton(
+              icon: const Icon(Icons.search),
+              onPressed: () {
+                Navigator.pushNamed(context, '/search');
+              },
             ),
-            // 2) 다이얼 표시 영역
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // 입력된 번호
-                  Text(_number, style: const TextStyle(fontSize: 36)),
-                  const SizedBox(height: 20),
+          ),
 
-                  // 키패드 (1 2 3 / 4 5 6 / 7 8 9 / * 0 #)
-                  _buildDialPad(),
-
-                  // 통화 버튼 (중앙)
-                  const SizedBox(height: 20),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      shape: const CircleBorder(),
-                      padding: const EdgeInsets.all(16),
-                      backgroundColor: Colors.green,
-                    ),
-                    onPressed: _makeCall,
-                    child: const Icon(Icons.call, color: Colors.white),
+          // 중간: 번호 표시 + 키패드 + 발신 버튼
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(_number, style: const TextStyle(fontSize: 36)),
+                const SizedBox(height: 20),
+                _buildDialPad(),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    shape: const CircleBorder(),
+                    padding: const EdgeInsets.all(16),
+                    backgroundColor: Colors.green,
                   ),
-                ],
-              ),
+                  onPressed: _makeCall,
+                  child: const Icon(Icons.call, color: Colors.white),
+                ),
+              ],
             ),
-            // 3) 하단 탭(키패드, 최근기록, 연락처, 설정)
-            Container(
-              color: Colors.white,
-              height: 60,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildTabItem('키패드', Icons.dialpad, true),
-                  _buildTabItem('최근기록', Icons.history, false),
-                  _buildTabItem('연락처', Icons.contacts, false),
-                  _buildTabItem('설정', Icons.settings, false),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildDialPad() {
-    // 간단히 4행 x 3열 Grid로 구성
-    // 원한다면 각 숫자 아래에 'ABC', 'DEF' 등 표시 가능
-    // 예: Column(children: [Text('1'), Text('ABC', style: ...)])
     final digits = [
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -100,7 +78,7 @@ class _DialerScreenState extends State<DialerScreen> {
       ['*', '0', '#'],
     ];
 
-    return Container(
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -134,8 +112,8 @@ class _DialerScreenState extends State<DialerScreen> {
                       }).toList(),
                 );
               }).toList()
-              // 추가로 백스페이스 버튼을 아래처럼 별도 배치하고 싶다면
               ..add(
+                // Backspace row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -148,25 +126,6 @@ class _DialerScreenState extends State<DialerScreen> {
                   ],
                 ),
               ),
-      ),
-    );
-  }
-
-  Widget _buildTabItem(String label, IconData icon, bool selected) {
-    // 하단 탭 아이템
-    return InkWell(
-      onTap: () {
-        // TODO: 탭 전환 로직
-      },
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: selected ? Colors.black : Colors.grey),
-          Text(
-            label,
-            style: TextStyle(color: selected ? Colors.black : Colors.grey),
-          ),
-        ],
       ),
     );
   }

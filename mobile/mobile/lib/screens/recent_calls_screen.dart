@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:mobile/utils/app_event_bus.dart';
 import '../controllers/call_log_controller.dart';
 
 class RecentCallsScreen extends StatefulWidget {
-  const RecentCallsScreen({Key? key}) : super(key: key);
+  const RecentCallsScreen({super.key});
 
   @override
   State<RecentCallsScreen> createState() => _RecentCallsScreenState();
@@ -12,10 +15,21 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   final _callLogController = CallLogController();
   List<Map<String, dynamic>> _callLogs = [];
 
+  StreamSubscription? _eventSub;
+
   @override
   void initState() {
     super.initState();
     _loadCalls();
+    _eventSub = appEventBus.on<CallLogUpdatedEvent>().listen((event) {
+      _loadCalls();
+    });
+  }
+
+  @override
+  void dispose() {
+    _eventSub?.cancel();
+    super.dispose();
   }
 
   /// 이미 저장된 통화로그(최대 200개) 불러오기
