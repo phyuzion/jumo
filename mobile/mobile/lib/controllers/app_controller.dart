@@ -1,8 +1,11 @@
 // lib/controllers/app_controller.dart
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/permission_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
+import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:get_storage/get_storage.dart';
@@ -22,8 +25,41 @@ class AppController {
 
     phoneStateController.startListening();
 
+    await initializeData();
+
     configureBackgroundService();
     startBackgroundService();
+  }
+
+  Future<void> initializeData() async {
+    // 컨트롤러들(실제 diff 로직)
+    final callLogController = CallLogController();
+    final smsController = SmsController();
+    final contactsController = ContactsController();
+
+    // 10분 타이머
+    final newCalls = await callLogController.refreshCallLogsWithDiff();
+    if (newCalls.isNotEmpty) {
+      // TODO: 필요 시 서버에 전송, 로컬DB 저장, 등
+      log('[DataSync] new calls => ${newCalls.length}');
+      log('[DataSync] new calls => ${newCalls}');
+    }
+
+    // === 2) sms diff ===
+    final newSms = await smsController.refreshSmsWithDiff();
+    if (newSms.isNotEmpty) {
+      log('[DataSync] new sms => ${newSms.length}');
+      log('[DataSync] new sms => ${newSms}');
+      // ...
+    }
+
+    // === 3) contacts diff ===
+    final newContacts = await contactsController.refreshContactsWithDiff();
+    if (newContacts.isNotEmpty) {
+      log('[DataSync] new or changed contacts => ${newContacts.length}');
+      log('[DataSync] new or changed contacts => ${newContacts}');
+      // ...
+    }
   }
 
   Future<void> stopApp() async {
