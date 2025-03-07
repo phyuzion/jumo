@@ -46,7 +46,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 상단 AppBar 가 이미 HomeScreen(탭) 쪽에 있다면, 여기서는 body만
       body: RefreshIndicator(
         onRefresh: _refreshCalls,
         child: ListView.builder(
@@ -58,11 +57,13 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
             final callType = call['callType'] as String? ?? '';
             final ts = call['timestamp'] as int? ?? 0;
 
+            // 날짜 & 시간
             final date = DateTime.fromMillisecondsSinceEpoch(ts);
+            final dateStr = '${date.month}월 ${date.day}일 '; // 예: 5/12
             final timeStr =
                 '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
-            // callType 에 따라 아이콘/색상
+            // callType 별 아이콘
             IconData iconData;
             Color iconColor;
             switch (callType) {
@@ -83,50 +84,61 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 iconColor = Colors.grey;
             }
 
-            // Slidable 사용
             return Slidable(
               key: ValueKey(index),
-              // 스와이프 방향
               endActionPane: ActionPane(
                 motion: const BehindMotion(),
-                // or StretchMotion / DrawerMotion
                 children: [
-                  // 통화 아이콘
                   SlidableAction(
                     onPressed: (_) => _onTapCall(number),
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     icon: Icons.call,
-                    autoClose: false,
-                    spacing: 0,
                   ),
-                  // 검색 아이콘
                   SlidableAction(
                     onPressed: (_) => _onTapSearch(number),
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
                     icon: Icons.search,
-                    autoClose: false,
                   ),
-                  // 편집 아이콘
                   SlidableAction(
                     onPressed: (_) => _onTapEdit(number),
                     backgroundColor: Colors.blueGrey,
                     foregroundColor: Colors.white,
                     icon: Icons.edit,
-                    autoClose: false,
                   ),
                 ],
               ),
               child: ListTile(
                 leading: Icon(iconData, color: iconColor, size: 28),
-                title: Text(
-                  name.isNotEmpty ? name : number,
-                  style: const TextStyle(fontSize: 18), // 폰트 키우기
-                ),
-                trailing: Text(
-                  timeStr,
-                  style: const TextStyle(fontSize: 16, color: Colors.grey),
+                title:
+                    name.isNotEmpty
+                        ? Text(name, style: const TextStyle(fontSize: 20))
+                        : Text(number, style: const TextStyle(fontSize: 20)),
+                subtitle:
+                    name.isNotEmpty
+                        ? Text(
+                          number,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        )
+                        : null,
+                // 날짜/시간 2줄
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      dateStr,
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                    Text(
+                      timeStr,
+                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                  ],
                 ),
               ),
             );
@@ -136,7 +148,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     );
   }
 
-  // 액션 버튼 로직
   Future<void> _onTapCall(String number) async {
     await NativeMethods.makeCall(number);
   }
@@ -146,7 +157,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   }
 
   void _onTapEdit(String number) {
-    // ex) 편집 화면
     debugPrint('Tap Edit => $number');
   }
 }
