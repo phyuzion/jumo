@@ -4,6 +4,8 @@ import 'dart:developer';
 import 'package:call_e_log/call_log.dart';
 import 'package:get_storage/get_storage.dart';
 
+import 'package:mobile/utils/app_event_bus.dart';
+
 class CallLogController {
   final box = GetStorage();
 
@@ -50,6 +52,8 @@ class CallLogController {
         }).toList();
 
     await box.write(storageKey, newList);
+
+    appEventBus.fire(CallLogUpdatedEvent());
 
     return diffList;
   }

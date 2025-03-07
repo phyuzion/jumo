@@ -6,6 +6,7 @@ class NavigationController {
   static final GlobalKey<NavigatorState> navKey = GlobalKey<NavigatorState>();
 
   static Future<void> init() async {
+    // 기존 setMethodCallHandler
     NativeMethods.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'onIncomingNumber':
@@ -13,6 +14,10 @@ class NavigationController {
           break;
         case 'onCallEnded':
           _goToCallEnded();
+          break;
+        // 추가: onCallStarted
+        case 'onCallStarted':
+          _goToOnCall();
           break;
       }
     });
@@ -29,6 +34,13 @@ class NavigationController {
     final ctx = navKey.currentContext;
     if (ctx != null) {
       Navigator.of(ctx).pushNamed('/callEnded');
+    }
+  }
+
+  static void _goToOnCall() {
+    final ctx = navKey.currentContext;
+    if (ctx != null) {
+      Navigator.of(ctx).pushNamed('/onCall');
     }
   }
 }

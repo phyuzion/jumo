@@ -4,6 +4,8 @@ import 'dart:developer';
 import 'package:fast_contacts/fast_contacts.dart';
 import 'package:get_storage/get_storage.dart';
 
+import 'package:mobile/utils/app_event_bus.dart';
+
 class ContactsController {
   final box = GetStorage();
   static const storageKey = 'fastContacts';
@@ -45,6 +47,8 @@ class ContactsController {
 
     // 4) 저장
     await box.write(storageKey, newList);
+
+    appEventBus.fire(ContactsUpdatedEvent());
 
     // 5) 반환
     return diffList;

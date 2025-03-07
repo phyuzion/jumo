@@ -1,10 +1,15 @@
 // lib/controllers/phone_state_controller.dart
 import 'dart:async';
 import 'dart:developer';
+import 'package:flutter/material.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart'; // 예: callLogController
 
 class PhoneStateController {
+  final GlobalKey<NavigatorState> navKey;
+
+  PhoneStateController(this.navKey);
+
   StreamSubscription<PhoneState>? _subscription;
 
   // 통화기록 컨트롤러 (주입 or 싱글턴)
@@ -43,7 +48,12 @@ class PhoneStateController {
   }
 
   void _onCallStarted(String? number) {
-    log('[PhoneState] CallStarted: $number');
+    final state = navKey.currentState;
+    if (state != null) {
+      // number가 null일 수도 있으니, 안전하게 처리
+      final phone = number ?? '';
+      state.pushNamed('/onCall', arguments: phone);
+    }
   }
 
   Future<void> _onCallEnded() async {
