@@ -1,4 +1,7 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 
 class CallEndedScreen extends StatefulWidget {
@@ -12,13 +15,21 @@ class CallEndedScreen extends StatefulWidget {
 class _CallEndedScreen extends State<CallEndedScreen> {
   String? _displayName;
   String? _phones;
+
+  final callLogController = CallLogController();
   // or additional contact info
   // We'll search from contactsController
 
   @override
-  void initState() {
+  Future<void> initState() async {
     super.initState();
     _loadContactName();
+
+    // 로그 갱신
+    final newLogs = await callLogController.refreshCallLogsWithDiff();
+    if (newLogs.isNotEmpty) {
+      log('[PhoneState] new logs => ${newLogs.length}');
+    }
   }
 
   /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
@@ -118,7 +129,11 @@ class _CallEndedScreen extends State<CallEndedScreen> {
               ),
               onPressed: () {
                 // 단순 종료 => pop
-                Navigator.pop(context);
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/home',
+                  (route) => false,
+                );
 
                 // 또는 Navigator.pushNamedAndRemoveUntil(...)
               },

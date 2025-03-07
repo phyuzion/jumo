@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 
 class PhoneStateController {
   final GlobalKey<NavigatorState> navKey;
@@ -17,19 +17,19 @@ class PhoneStateController {
   bool _inCall = false;
 
   void startListening() {
-    _subscription = PhoneState.stream.listen((event) {
+    _subscription = PhoneState.stream.listen((event) async {
       switch (event.status) {
         case PhoneStateStatus.NOTHING:
           _onNothing();
           break;
         case PhoneStateStatus.CALL_INCOMING:
-          _onIncoming(event.number);
+          await _onIncoming(event.number);
           break;
         case PhoneStateStatus.CALL_STARTED:
-          _onCallStarted(event.number);
+          await _onCallStarted(event.number);
           break;
         case PhoneStateStatus.CALL_ENDED:
-          _onCallEnded(event.number);
+          await _onCallEnded(event.number);
           break;
       }
     });
@@ -45,49 +45,72 @@ class PhoneStateController {
   }
 
   Future<void> _onIncoming(String? number) async {
-    //nothing happend.
     _inCall = true;
-    if (await NativeDefaultDialerMethods.isDefaultDialer()) {
-      log('[PhoneState] inCallService handles => skip');
+    final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
+    if (isDef) {
+      // 기본 전화앱 => InCallService->MainActivity->onIncomingNumber
+      log('[PhoneState] default dialer => skip phone_state incoming UI');
     } else {
-      log('[PhoneState] not default => skip UI');
+      // 비기본앱 => "수신전화"는 OS 기본앱에서 처리 => skip
+      log('[PhoneState] not default => skip incoming UI');
     }
   }
 
   Future<void> _onCallStarted(String? number) async {
     _inCall = true;
-    if (await NativeDefaultDialerMethods.isDefaultDialer()) {
-      log('[PhoneState] default dialer => skip phone_state UI');
+
+    //이미 들어가 있으면 리턴
+    if (_isOnCallScreen) {
+      log('[PhoneState] already onCall screen => skip');
       return;
     }
-    // 비기본앱 + 앱 발신
-    if (outgoingCallFromApp && !_isOnCallScreen) {
-      final state = navKey.currentState;
-      if (state == null) return;
 
-      _isOnCallScreen = true;
-      final phone = number ?? '';
-      log('[PhoneState] push /onCall => $phone');
+    // 발신 -> OnCall
+    _isOnCallScreen = true;
+
+    final phone = number ?? '';
+    log('[PhoneState] => pushNamed /onCall($phone)');
+
+    final state = navKey.currentState;
+    if (state == null) return;
+
+    if (outgoingCallFromApp) {
+      log('안에서 건 애니까 그냥 덮어씌운다.');
       state.pushNamed('/onCall', arguments: phone);
+    } else {
+      final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
+      if (isDef) {
+        log('안에서 건애 아니고 기본애니까 덮어씌운다.');
+        state.pushReplacementNamed('/onCall', arguments: phone);
+      }
     }
   }
 
   Future<void> _onCallEnded(String? number) async {
-    log('[PhoneState] callEnded => logs sync');
+    log('[PhoneState] callEnded => sync logs');
+
     if (!_inCall) {
-      log('Ignore spurious CALL_ENDED because we were never in call');
+      // 처음부터 통화중이 아니었다면 => spurious ended
+      log('[PhoneState] ignore spurious ended');
       return;
     }
     _inCall = false;
     _isOnCallScreen = false;
     outgoingCallFromApp = false;
 
-    // 갱신
+    // 로그 갱신
     final newLogs = await callLogController.refreshCallLogsWithDiff();
     if (newLogs.isNotEmpty) {
       log('[PhoneState] new logs => ${newLogs.length}');
     }
-    final nav = navKey.currentState;
-    nav?.pushReplacementNamed('/callEnded', arguments: number ?? '');
+
+    final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
+    if (!isDef) {
+      final state = navKey.currentState;
+      if (state != null) {
+        final endedNum = number ?? '';
+        state.pushReplacementNamed('/callEnded', arguments: endedNum);
+      }
+    }
   }
 }
