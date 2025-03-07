@@ -1,5 +1,6 @@
 // lib/screens/settings_screen.dart
 import 'package:flutter/material.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -23,8 +24,8 @@ class SettingsScreen extends StatelessWidget {
           child: const Text('비밀번호 변경'),
         ),
         ElevatedButton(
-          onPressed: () {
-            // 기본 전화앱 등록
+          onPressed: () async {
+            await NativeDefaultDialerMethods.requestDefaultDialerManually();
           },
           child: const Text('기본 전화앱 등록'),
         ),

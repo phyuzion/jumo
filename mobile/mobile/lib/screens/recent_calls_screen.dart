@@ -110,11 +110,13 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 ],
               ),
               child: ListTile(
+                minTileHeight: 60,
+
                 leading: Icon(iconData, color: iconColor, size: 28),
                 title:
                     name.isNotEmpty
-                        ? Text(name, style: const TextStyle(fontSize: 20))
-                        : Text(number, style: const TextStyle(fontSize: 20)),
+                        ? Text(name, style: const TextStyle(fontSize: 18))
+                        : Text(number, style: const TextStyle(fontSize: 18)),
                 subtitle:
                     name.isNotEmpty
                         ? Text(
@@ -132,11 +134,11 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                   children: [
                     Text(
                       dateStr,
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      style: const TextStyle(fontSize: 15, color: Colors.grey),
                     ),
                     Text(
                       timeStr,
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      style: const TextStyle(fontSize: 15, color: Colors.grey),
                     ),
                   ],
                 ),

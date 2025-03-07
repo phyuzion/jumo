@@ -18,10 +18,37 @@ class _SearchScreenState extends State<SearchScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is String) {
-        _textController.text = args;
+        final normalized = _normalizePhone(args);
+        _textController.text = normalized;
       }
       _focusNode.requestFocus();
     });
+  }
+
+  /// 전화번호 정규화:
+  /// 1) 숫자만 남김 ([^0-9] 제거)
+  /// 2) +82 => 맨 앞 '82' 를 '0' 으로 변환 (조건부)
+  ///    예) +82-10-1234-5678 => 01012345678
+  String _normalizePhone(String raw) {
+    // 1) 모두 소문자로
+    final lower = raw.toLowerCase().trim();
+    // 2) +82 를 우선 처리 -> "82"
+    //    간단히 replaceAll
+    //    하지만 실제론 "replace +82 => "82", 나중에 처리
+    var replaced = lower.replaceAll('+82', '82');
+
+    // 3) 숫자 외 문자를 제거
+    //    (공백, -, (, ), 등 모두 제거)
+    replaced = replaced.replaceAll(RegExp(r'[^0-9]'), '');
+
+    // 4) 만약 '82'로 시작하면 => '0' + (이후)
+    //    예) "8210..." => "010..."
+    if (replaced.startsWith('82')) {
+      // '82' -> '0'
+      replaced = '0${replaced.substring(2)}';
+    }
+
+    return replaced;
   }
 
   @override

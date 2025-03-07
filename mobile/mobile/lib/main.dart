@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
       // 앱 전체 Theme
       theme: ThemeData(
         colorScheme: const ColorScheme.light(
-          primary: Colors.white,
+          primary: Colors.black,
           onPrimary: Colors.black,
           surface: Colors.white,
           onSurface: Colors.black,

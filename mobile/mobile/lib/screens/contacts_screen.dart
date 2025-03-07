@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:mobile/services/native_methods.dart';
+
 import '../controllers/contacts_controller.dart';
 import '../utils/app_event_bus.dart'; // EventBus, ContactsUpdatedEvent
 
@@ -21,7 +24,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     super.initState();
     _loadContacts();
 
-    // EventBus 수신 => 주소록 변경 시 onContactsUpdated
+    // 주소록 변경 이벤트 => 재로드
     _eventSub = appEventBus.on<ContactsUpdatedEvent>().listen((event) {
       _loadContacts();
     });
@@ -38,19 +41,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
     setState(() => _contacts = list);
   }
 
-  /// 새로고침
   Future<void> _refreshContacts() async {
-    // Diff 로직
     await _contactsController.refreshContactsWithDiff();
-    // 끝나면 _loadContacts() -> setState
-    _loadContacts();
+    await _loadContacts();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 하단 BottomNavigationBar는 HomeScreen(메인)에서 관리한다면,
-    // 여기서는 body 부분만 구현
     return Scaffold(
+      // 상단 AppBar 는 HomeScreen(탭) 쪽에서 처리
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
         child: ListView.builder(
@@ -60,26 +59,82 @@ class _ContactsScreenState extends State<ContactsScreen> {
             final name = c['name'] as String? ?? '';
             final phones = c['phones'] as String? ?? '';
 
-            // 첫글자(원형 아바타에 표시)
+            // 첫글자(아바타 색상 결정)
             final firstChar = name.isNotEmpty ? name.characters.first : '?';
-
-            // 원형 배경색 (간단히, 첫글자에 따라 결정 or 무작위)
             final avatarColor = _pickColorFromChar(firstChar);
 
-            return ListTile(
-              leading: CircleAvatar(
-                backgroundColor: avatarColor,
-                child: Text(
-                  firstChar,
-                  style: const TextStyle(color: Colors.white),
+            return Slidable(
+              key: ValueKey(i),
+              endActionPane: ActionPane(
+                motion: const BehindMotion(),
+                children: [
+                  // 통화 아이콘
+                  SlidableAction(
+                    onPressed: (_) => _onTapCall(name, phones),
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    icon: Icons.call,
+                  ),
+                  // 검색 아이콘
+                  SlidableAction(
+                    onPressed: (_) => _onTapSearch(name, phones),
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    icon: Icons.search,
+                  ),
+                  // 편집 아이콘
+                  SlidableAction(
+                    onPressed: (_) => _onTapEdit(name, phones),
+                    backgroundColor: Colors.blueGrey,
+                    foregroundColor: Colors.white,
+                    icon: Icons.edit,
+                  ),
+                ],
+              ),
+              child: Container(
+                height: 70,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    // 왼쪽 원형 아바타
+                    CircleAvatar(
+                      backgroundColor: avatarColor,
+                      radius: 22,
+                      child: Text(
+                        firstChar,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // 이름 + 번호
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // 이름(또는 ???)
+                          Text(
+                            name.isNotEmpty ? name : '이름 없음',
+                            style: const TextStyle(fontSize: 18),
+                          ),
+                          // 번호
+                          Text(
+                            phones,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // 여기 trailing 아이콘 넣을 수도 있음, 현재는 없음
+                  ],
                 ),
               ),
-              title: Text(name, style: const TextStyle(fontSize: 16)),
-              subtitle: Text(phones), // 여러 번호를 ','로 합쳐둔 것
-              // onTap 시 전화, 상세보기 등 가능
-              onTap: () {
-                // 예) 상세 페이지 이동?
-              },
             );
           },
         ),
@@ -87,12 +142,25 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  /// 단순: 첫글자에 따라 파스텔 색상을 뽑는 함수 (예시)
+  /// 간단: 첫글자로부터 Hue값 만들어 파스텔색
   Color _pickColorFromChar(String char) {
-    // A ~ Z 등등을 int로 변환
     final code = char.toUpperCase().codeUnitAt(0);
-    // 임의로 hue 를 code 에서 뽑고, saturation/value 고정
     final hue = (code * 5) % 360;
     return HSLColor.fromAHSL(1.0, hue.toDouble(), 0.6, 0.7).toColor();
+  }
+
+  // 슬라이드 액션 로직
+  void _onTapCall(String name, String phones) {
+    NativeMethods.makeCall(phones.split(',')[0]);
+    debugPrint('[Contacts] Tap Call => $name / $phones');
+  }
+
+  void _onTapSearch(String name, String phones) {
+    Navigator.pushNamed(context, '/search', arguments: phones);
+    debugPrint('[Contacts] Tap Search => $name / $phones');
+  }
+
+  void _onTapEdit(String name, String phones) {
+    debugPrint('[Contacts] Tap Edit => $name / $phones');
   }
 }
