@@ -39,7 +39,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   }
 
   Future<void> _refreshCalls() async {
-    await _callLogController.refreshCallLogsWithDiff();
+    await _callLogController.refreshCallLogs();
     await _loadCalls();
   }
 

@@ -290,47 +290,49 @@ module.exports = {
     // 통화내역 upsert
     // --------------------------------------------------
     updatePhoneLog: async (_, { userId, logs }, { tokenData }) => {
-      // 유저 체크 -> 보안 요구사항에 따라
-      // 예: 어드민만 가능 or userId 본인이면 가능 등
-      // 여기서는 "체크는 유저인지만" => 즉, 본인 or admin?
-      // 아래 예시는 "admin"만 한다고 가정 or user check
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
+      // 1) 로그인(토큰)되어 있어야 함
+      if (!tokenData) {
+        throw new AuthenticationError('로그인이 필요합니다.');
       }
+    
+      // 2) 관리자거나, 혹은 tokenData.userId === userId 이면 통과
+      if (!(tokenData.adminId || (tokenData.userId === userId))) {
+        throw new ForbiddenError('본인만 통화내역 업로드가 가능합니다.');
+      }
+    
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('유저를 찾을 수 없습니다.');
-
+    
+      // 나머지 로직 동일
       for (const log of logs) {
-        // time parse
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
-          // epoch string? try parse
           const epoch = parseFloat(log.time);
           if (!isNaN(epoch)) dt = new Date(epoch);
         }
         const newLog = {
           phoneNumber: log.phoneNumber,
-          time: dt, // Date 객체
+          time: dt,
           callType: log.callType,
         };
-        // pushNewLog
         pushNewLog(user.phoneLogs, newLog, 200);
       }
-
       await user.save();
       return true;
     },
-
-    // --------------------------------------------------
-    // 문자내역 upsert
-    // --------------------------------------------------
+    
     updateSMSLog: async (_, { userId, logs }, { tokenData }) => {
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
+      if (!tokenData) {
+        throw new AuthenticationError('로그인이 필요합니다.');
       }
+    
+      if (!(tokenData.adminId || (tokenData.userId === userId))) {
+        throw new ForbiddenError('본인만 문자내역 업로드가 가능합니다.');
+      }
+    
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('유저를 찾을 수 없습니다.');
-
+    
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
@@ -345,10 +347,10 @@ module.exports = {
         };
         pushNewLog(user.smsLogs, newLog, 200);
       }
-
       await user.save();
       return true;
     },
+    
     
   },
 };

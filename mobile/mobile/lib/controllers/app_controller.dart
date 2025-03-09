@@ -33,14 +33,14 @@ class AppController {
     final contactsController = ContactsController();
 
     // 10분 타이머
-    final newCalls = await callLogController.refreshCallLogsWithDiff();
+    final newCalls = await callLogController.refreshCallLogs();
     if (newCalls.isNotEmpty) {
       log('[DataSync] new calls => ${newCalls.length}');
       log('[DataSync] new calls => ${newCalls}');
     }
 
     // === 2) sms diff ===
-    final newSms = await smsController.refreshSmsWithDiff();
+    final newSms = await smsController.refreshSms();
     if (newSms.isNotEmpty) {
       log('[DataSync] new sms => ${newSms.length}');
       log('[DataSync] new sms => ${newSms}');

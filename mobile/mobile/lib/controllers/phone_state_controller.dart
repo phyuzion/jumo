@@ -99,7 +99,7 @@ class PhoneStateController {
     outgoingCallFromApp = false;
 
     // 로그 갱신
-    final newLogs = await callLogController.refreshCallLogsWithDiff();
+    final newLogs = await callLogController.refreshCallLogs();
     if (newLogs.isNotEmpty) {
       log('[PhoneState] new logs => ${newLogs.length}');
     }
