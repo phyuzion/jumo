@@ -88,7 +88,7 @@ module.exports = {
     // --------------------------------------------------
     // (Admin 전용) 유저 전화 내역
     // --------------------------------------------------
-    getUserPhoneLog: async (_, { userId }, { tokenData }) => {
+    getUserCallLog: async (_, { userId }, { tokenData }) => {
       // 어드민만
       if (!tokenData?.adminId) {
         throw new ForbiddenError('관리자 권한이 필요합니다.');
@@ -96,8 +96,8 @@ module.exports = {
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
-      // phoneLogs를 최신순(이미 unshift로 관리) 그대로 반환
-      return user.phoneLogs.map((log) => ({
+      // callLogs를 최신순(이미 unshift로 관리) 그대로 반환
+      return user.callLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
         time: log.time.toISOString(),   // 클라이언트엔 string
         callType: log.callType,
@@ -289,7 +289,7 @@ module.exports = {
     // --------------------------------------------------
     // 통화내역 upsert
     // --------------------------------------------------
-    updatePhoneLog: async (_, { logs }, { tokenData }) => {
+    updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
     
       // 나머지 로직 동일
@@ -304,7 +304,7 @@ module.exports = {
           time: dt,
           callType: log.callType,
         };
-        pushNewLog(user.phoneLogs, newLog, 200);
+        pushNewLog(user.callLogs, newLog, 200);
       }
       await user.save();
       return true;

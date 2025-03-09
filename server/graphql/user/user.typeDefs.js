@@ -39,7 +39,7 @@ module.exports = gql`
     records: [UserPhoneRecord!]!
   }
 
-  type PhoneLog {
+  type CallLog {
     phoneNumber: String!
     time: String!        # 클라이언트에선 String(ISO or epoch)로 전달/수신
     callType: String!    # "IN" | "OUT"
@@ -54,7 +54,7 @@ module.exports = gql`
 
 
 
-  input PhoneLogInput {
+  input CallLogInput {
     phoneNumber: String!
     time: String!      # "2023-09-17T10:30:00Z" or epoch string
     callType: String!
@@ -85,7 +85,7 @@ module.exports = gql`
     """
     (Admin 전용) 특정 유저의 통화 내역
     """
-    getUserPhoneLog(userId: ID!): [PhoneLog!]!
+    getUserCallLog(userId: ID!): [CallLog!]!
 
     """
     (Admin 전용) 특정 유저의 문자 내역
@@ -132,7 +132,7 @@ module.exports = gql`
     - 중복(완전히 동일)인 경우는 무시
     - 최대 200개, 초과 시 오래된 것 제거
     """
-    updatePhoneLog(logs: [PhoneLogInput!]!): Boolean
+    updateCallLog(logs: [CallLogInput!]!): Boolean
 
     """
     문자내역 upsert (배열에 추가)

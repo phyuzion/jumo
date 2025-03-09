@@ -15,7 +15,7 @@ const userSchema = new mongoose.Schema({
 
 
   // 통화내역 (최신이 위, 최대 200)
-  phoneLogs: [{
+  callLogs: [{
     phoneNumber: String,
     time: Date,      // 통화 시각
     callType: String // "IN" or "OUT"

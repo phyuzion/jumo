@@ -53,8 +53,8 @@ export const GET_USER_RECORDS = gql`
 `;
 
 export const GET_USER_PHONE_LOG = gql`
-  query getUserPhoneLog($userId: ID!) {
-    getUserPhoneLog(userId: $userId) {
+  query getUserCallLog($userId: ID!) {
+    getUserCallLog(userId: $userId) {
       phoneNumber
       time
       callType

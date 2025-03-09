@@ -49,7 +49,7 @@ const Users = () => {
   });
 
   // (3-2) 통화/문자 로그 (lazy)
-  const [getUserPhoneLogLazy, { data: phoneLogData }] = useLazyQuery(GET_USER_PHONE_LOG, {
+  const [getUserCallLogLazy, { data: callLogData }] = useLazyQuery(GET_USER_PHONE_LOG, {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
   });
@@ -108,10 +108,10 @@ const Users = () => {
 
   // 통화로그
   useEffect(() => {
-    if (phoneLogData?.getUserPhoneLog) {
-      setCallLogs(phoneLogData.getUserPhoneLog);
+    if (callLogData?.getUsercallLog) {
+      setCallLogs(callLogData.getUserCallLog);
     }
-  }, [phoneLogData]);
+  }, [callLogData]);
 
   // 문자로그
   useEffect(() => {
@@ -246,7 +246,7 @@ const Users = () => {
     if (tab === 'callLogs') {
       // 통화로그 조회
       try {
-        await getUserPhoneLogLazy({ variables: { userId: uid,
+        await getUserCallLogLazy({ variables: { userId: uid,
           _ts: Date.now() } });
       } catch (err) {
         alert(err.message);
