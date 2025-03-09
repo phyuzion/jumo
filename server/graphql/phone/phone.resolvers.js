@@ -109,6 +109,8 @@ module.exports = {
       // 1) phoneNumber별로 그룹핑
       const mapByPhone = {};
       for (const rec of records) {
+
+        console.log('map Rec', rec);
         const phone = rec.phoneNumber?.trim();
         if (!phone) continue;
         if (!mapByPhone[phone]) mapByPhone[phone] = [];
