@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:mobile/services/native_methods.dart';
-
+import 'package:mobile/models/phone_book_model.dart';
 import '../controllers/contacts_controller.dart';
 import '../utils/app_event_bus.dart'; // EventBus, ContactsUpdatedEvent
 
@@ -15,7 +15,7 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   final _contactsController = ContactsController();
-  List<Map<String, dynamic>> _contacts = [];
+  List<PhoneBookModel> _contacts = [];
 
   StreamSubscription? _eventSub;
 
@@ -42,7 +42,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _refreshContacts() async {
-    await _contactsController.refreshContactsMerged();
+    await _contactsController.refreshContactsWithDiff();
+    // 로컬 다시 로드
     await _loadContacts();
   }
 
@@ -56,8 +57,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
           itemCount: _contacts.length,
           itemBuilder: (ctx, i) {
             final c = _contacts[i];
-            final name = c['name'] as String? ?? '';
-            final phones = c['phones'] as String? ?? '';
+            final name = c.name;
+            final phone = c.phoneNumber;
+            final memo = c.memo ?? '';
 
             // 첫글자(아바타 색상 결정)
             final firstChar = name.isNotEmpty ? name.characters.first : '?';
@@ -70,21 +72,21 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 children: [
                   // 통화 아이콘
                   SlidableAction(
-                    onPressed: (_) => _onTapCall(name, phones),
+                    onPressed: (_) => _onTapCall(name, phone),
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
                     icon: Icons.call,
                   ),
                   // 검색 아이콘
                   SlidableAction(
-                    onPressed: (_) => _onTapSearch(name, phones),
+                    onPressed: (_) => _onTapSearch(name, phone),
                     backgroundColor: Colors.orange,
                     foregroundColor: Colors.white,
                     icon: Icons.search,
                   ),
                   // 편집 아이콘
                   SlidableAction(
-                    onPressed: (_) => _onTapEdit(name, phones),
+                    onPressed: (_) => _onTapEdit(name, phone),
                     backgroundColor: Colors.blueGrey,
                     foregroundColor: Colors.white,
                     icon: Icons.edit,
@@ -122,7 +124,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                           ),
                           // 번호
                           Text(
-                            phones,
+                            phone,
                             style: const TextStyle(
                               fontSize: 12,
                               color: Colors.grey,

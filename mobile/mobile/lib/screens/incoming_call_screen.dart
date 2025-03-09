@@ -30,10 +30,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
     // 단순히 'phones' 에 widget.incomingNumber 가 포함되는지 검사 (문자열로)
     for (final c in contacts) {
-      final phoneStr = c['phones'] as String? ?? '';
+      final phoneStr = c.phoneNumber as String? ?? '';
       if (phoneStr.contains(widget.incomingNumber)) {
         setState(() {
-          _displayName = c['name'] as String?;
+          _displayName = c.name as String?;
           _phones = phoneStr;
         });
         break;

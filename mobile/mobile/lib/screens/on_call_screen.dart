@@ -36,10 +36,10 @@ class _OnCallScreenState extends State<OnCallScreen> {
     final contactsController = ContactsController();
     final contacts = contactsController.getSavedContacts();
     for (final c in contacts) {
-      final ph = c['phones'] as String? ?? '';
+      final ph = c.phoneNumber as String? ?? '';
       if (ph.contains(number)) {
         setState(() {
-          contactName = c['name'] as String?;
+          contactName = c.name as String?;
         });
         return;
       }
