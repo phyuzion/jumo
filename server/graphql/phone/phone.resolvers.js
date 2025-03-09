@@ -28,8 +28,10 @@ module.exports = {
       if (!records || !Array.isArray(records) || records.length === 0) {
         throw new UserInputError('records 배열이 비어 있습니다.');
       }
+      console.log('records arrived');
 
       for (const record of records) {
+        console.log(record);
         // record = { phoneNumber, userName?, userType?, name, memo, type }
 
         const { phoneNumber } = record;
