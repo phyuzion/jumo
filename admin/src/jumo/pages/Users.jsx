@@ -16,7 +16,7 @@ import {
 import {
   GET_ALL_USERS,
   GET_USER_RECORDS,
-  GET_USER_PHONE_LOG,     // <-- 추가
+  GET_USER_CALL_LOG,     // <-- 추가
   GET_USER_SMS_LOG        // <-- 추가
 } from "../graphql/queries";
 import {
@@ -49,7 +49,7 @@ const Users = () => {
   });
 
   // (3-2) 통화/문자 로그 (lazy)
-  const [getUserCallLogLazy, { data: callLogData }] = useLazyQuery(GET_USER_PHONE_LOG, {
+  const [getUserCallLogLazy, { data: callLogData }] = useLazyQuery(GET_USER_CALL_LOG, {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
   });
@@ -108,7 +108,7 @@ const Users = () => {
 
   // 통화로그
   useEffect(() => {
-    if (callLogData?.getUsercallLog) {
+    if (callLogData?.getUserCallLog) {
       setCallLogs(callLogData.getUserCallLog);
     }
   }, [callLogData]);

@@ -2,97 +2,80 @@ import 'dart:developer';
 
 import 'package:call_e_log/call_log.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:mobile/graphql/apis.dart'; // JumoGraphQLApi
 import 'package:mobile/utils/app_event_bus.dart';
+// 분리된 log_api.dart
+import 'package:mobile/graphql/log_api.dart';
 
 class CallLogController {
   final box = GetStorage();
-
-  /// key for storage
   static const storageKey = 'callLogs';
 
-  /// 최신 200개 통화기록을 가져와 로컬에 저장 후, 곧바로 서버에 업로드 시도
+  /// 디바이스 CallLog (200개)를 읽어 로컬저장 + 서버업로드
   Future<List<Map<String, dynamic>>> refreshCallLogs() async {
-    // 1) 디바이스에서 call log 200개 가져오기
-    final callLogEntry = await CallLog.get();
-    final callLogTake200 = callLogEntry.take(200);
+    final callEntries = await CallLog.get();
+    final take200 = callEntries.take(200);
 
-    final callLogList = <Map<String, dynamic>>[];
-    for (final e in callLogTake200) {
+    final newList = <Map<String, dynamic>>[];
+    for (final e in take200) {
       final map = {
         'number': e.number ?? '',
         'name': e.name ?? '',
-        // 'incoming' | 'outgoing' | 'missed'
-        'callType': e.callType?.name ?? '',
+        'callType': e.callType?.name ?? '', // "incoming"/"outgoing"/"missed"
         'timestamp': e.timestamp ?? 0,
       };
-      callLogList.add(map);
+      newList.add(map);
     }
 
-    // 2) 로컬 저장
-    await box.write(storageKey, callLogList);
-
-    // 이벤트
+    // 1) 로컬 저장
+    await box.write(storageKey, newList);
     appEventBus.fire(CallLogUpdatedEvent());
 
-    // 3) 서버에 업로드 (로그인되어 있으면)
-    await _uploadToServer(callLogList);
+    // 2) 서버 업로드
+    await _uploadToServer(newList);
 
-    return callLogList;
+    return newList;
   }
 
-  /// 서버 업로드 부분
-  Future<void> _uploadToServer(List<Map<String, dynamic>> localLogs) async {
-    final accessToken = JumoGraphQLApi.accessToken;
-    if (accessToken == null) {
-      // 아직 로그인 안됨 => 업로드 스킵 or 로그만
-      log('[CallLogController] Not logged in. Skip upload.');
-      return;
-    }
-    // userId 필요. (로그인 시 어딘가에 저장해뒀다고 가정)
-    final userId = box.read<String>('myUserId') ?? '';
-    if (userId.isEmpty) {
-      log('[CallLogController] myUserId is empty. Skip upload.');
-      return;
-    }
-
-    // 1) GraphQL에 맞게 변환
-    // callType: 'incoming' => 'IN', 'outgoing' => 'OUT', 'missed' => 'MISS'
-    // time => epoch string
+  /// 내부: 서버에 업로드
+  Future<void> _uploadToServer(List<Map<String, dynamic>> localList) async {
+    // localList => 서버 규격 변환
+    // callType: "incoming" => "IN" / "outgoing" => "OUT" / "missed" => "MISS"
     final logsForServer =
-        localLogs.map((m) {
-          final phone = m['number'] as String? ?? '';
-          final tsString = (m['timestamp'] ?? '').toString();
-          final ctype = m['callType'] as String? ?? '';
+        localList.map((m) {
+          final rawType = (m['callType'] as String).toLowerCase();
           String serverType;
-          if (ctype == 'incoming') {
-            serverType = 'IN';
-          } else if (ctype == 'outgoing') {
-            serverType = 'OUT';
-          } else {
-            serverType = 'MISS';
+          switch (rawType) {
+            case 'incoming':
+              serverType = 'IN';
+              break;
+            case 'outgoing':
+              serverType = 'OUT';
+              break;
+            case 'missed':
+              serverType = 'MISS';
+              break;
+            default:
+              serverType = 'UNKNOWN';
           }
-          return {
-            'phoneNumber': phone,
-            'time': tsString,
+
+          return <String, dynamic>{
+            'phoneNumber': m['number'] ?? '',
+            'time': (m['timestamp'] ?? '').toString(), // epoch → string
             'callType': serverType,
           };
         }).toList();
 
-    // 2) 업로드
     try {
-      final ok = await JumoGraphQLApi.updatePhoneLog(logs: logsForServer);
+      final ok = await LogApi.updateCallLog(logsForServer);
       if (ok) {
-        log('[CallLogController] 통화 로그 서버 업로드 성공');
-      } else {
-        log('[CallLogController] 통화 로그 서버 업로드 실패(서버 false)');
+        log('통화 로그 업로드 성공');
       }
     } catch (e) {
-      log('[CallLogController] 업로드 중 에러: $e');
+      log('통화 로그 업로드 실패: $e');
     }
   }
 
-  /// get_storage 에서 이전 목록 읽기
+  /// 로컬 저장된 목록 읽기
   List<Map<String, dynamic>> getSavedCallLogs() {
     final list = box.read<List>(storageKey) ?? [];
     return list.map((e) => Map<String, dynamic>.from(e)).toList();

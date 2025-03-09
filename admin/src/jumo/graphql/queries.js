@@ -52,7 +52,7 @@ export const GET_USER_RECORDS = gql`
   }
 `;
 
-export const GET_USER_PHONE_LOG = gql`
+export const GET_USER_CALL_LOG = gql`
   query getUserCallLog($userId: ID!) {
     getUserCallLog(userId: $userId) {
       phoneNumber

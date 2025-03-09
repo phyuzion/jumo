@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:mobile/graphql/apis.dart';
+import 'package:mobile/graphql/user_api.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (_myNumber.isEmpty) {
         throw Exception('내 휴대폰번호(myNumber)가 없습니다. 자동로그인 불가');
       }
-      await JumoGraphQLApi.userLogin(
+      await UserApi.userLogin(
         loginId: savedId,
         password: savedPw,
         phoneNumber: _myNumber,
@@ -74,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
 
       // userLogin 호출
-      await JumoGraphQLApi.userLogin(
+      await UserApi.userLogin(
         loginId: loginId,
         password: password,
         phoneNumber: _myNumber,

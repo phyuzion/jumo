@@ -2,7 +2,7 @@ import 'dart:developer';
 
 import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:mobile/graphql/apis.dart';
+import 'package:mobile/graphql/log_api.dart';
 
 class SmsController {
   final box = GetStorage();
@@ -36,19 +36,6 @@ class SmsController {
 
   /// 서버 업로드
   Future<void> _uploadToServer(List<Map<String, dynamic>> localSms) async {
-    final accessToken = JumoGraphQLApi.accessToken;
-    if (accessToken == null) {
-      log('[SmsController] Not logged in. Skip upload.');
-      return;
-    }
-    final userId = box.read<String>('myUserId') ?? '';
-    if (userId.isEmpty) {
-      log('[SmsController] myUserId is empty. Skip upload.');
-      return;
-    }
-
-    // smsType 변환: type=1 => IN, else => OUT
-    // time => string
     final smsForServer =
         localSms.map((m) {
           final phone = m['address'] as String? ?? '';
@@ -65,7 +52,7 @@ class SmsController {
         }).toList();
 
     try {
-      final ok = await JumoGraphQLApi.updateSMSLog(logs: smsForServer);
+      final ok = await LogApi.updateSMSLog(smsForServer);
       if (ok) {
         log('[SmsController] SMS 로그 서버 업로드 성공');
       } else {
