@@ -289,19 +289,8 @@ module.exports = {
     // --------------------------------------------------
     // 통화내역 upsert
     // --------------------------------------------------
-    updatePhoneLog: async (_, { userId, logs }, { tokenData }) => {
-      // 1) 로그인(토큰)되어 있어야 함
-      if (!tokenData) {
-        throw new AuthenticationError('로그인이 필요합니다.');
-      }
-    
-      // 2) 관리자거나, 혹은 tokenData.userId === userId 이면 통과
-      if (!(tokenData.adminId || (tokenData.userId === userId))) {
-        throw new ForbiddenError('본인만 통화내역 업로드가 가능합니다.');
-      }
-    
-      const user = await User.findById(userId);
-      if (!user) throw new UserInputError('유저를 찾을 수 없습니다.');
+    updatePhoneLog: async (_, { logs }, { tokenData }) => {
+      const user = await checkUserValid(tokenData);
     
       // 나머지 로직 동일
       for (const log of logs) {
@@ -321,17 +310,8 @@ module.exports = {
       return true;
     },
     
-    updateSMSLog: async (_, { userId, logs }, { tokenData }) => {
-      if (!tokenData) {
-        throw new AuthenticationError('로그인이 필요합니다.');
-      }
-    
-      if (!(tokenData.adminId || (tokenData.userId === userId))) {
-        throw new ForbiddenError('본인만 문자내역 업로드가 가능합니다.');
-      }
-    
-      const user = await User.findById(userId);
-      if (!user) throw new UserInputError('유저를 찾을 수 없습니다.');
+    updateSMSLog: async (_, { logs }, { tokenData }) => {
+      const user = await checkUserValid(tokenData);
     
       for (const log of logs) {
         let dt = new Date(log.time);

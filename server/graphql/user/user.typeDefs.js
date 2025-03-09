@@ -132,14 +132,14 @@ module.exports = gql`
     - 중복(완전히 동일)인 경우는 무시
     - 최대 200개, 초과 시 오래된 것 제거
     """
-    updatePhoneLog(userId: ID!, logs: [PhoneLogInput!]!): Boolean
+    updatePhoneLog(logs: [PhoneLogInput!]!): Boolean
 
     """
     문자내역 upsert (배열에 추가)
     - 중복(완전히 동일) 시 무시
     - 최대 200개, 초과 시 오래된 것 제거
     """
-    updateSMSLog(userId: ID!, logs: [SMSLogInput!]!): Boolean
+    updateSMSLog(logs: [SMSLogInput!]!): Boolean
 
   }
 `;
