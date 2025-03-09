@@ -3,6 +3,11 @@
 const mongoose = require('mongoose');
 
 const recordSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null,
+  },
   userName: String,   // 유저의 이름
   userType: Number,   // 유저의 type
   name: String,       // 이 레코드(전화번호부)에서 저장한 이름
