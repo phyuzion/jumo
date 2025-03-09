@@ -42,7 +42,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _refreshContacts() async {
-    await _contactsController.refreshContactsWithDiff();
+    await _contactsController.refreshContactsMerged();
     await _loadContacts();
   }
 
