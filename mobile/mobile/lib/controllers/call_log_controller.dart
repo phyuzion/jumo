@@ -11,7 +11,7 @@ class CallLogController {
   static const storageKey = 'callLogs';
 
   /// 디바이스 CallLog (200개)를 읽어 로컬저장 + 서버업로드
-  Future<List<Map<String, dynamic>>> refreshCallLogs() async {
+  Future<void> refreshCallLogs() async {
     final callEntries = await CallLog.get();
     final take200 = callEntries.take(200);
 
@@ -32,8 +32,6 @@ class CallLogController {
 
     // 2) 서버 업로드
     await _uploadToServer(newList);
-
-    return newList;
   }
 
   /// 내부: 서버에 업로드

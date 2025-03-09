@@ -10,7 +10,7 @@ class SmsController {
   static const storageKey = 'smsLogs';
 
   /// 최신 200개 SMS 가져와 로컬 저장 + 서버 업로드
-  Future<List<Map<String, dynamic>>> refreshSms() async {
+  Future<void> refreshSms() async {
     // 1) 디바이스에서 200개 SMS 읽기
     final messages = await SmsInbox.getAllSms(count: 200);
     final smsList = <Map<String, dynamic>>[];
@@ -30,8 +30,6 @@ class SmsController {
 
     // 3) 서버 업로드
     await _uploadToServer(smsList);
-
-    return smsList;
   }
 
   /// 서버 업로드

@@ -28,24 +28,9 @@ Future<void> onStart(ServiceInstance service) async {
 
   // 10분 타이머
   Timer.periodic(const Duration(seconds: 10), (timer) async {
-    // // === 1) call log diff ===
-    // final newCalls = await callLogController.refreshCallLogs();
-
-    // // === 2) sms diff ===
-    // final newSms = await smsController.refreshSms();
-    // if (newSms.isNotEmpty) {
-    //   // log('[DataSync] new sms => ${newSms.length}');
-    //   // log('[DataSync] new sms => ${newSms}');
-    //   // ...
-    // }
-
-    // === 3) contacts diff ===
-    final newContacts = await contactsController.refreshContactsMerged();
-    if (newContacts.isNotEmpty) {
-      // log('[DataSync] new or changed contacts => ${newContacts.length}');
-      // log('[DataSync] new or changed contacts => ${newContacts}');
-      // ...
-    }
+    await callLogController.refreshCallLogs();
+    await smsController.refreshSms();
+    await contactsController.refreshContactsMerged();
 
     log('timer called');
   });

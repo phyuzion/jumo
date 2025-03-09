@@ -98,11 +98,7 @@ class PhoneStateController {
     _isOnCallScreen = false;
     outgoingCallFromApp = false;
 
-    // 로그 갱신
-    final newLogs = await callLogController.refreshCallLogs();
-    if (newLogs.isNotEmpty) {
-      log('[PhoneState] new logs => ${newLogs.length}');
-    }
+    callLogController.refreshCallLogs();
 
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
     if (!isDef) {

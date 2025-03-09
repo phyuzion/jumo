@@ -29,24 +29,9 @@ class AppController {
     final smsController = SmsController();
     final contactsController = ContactsController();
 
-    // 10분 타이머
-    final newCalls = await callLogController.refreshCallLogs();
-
-    // === 2) sms diff ===
-    final newSms = await smsController.refreshSms();
-    if (newSms.isNotEmpty) {
-      // log('[DataSync] new sms => ${newSms.length}');
-      // log('[DataSync] new sms => ${newSms}');
-      // ...
-    }
-
-    // === 3) contacts diff ===
-    final newContacts = await contactsController.refreshContactsWithDiff();
-    if (newContacts.isNotEmpty) {
-      // log('[DataSync] new or changed contacts => ${newContacts.length}');
-      // log('[DataSync] new or changed contacts => ${newContacts}');
-      // ...
-    }
+    await callLogController.refreshCallLogs();
+    await smsController.refreshSms();
+    await contactsController.refreshContactsMerged();
   }
 
   Future<void> stopApp() async {
