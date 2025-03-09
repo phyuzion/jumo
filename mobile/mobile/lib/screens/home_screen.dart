@@ -21,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     final appController = context.read<AppController>();
+    appController.initializeApp();
     appController.configureBackgroundService();
     appController.startBackgroundService();
   }

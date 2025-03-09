@@ -32,7 +32,6 @@ class _DeciderScreenState extends State<DeciderScreen> {
     setState(() => _checking = true);
     final ok = await appController.checkEssentialPermissions();
 
-    appController.initializeApp();
     if (ok) {
       if (!mounted) return;
       // 권한 + 초기화 끝 -> 로그인 화면

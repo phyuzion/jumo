@@ -2,9 +2,6 @@
 
 /// 로컬 주소록 + 메모/타입/업데이트시각 등을 함께 담는 모델
 class PhoneBookModel {
-  /// 디바이스에서 가져온 고유 id (fast_contacts의 Contact.id)
-  final String id;
-
   /// 표시 이름 (디바이스: displayName)
   final String name;
 
@@ -21,7 +18,6 @@ class PhoneBookModel {
   final String? updatedAt;
 
   PhoneBookModel({
-    required this.id,
     required this.name,
     required this.phoneNumber,
     this.memo,
@@ -32,7 +28,6 @@ class PhoneBookModel {
   /// JSON -> Model
   factory PhoneBookModel.fromJson(Map<String, dynamic> json) {
     return PhoneBookModel(
-      id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       phoneNumber: json['phoneNumber'] as String? ?? '',
       memo: json['memo'] as String?,
@@ -44,7 +39,6 @@ class PhoneBookModel {
   /// Model -> JSON
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
       'name': name,
       'phoneNumber': phoneNumber,
       'memo': memo,
@@ -54,7 +48,6 @@ class PhoneBookModel {
   }
 
   PhoneBookModel copyWith({
-    String? id,
     String? name,
     String? phoneNumber,
     String? memo,
@@ -62,8 +55,6 @@ class PhoneBookModel {
     String? updatedAt,
   }) {
     return PhoneBookModel(
-      /// 지금 입력된 값이 있으면 그걸 사용, 없으면 기존 필드 유지
-      id: id ?? this.id,
       name: name ?? this.name,
       phoneNumber: phoneNumber ?? this.phoneNumber,
       memo: memo ?? this.memo,
