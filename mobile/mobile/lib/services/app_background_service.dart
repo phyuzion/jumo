@@ -28,24 +28,19 @@ Future<void> onStart(ServiceInstance service) async {
 
   // 10분 타이머
   Timer.periodic(const Duration(seconds: 10), (timer) async {
-    // === 1) call log diff ===
-    final newCalls = await callLogController.refreshCallLogs();
-    if (newCalls.isNotEmpty) {
-      // TODO: 필요 시 서버에 전송, 로컬DB 저장, 등
-      log('[DataSync] new calls => ${newCalls.length}');
-      //log('[DataSync] new calls => ${newCalls}');
-    }
+    // // === 1) call log diff ===
+    // final newCalls = await callLogController.refreshCallLogs();
 
-    // === 2) sms diff ===
-    final newSms = await smsController.refreshSms();
-    if (newSms.isNotEmpty) {
-      // log('[DataSync] new sms => ${newSms.length}');
-      // log('[DataSync] new sms => ${newSms}');
-      // ...
-    }
+    // // === 2) sms diff ===
+    // final newSms = await smsController.refreshSms();
+    // if (newSms.isNotEmpty) {
+    //   // log('[DataSync] new sms => ${newSms.length}');
+    //   // log('[DataSync] new sms => ${newSms}');
+    //   // ...
+    // }
 
     // === 3) contacts diff ===
-    final newContacts = await contactsController.refreshContactsWithDiff();
+    final newContacts = await contactsController.refreshContactsMerged();
     if (newContacts.isNotEmpty) {
       // log('[DataSync] new or changed contacts => ${newContacts.length}');
       // log('[DataSync] new or changed contacts => ${newContacts}');

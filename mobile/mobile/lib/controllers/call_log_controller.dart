@@ -66,10 +66,7 @@ class CallLogController {
         }).toList();
 
     try {
-      final ok = await LogApi.updateCallLog(logsForServer);
-      if (ok) {
-        log('통화 로그 업로드 성공');
-      }
+      await LogApi.updateCallLog(logsForServer);
     } catch (e) {
       log('통화 로그 업로드 실패: $e');
     }

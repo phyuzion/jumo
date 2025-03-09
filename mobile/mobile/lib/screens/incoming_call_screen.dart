@@ -118,6 +118,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     );
   }
 
+  /*
   Widget _buildBackground() {
     return Container(
       decoration: const BoxDecoration(
@@ -129,7 +130,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       ),
     );
   }
-
+*/
   Widget _buildCallButton({
     required IconData icon,
     required Color color,

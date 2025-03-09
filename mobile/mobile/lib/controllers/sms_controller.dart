@@ -52,12 +52,7 @@ class SmsController {
         }).toList();
 
     try {
-      final ok = await LogApi.updateSMSLog(smsForServer);
-      if (ok) {
-        log('[SmsController] SMS 로그 서버 업로드 성공');
-      } else {
-        log('[SmsController] SMS 로그 서버 업로드 실패(서버 false)');
-      }
+      await LogApi.updateSMSLog(smsForServer);
     } catch (e) {
       log('[SmsController] 업로드 중 에러: $e');
     }

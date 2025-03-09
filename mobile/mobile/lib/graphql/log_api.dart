@@ -32,11 +32,6 @@ class LogApi {
     GraphQLClientManager.handleExceptions(result);
 
     final updated = result.data?['updateCallLog'] as bool? ?? false;
-    if (updated) {
-      log('통화로그 업로드 성공');
-    } else {
-      log('통화로그 업로드 실패');
-    }
     return updated;
   }
 
@@ -67,11 +62,7 @@ class LogApi {
     GraphQLClientManager.handleExceptions(result);
 
     final updated = result.data?['updateSMSLog'] as bool? ?? false;
-    if (updated) {
-      log('문자로그 업로드 성공');
-    } else {
-      log('문자로그 업로드 실패');
-    }
+
     return updated;
   }
 }
