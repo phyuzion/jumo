@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -61,6 +63,7 @@ class JumoGraphQLApi {
     required String password,
     required String phoneNumber,
   }) async {
+    log('loginId : $loginId password : $password phoneNumber : $phoneNumber');
     final MutationOptions options = MutationOptions(
       document: gql(_userLoginMutation),
       variables: {

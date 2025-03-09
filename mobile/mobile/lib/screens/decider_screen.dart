@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
 class DeciderScreen extends StatefulWidget {
@@ -38,7 +39,8 @@ class _DeciderScreenState extends State<DeciderScreen> {
 
       final myNumber = await NativeMethods.getMyPhoneNumber();
       log('myNumber=$myNumber');
-      GetStorage().write('myNumber', myNumber);
+      final myRealnumber = normalizePhone(myNumber);
+      GetStorage().write('myNumber', myRealnumber);
 
       Navigator.pushReplacementNamed(context, '/login');
     } else {

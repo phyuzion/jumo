@@ -35,23 +35,23 @@ class AppController {
     // 10분 타이머
     final newCalls = await callLogController.refreshCallLogs();
     if (newCalls.isNotEmpty) {
-      log('[DataSync] new calls => ${newCalls.length}');
-      log('[DataSync] new calls => ${newCalls}');
+      // log('[DataSync] new calls => ${newCalls.length}');
+      // log('[DataSync] new calls => ${newCalls}');
     }
 
     // === 2) sms diff ===
     final newSms = await smsController.refreshSms();
     if (newSms.isNotEmpty) {
-      log('[DataSync] new sms => ${newSms.length}');
-      log('[DataSync] new sms => ${newSms}');
+      // log('[DataSync] new sms => ${newSms.length}');
+      // log('[DataSync] new sms => ${newSms}');
       // ...
     }
 
     // === 3) contacts diff ===
     final newContacts = await contactsController.refreshContactsWithDiff();
     if (newContacts.isNotEmpty) {
-      log('[DataSync] new or changed contacts => ${newContacts.length}');
-      log('[DataSync] new or changed contacts => ${newContacts}');
+      // log('[DataSync] new or changed contacts => ${newContacts.length}');
+      // log('[DataSync] new or changed contacts => ${newContacts}');
       // ...
     }
   }

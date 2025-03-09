@@ -4,6 +4,8 @@ String normalizePhone(String raw) {
   replaced = replaced.replaceAll(RegExp(r'[^0-9]'), '');
   if (replaced.startsWith('82')) {
     replaced = '0${replaced.substring(2)}';
+  } else if (replaced.startsWith('+1')) {
+    replaced = replaced.substring(2);
   }
 
   return replaced;
