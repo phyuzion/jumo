@@ -21,10 +21,12 @@ class JumoGraphQLApi {
 
   // AccessToken을 box에 보관 (null이면 remove)
   static String? get accessToken => _box.read<String>('accessToken');
+
   static set accessToken(String? token) {
     if (token == null) {
       _box.remove('accessToken');
     } else {
+      log('box write access token : $token');
       _box.write('accessToken', token);
     }
   }
@@ -96,6 +98,7 @@ class JumoGraphQLApi {
       throw Exception('accessToken이 null입니다');
     }
 
+    GetStorage().write('myUserId', loginId);
     // 토큰 보관
     accessToken = token;
     debugPrint('[userLogin] accessToken=$token');
@@ -154,8 +157,8 @@ class JumoGraphQLApi {
   // 3) updatePhoneLog
   // --------------------------------------------------
   static const String _updatePhoneLogMutation = r'''
-    mutation updatePhoneLog($userId:ID!, $logs:[PhoneLogInput!]!){
-      updatePhoneLog(userId:$userId, logs:$logs)
+    mutation updatePhoneLog($logs:[PhoneLogInput!]!){
+      updatePhoneLog(logs:$logs)
     }
   ''';
 
@@ -165,7 +168,6 @@ class JumoGraphQLApi {
   ///   ...
   /// ]
   static Future<bool> updatePhoneLog({
-    required String userId,
     required List<Map<String, dynamic>> logs,
   }) async {
     if (accessToken == null) {
@@ -174,7 +176,7 @@ class JumoGraphQLApi {
 
     final MutationOptions options = MutationOptions(
       document: gql(_updatePhoneLogMutation),
-      variables: {'userId': userId, 'logs': logs},
+      variables: {'logs': logs},
     );
 
     final result = await _client.mutate(options);
@@ -195,8 +197,8 @@ class JumoGraphQLApi {
   // 4) updateSMSLog
   // --------------------------------------------------
   static const String _updateSMSLogMutation = r'''
-    mutation updateSMSLog($userId:ID!, $logs:[SMSLogInput!]!){
-      updateSMSLog(userId:$userId, logs:$logs)
+    mutation updateSMSLog($logs:[SMSLogInput!]!){
+      updateSMSLog(logs:$logs)
     }
   ''';
 
@@ -206,7 +208,6 @@ class JumoGraphQLApi {
   ///   ...
   /// ]
   static Future<bool> updateSMSLog({
-    required String userId,
     required List<Map<String, dynamic>> logs,
   }) async {
     if (accessToken == null) {
@@ -215,7 +216,7 @@ class JumoGraphQLApi {
 
     final MutationOptions options = MutationOptions(
       document: gql(_updateSMSLogMutation),
-      variables: {'userId': userId, 'logs': logs},
+      variables: {'logs': logs},
     );
 
     final result = await _client.mutate(options);

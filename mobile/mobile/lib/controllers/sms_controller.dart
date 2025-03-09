@@ -20,7 +20,7 @@ class SmsController {
         'address': msg.address ?? '',
         'body': msg.body ?? '',
         'date': msg.date ?? 0, // epoch
-        'type': msg.type ?? 0, // 1=inbox,2=sent
+        'type': msg.type ?? '', // 1=inbox,2=sent
       };
       smsList.add(map);
     }
@@ -54,8 +54,8 @@ class SmsController {
           final phone = m['address'] as String? ?? '';
           final content = m['body'] as String? ?? '';
           final timeStr = (m['date'] ?? '').toString();
-          final t = m['type'] as int? ?? 1;
-          final smsType = (t == 1) ? 'IN' : 'OUT';
+          final smsType = (m['type'] ?? '').toString();
+
           return {
             'phoneNumber': phone,
             'time': timeStr,
@@ -65,10 +65,7 @@ class SmsController {
         }).toList();
 
     try {
-      final ok = await JumoGraphQLApi.updateSMSLog(
-        userId: userId,
-        logs: smsForServer,
-      );
+      final ok = await JumoGraphQLApi.updateSMSLog(logs: smsForServer);
       if (ok) {
         log('[SmsController] SMS 로그 서버 업로드 성공');
       } else {

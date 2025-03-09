@@ -1,6 +1,7 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:provider/provider.dart';
 import 'dialer_screen.dart';
 import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
@@ -18,6 +19,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+
+    final appController = context.read<AppController>();
+    appController.configureBackgroundService();
+    appController.startBackgroundService();
   }
 
   int _currentIndex = 0;

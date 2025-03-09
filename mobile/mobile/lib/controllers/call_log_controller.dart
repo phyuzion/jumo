@@ -81,10 +81,7 @@ class CallLogController {
 
     // 2) 업로드
     try {
-      final ok = await JumoGraphQLApi.updatePhoneLog(
-        userId: userId,
-        logs: logsForServer,
-      );
+      final ok = await JumoGraphQLApi.updatePhoneLog(logs: logsForServer);
       if (ok) {
         log('[CallLogController] 통화 로그 서버 업로드 성공');
       } else {

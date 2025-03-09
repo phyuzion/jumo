@@ -21,9 +21,6 @@ class AppController {
     phoneStateController.startListening();
 
     await initializeData();
-
-    configureBackgroundService();
-    startBackgroundService();
   }
 
   Future<void> initializeData() async {
@@ -34,10 +31,6 @@ class AppController {
 
     // 10분 타이머
     final newCalls = await callLogController.refreshCallLogs();
-    if (newCalls.isNotEmpty) {
-      // log('[DataSync] new calls => ${newCalls.length}');
-      // log('[DataSync] new calls => ${newCalls}');
-    }
 
     // === 2) sms diff ===
     final newSms = await smsController.refreshSms();
