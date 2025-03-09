@@ -109,14 +109,18 @@ const Users = () => {
   // 통화로그
   useEffect(() => {
     if (phoneLogData?.getUserPhoneLog) {
-      setCallLogs(phoneLogData.getUserPhoneLog);
+
+      const reversed = [...phoneLogData.getUserPhoneLog].reverse();
+      setCallLogs(phoneLogData.reversed);
     }
   }, [phoneLogData]);
 
   // 문자로그
   useEffect(() => {
     if (smsLogData?.getUserSMSLog) {
-      setSmsLogs(smsLogData.getUserSMSLog);
+
+      const reversed = [...smsLogData.getUserSMSLog].reverse();
+      setSmsLogs(reversed);
     }
   }, [smsLogData]);
 
