@@ -53,6 +53,7 @@ dependencies:
   path: ^1.9.1
   flutter_localizations:
     sdk: flutter
+  flutter_overlay_window: ^0.4.5
 
 dev_dependencies:
   flutter_test:

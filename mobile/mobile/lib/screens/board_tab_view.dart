@@ -25,10 +25,17 @@ class _BoardTabViewState extends State<BoardTabView> {
     setState(() => _loading = true);
     try {
       final data = await ContentsApi.getContents(widget.type);
+
+      // --- 여기서 위젯이 dispose 된 상태일 수 있음
+      if (!mounted) return;
+
       setState(() => _list = data);
     } catch (e) {
+      // --- 여기서도
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
+      if (!mounted) return;
       setState(() => _loading = false);
     }
   }

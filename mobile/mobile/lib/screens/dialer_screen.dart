@@ -1,4 +1,8 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:provider/provider.dart';
@@ -16,6 +20,24 @@ class _DialerScreenState extends State<DialerScreen> {
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
       // 앱 발신임을 표시
+
+      // 2) number 저장
+      final box = GetStorage();
+      await box.write('search_number', '01089236835');
+
+      // 3) 오버레이 실행
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true,
+        alignment: OverlayAlignment.center,
+        height: WindowSize.matchParent,
+        width: WindowSize.matchParent,
+        overlayTitle: "CallResultOverlay",
+        overlayContent: "수신전화감지", // 알림 표기용
+        flag: OverlayFlag.defaultFlag,
+        visibility: NotificationVisibility.visibilityPublic,
+        positionGravity: PositionGravity.auto,
+        // key: 'overlayMain', => If needed
+      );
 
       final phoneState = context.read<PhoneStateController>();
       phoneState.outgoingCallFromApp = true;

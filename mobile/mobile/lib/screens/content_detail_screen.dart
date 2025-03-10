@@ -18,12 +18,16 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   Map<String, dynamic>? _item;
   QuillController? _quillController;
 
+  // 1) 댓글 입력 컨트롤러
+  final _replyCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     _fetchDetail();
   }
 
+  /// 게시글 + 댓글 목록 불러오기
   Future<void> _fetchDetail() async {
     setState(() => _loading = true);
     try {
@@ -31,20 +35,18 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       if (data != null) {
         _item = data;
 
-        // content = { "ops": [...], ...}
+        // content = { "ops": [...] }
         final contentMap = data['content'];
         if (contentMap != null && contentMap is Map) {
-          // parse -> Document.fromJson(contentMap['ops'])
           final opsList = contentMap['ops'];
           if (opsList != null && opsList is List) {
             final doc = Document.fromJson(opsList);
             _quillController = QuillController(
               document: doc,
               selection: const TextSelection.collapsed(offset: 0),
-              readOnly: true, // 중요!
+              readOnly: true,
             );
           } else {
-            // ops가 없음 => empty
             _quillController = QuillController.basic();
           }
         } else {
@@ -58,6 +60,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
   }
 
+  /// 수정 화면
   void _onTapEdit() {
     if (_item == null) return;
     Navigator.pushNamed(context, '/contentEdit', arguments: _item).then((res) {
@@ -71,7 +74,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   Widget build(BuildContext context) {
     if (_loading && _item == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('상세보기')),
+        appBar: AppBar(title: const Text('게시글 상세')),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
@@ -83,6 +86,8 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             IconButton(icon: const Icon(Icons.edit), onPressed: _onTapEdit),
         ],
       ),
+      // 댓글 입력 시 스크롤을 위해 Column -> SingleChildScrollView or nested approach
+      // 여기는 간단히 -> Column + Expanded
       body: _buildBody(),
     );
   }
@@ -92,49 +97,66 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       return const Center(child: Text('데이터 없음'));
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Title: ${_item!['title']}'),
-          Text('User: ${_item!['userId']}'),
-          Text('Type: ${_item!['type']}'),
-          Text('Created: ${formatDateString(_item!['createdAt'])}'),
-          const SizedBox(height: 16),
-          if (_quillController != null)
-            QuillEditor(
-              controller: _quillController!,
-              focusNode: FocusNode(),
-              scrollController: ScrollController(),
-              config: QuillEditorConfig(
-                autoFocus: false,
-                expands: false,
-                padding: EdgeInsets.zero,
-                embedBuilders: [...FlutterQuillEmbeds.editorBuilders()],
-              ),
+    return Column(
+      children: [
+        // 상단부 (게시글 정보 + QuillViewer)
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Title: ${_item!['title']}'),
+                Text('User: ${_item!['userId']}'),
+                Text('Type: ${_item!['type']}'),
+                Text('Created: ${formatDateString(_item!['createdAt'])}'),
+                const SizedBox(height: 16),
+                if (_quillController != null)
+                  QuillEditor(
+                    controller: _quillController!,
+                    focusNode: FocusNode(),
+                    scrollController: ScrollController(),
+                    config: QuillEditorConfig(
+                      autoFocus: false,
+                      expands: false,
+                      padding: EdgeInsets.zero,
+                      embedBuilders: [...FlutterQuillEmbeds.editorBuilders()],
+                    ),
+                  ),
+                const Divider(),
+                // 댓글 목록
+                _buildCommentList(),
+              ],
             ),
-          const Divider(),
-          // 댓글
-          if (_item!['comments'] != null)
-            ..._buildCommentSection(_item!['comments'] as List),
-        ],
-      ),
+          ),
+        ),
+        // 하단 댓글 추가 UI
+        _buildReplyInput(),
+      ],
     );
   }
 
-  List<Widget> _buildCommentSection(List comments) {
-    return [
-      Text(
-        '댓글 (${comments.length})',
-        style: const TextStyle(fontWeight: FontWeight.bold),
-      ),
-      const SizedBox(height: 8),
-      for (int i = 0; i < comments.length; i++)
-        _buildCommentItem(i, comments[i] as Map<String, dynamic>),
-    ];
+  /// 댓글 목록
+  Widget _buildCommentList() {
+    final comments = _item!['comments'] as List? ?? [];
+    if (comments.isEmpty) {
+      return const Text('댓글 없음');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '댓글 (${comments.length})',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        for (int i = 0; i < comments.length; i++)
+          _buildCommentItem(i, comments[i] as Map<String, dynamic>),
+      ],
+    );
   }
 
+  /// 개별 댓글 아이템
   Widget _buildCommentItem(int index, Map<String, dynamic> c) {
     final userId = c['userId'] ?? '';
     final comment = c['comment'] ?? '';
@@ -176,6 +198,58 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     );
   }
 
+  /// 댓글 입력 + 등록 버튼
+  Widget _buildReplyInput() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      color: Colors.grey.shade100,
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _replyCtrl,
+              decoration: const InputDecoration(
+                labelText: '댓글 입력',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(onPressed: _onTapAddReply, child: const Text('등록')),
+        ],
+      ),
+    );
+  }
+
+  /// 댓글 등록 로직
+  Future<void> _onTapAddReply() async {
+    if (_item == null) return;
+    final comment = _replyCtrl.text.trim();
+    if (comment.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('댓글을 입력하세요')));
+      return;
+    }
+
+    try {
+      // createReply => List<Map<String,dynamic>>
+      final newComments = await ContentsApi.createReply(
+        contentId: _item!['id'],
+        comment: comment,
+      );
+      // 로컬 state 에 반영
+      setState(() {
+        _item!['comments'] = newComments;
+      });
+      // 입력창 비우기
+      _replyCtrl.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  /// 댓글 삭제
   Future<void> _onDeleteReply(int index) async {
     if (_item == null) return;
     final yes = await showDialog<bool>(
@@ -204,9 +278,11 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
         index: index,
       );
       if (success) {
-        final arr = [...(_item!['comments'] as List)];
+        final arr = List<Map<String, dynamic>>.from(_item!['comments'] as List);
         arr.removeAt(index);
-        setState(() => _item!['comments'] = arr);
+        setState(() {
+          _item!['comments'] = arr;
+        });
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));

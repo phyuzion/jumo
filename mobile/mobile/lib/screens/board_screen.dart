@@ -36,10 +36,7 @@ class _BoardScreenState extends State<BoardScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('게시판(Quill)'),
-        bottom: TabBar(controller: _tabController, tabs: _tabs),
-      ),
+      appBar: TabBar(controller: _tabController, tabs: _tabs),
       body: TabBarView(
         controller: _tabController,
         children: const [

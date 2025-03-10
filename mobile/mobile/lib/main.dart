@@ -6,6 +6,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
+import 'package:mobile/overlay/call_result_overlay.dart';
 import 'package:mobile/screens/board_screen.dart';
 import 'package:mobile/screens/content_detail_screen.dart';
 import 'package:mobile/screens/content_edit_screen.dart';
@@ -23,6 +24,38 @@ import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
+
+/// 오버레이 전용 엔트리
+@pragma('vm:entry-point')
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  runApp(
+    MaterialApp(
+      home: CallResultOverlay(),
+      debugShowCheckedModeBanner: false,
+      debugShowMaterialGrid: false,
+      theme: ThemeData(
+        colorScheme: const ColorScheme.light(
+          primary: Colors.black,
+          onPrimary: Colors.white,
+          surface: Colors.white,
+          onSurface: Colors.black,
+        ),
+        useMaterial3: true,
+      ),
+      // 텍스트 크기 고정
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(0.7)),
+          child: child!,
+        );
+      },
+    ),
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
