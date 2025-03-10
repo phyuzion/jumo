@@ -25,6 +25,7 @@ class AppController {
 
   Future<void> initializeData() async {
     // 컨트롤러들(실제 diff 로직)
+
     final callLogController = CallLogController();
     final smsController = SmsController();
     final contactsController = ContactsController();

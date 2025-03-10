@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
+import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
@@ -25,6 +28,10 @@ void main() async {
     NavigationController.navKey,
   );
 
+  final contactsController = ContactsController();
+  final callLogContoller = CallLogController();
+  final smsController = SmsController();
+
   // 2) appController (의존성으로 phoneStateController 주입)
   final appController = AppController(phoneStateController);
 
@@ -33,6 +40,9 @@ void main() async {
       providers: [
         Provider<PhoneStateController>.value(value: phoneStateController),
         Provider<AppController>.value(value: appController),
+        Provider<ContactsController>.value(value: contactsController),
+        Provider<CallLogController>.value(value: callLogContoller),
+        Provider<SmsController>.value(value: smsController),
       ],
       child: const MyApp(),
     ),

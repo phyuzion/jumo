@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import '../controllers/contacts_controller.dart';
@@ -141,7 +142,22 @@ class _ContactsScreenState extends State<ContactsScreen> {
           },
         ),
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _onTapAddContact,
+        child: const Icon(Icons.add),
+      ),
     );
+  }
+
+  Future<void> _onTapAddContact() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const EditContactScreen()),
+    );
+    if (result == true) {
+      // 새로고침
+      await _refreshContacts();
+    }
   }
 
   /// 간단: 첫글자로부터 Hue값 만들어 파스텔색
