@@ -1,6 +1,8 @@
 package com.jumo.mobile
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.telephony.TelephonyManager
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
@@ -17,8 +19,21 @@ object NativeBridge {
                 "makeCall" -> {
                     val number = call.argument<String>("phoneNumber") ?: ""
                     Log.d("NativeBridge", "makeCall($number)")
-                    // ACTION_CALL or TelecomManager.placeCall
-                    // ...
+                    
+                    try {
+                        val context = JumoApp.context
+                        val callIntent = Intent(Intent.ACTION_CALL).apply {
+                            data = Uri.parse("tel:$number")
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        // AndroidManifest.xml 에서 android.permission.CALL_PHONE 권한 필요
+                        context.startActivity(callIntent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e("NativeBridge", "makeCall error: $e")
+                        result.error("CALL_ERROR", "Failed to start call", "$e")
+                    }
+
                     result.success(true)
                 }
                 "acceptCall" -> {
@@ -41,6 +56,11 @@ object NativeBridge {
                 "toggleHold" -> {
                     val hold = call.argument<Boolean>("holdOn") ?: false
                     PhoneInCallService.toggleHold(hold)
+                    result.success(true)
+                }
+                "toggleSpeaker" -> {
+                    val speaker = call.argument<Boolean>("speakerOn") ?: false
+                    PhoneInCallService.toggleSpeaker(speaker)
                     result.success(true)
                 }
                 "getMyPhoneNumber" -> {

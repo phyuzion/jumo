@@ -16,7 +16,9 @@ class NativeMethods {
   }
 
   static Future<void> makeCall(String phoneNumber) async {
-    await _channel.invokeMethod('makeCall', {'phoneNumber': phoneNumber});
+    if (await _channel.invokeMethod('makeCall', {
+      'phoneNumber': phoneNumber,
+    })) {}
   }
 
   static Future<void> acceptCall() async {
@@ -37,5 +39,9 @@ class NativeMethods {
 
   static Future<void> toggleHold(bool holdOn) async {
     await _channel.invokeMethod('toggleHold', {'holdOn': holdOn});
+  }
+
+  static Future<void> toggleSpeaker(bool speakerOn) async {
+    await _channel.invokeMethod('toggleSpeaker', {'speakerOn': speakerOn});
   }
 }

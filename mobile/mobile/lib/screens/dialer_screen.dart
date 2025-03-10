@@ -20,7 +20,7 @@ class _DialerScreenState extends State<DialerScreen> {
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
       // 앱 발신임을 표시
-
+      /*
       // 2) number 저장
       final box = GetStorage();
       await box.write('search_number', '01089236835');
@@ -36,12 +36,15 @@ class _DialerScreenState extends State<DialerScreen> {
         flag: OverlayFlag.defaultFlag,
         visibility: NotificationVisibility.visibilityPublic,
         positionGravity: PositionGravity.auto,
-        // key: 'overlayMain', => If needed
       );
-
+*/
       final phoneState = context.read<PhoneStateController>();
       phoneState.outgoingCallFromApp = true;
       await NativeMethods.makeCall(_number);
+
+      if (context.mounted) {
+        Navigator.pushNamed(context, '/onCall', arguments: _number);
+      }
     }
   }
 

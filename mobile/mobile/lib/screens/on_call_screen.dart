@@ -37,10 +37,10 @@ class _OnCallScreenState extends State<OnCallScreen> {
     final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
     for (final c in contacts) {
-      final ph = c.phoneNumber as String? ?? '';
-      if (ph.contains(number)) {
+      final storedNum = c.phoneNumber;
+      if (storedNum == number) {
         setState(() {
-          contactName = c.name as String?;
+          contactName = c.name;
         });
         return;
       }
@@ -62,17 +62,16 @@ class _OnCallScreenState extends State<OnCallScreen> {
 
   Future<void> _toggleSpeaker() async {
     final newVal = !isSpeakerOn;
-    // TODO: 실제 NativeMethods.toggleSpeaker(newVal) 가 있다면 호출
-    // 여기서는 UI만
+    NativeMethods.toggleSpeaker(newVal);
     setState(() => isSpeakerOn = newVal);
   }
 
   Future<void> _hangUp() async {
     await NativeMethods.hangUpCall();
-    // 통화 종료 -> phone_state_controller => CALL_ENDED => ...
-    // 여기서는 화면만 닫거나, Navigator.pop(context)
+    // 통화 종료 후: phone_state_controller => CALL_ENDED => ...
+    // 여기선 화면만 닫거나, pop
     if (!mounted) return;
-    //Navigator.pop(context);
+    // Navigator.pop(context);
   }
 
   @override
@@ -98,40 +97,42 @@ class _OnCallScreenState extends State<OnCallScreen> {
 
             // 중앙 Card (뮤트, 홀드, 스피커)
             Card(
-              elevation: 4, // 그림자
+              elevation: 4,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
               margin: const EdgeInsets.symmetric(horizontal: 40),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 24,
-                  runSpacing: 24,
-                  children: [
-                    _buildIconButton(
-                      icon: isMuted ? Icons.mic_off : Icons.mic,
-                      label: '뮤트',
-                      active: isMuted,
-                      onTap: _toggleMute,
-                    ),
-                    _buildIconButton(
-                      icon: Icons.pause,
-                      label: '홀드',
-                      active: isHold,
-                      onTap: _toggleHold,
-                    ),
-                    _buildIconButton(
-                      icon: Icons.volume_up,
-                      label: '스피커',
-                      active: isSpeakerOn,
-                      onTap: _toggleSpeaker,
-                    ),
-                  ],
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildIconButton(
+                        icon: isMuted ? Icons.mic_off : Icons.mic,
+                        label: '뮤트',
+                        active: isMuted,
+                        onTap: _toggleMute,
+                      ),
+                      _buildIconButton(
+                        icon: Icons.pause,
+                        label: '홀드',
+                        active: isHold,
+                        onTap: _toggleHold,
+                      ),
+                      _buildIconButton(
+                        icon: Icons.volume_up,
+                        label: '스피커',
+                        active: isSpeakerOn,
+                        onTap: _toggleSpeaker,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
+
             const Spacer(),
 
             // 하단 종료 버튼

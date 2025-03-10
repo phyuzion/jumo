@@ -84,7 +84,7 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                   color: Colors.orange,
                   label: '검색',
                   onTap: () {
-                    // TODO
+                    Navigator.pushNamed(context, '/search', arguments: _phones);
                   },
                 ),
                 _buildActionButton(

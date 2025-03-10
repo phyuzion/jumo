@@ -153,6 +153,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
 
   Future<void> _onTapCall(String number) async {
     await NativeMethods.makeCall(number);
+
+    await NativeMethods.makeCall(number);
+
+    if (context.mounted) {
+      Navigator.pushNamed(context, '/onCall', arguments: number);
+    }
   }
 
   void _onTapSearch(String number) {

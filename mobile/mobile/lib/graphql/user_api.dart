@@ -1,5 +1,6 @@
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'client.dart'; // 위에서 만든 client.dart
@@ -12,12 +13,20 @@ class UserApi {
       userLogin(loginId: $loginId, password: $password, phoneNumber: $phoneNumber) {
         accessToken
         refreshToken
+        user {
+          id
+          systemId
+          loginId
+          name
+          phoneNumber
+          type
+          createdAt
+          validUntil
+        }
       }
     }
   ''';
 
-  /// 로그인
-  /// - 성공 시 [GraphQLClientManager.accessToken] 저장
   static Future<void> userLogin({
     required String loginId,
     required String password,
@@ -44,13 +53,25 @@ class UserApi {
     }
 
     final token = data['accessToken'] as String?;
-    // final refresh = data['refreshToken'];
     if (token == null) {
-      throw Exception('accessToken이 null임');
+      throw Exception('accessToken이 null');
     }
-
+    // 저장 (기존)
     GraphQLClientManager.accessToken = token;
-    debugPrint('[[userLogin]] accessToken=$token');
+
+    // 새로 반환된 user
+    final userData = data['user'];
+    if (userData == null) {
+      throw Exception('user 필드가 null임');
+    }
+    debugPrint('[[userLogin]] user=$userData');
+
+    // GetStorage 에 유저정보 저장
+    final box = GetStorage();
+    box.write('userId', userData['id']);
+    box.write('userName', userData['name']);
+    box.write('userType', userData['type'].toString());
+    box.write('userValidUntil', userData['validUntil'] ?? '');
   }
 
   // ==================== 2) userChangePassword ====================

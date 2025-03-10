@@ -115,8 +115,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
   }
 
-  void _onTapCall(String phone) {
-    NativeMethods.makeCall(phone);
+  Future<void> _onTapCall(String phoneNumber) async {
+    await NativeMethods.makeCall(phoneNumber);
+    if (context.mounted) {
+      Navigator.pushNamed(context, '/onCall', arguments: phoneNumber);
+    }
   }
 
   void _onTapSearch(String phone) {

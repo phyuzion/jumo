@@ -45,6 +45,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Future<void> _acceptCall() async {
     await NativeMethods.acceptCall();
     // 수락 -> 전화가 STATE_ACTIVE -> onCall
+
+    if (context.mounted) {
+      Navigator.pushReplacementNamed(context, '/onCall', arguments: _phones);
+    }
     if (!mounted) return;
   }
 

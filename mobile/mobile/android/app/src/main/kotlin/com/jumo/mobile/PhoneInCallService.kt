@@ -6,6 +6,10 @@ import android.telecom.InCallService
 import android.telecom.VideoProfile
 import android.util.Log
 import android.content.Intent
+import android.media.AudioManager
+import android.media.AudioDeviceInfo
+
+import android.content.Context
 
 class PhoneInCallService : InCallService() {
     companion object {
@@ -17,6 +21,7 @@ class PhoneInCallService : InCallService() {
         fun hangUpCall() { instance?.hangUpTopCall() }
         fun toggleMute(mute: Boolean) { instance?.setMuted(mute) }
         fun toggleHold(hold: Boolean) { instance?.toggleHoldTopCall(hold) }
+        fun toggleSpeaker(speaker: Boolean) { instance?.toggleSpeaker(speaker) }
     }
 
     override fun onCreate() {
@@ -97,6 +102,32 @@ class PhoneInCallService : InCallService() {
     private fun toggleHoldTopCall(hold: Boolean) {
         val c = activeCalls.lastOrNull() ?: return
         if (hold) c.hold() else c.unhold()
+    }
+
+        // PhoneInCallService.kt (예시)
+    private fun toggleSpeaker(enable: Boolean) {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+
+        val manager = getSystemService(AudioManager::class.java)
+        manager.mode = AudioManager.MODE_IN_CALL
+
+        if (enable) {
+            val devices = manager.availableCommunicationDevices
+            val speaker = devices.firstOrNull {
+                it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            }
+            if (speaker != null) {
+                manager.setCommunicationDevice(speaker)
+            }
+        } else {
+            manager.clearCommunicationDevice()
+        }
+
+        if(enable){
+            Log.d("PhoneInCallService", "Call Speaker")
+        }else{
+            Log.d("PhoneInCallService", "Call Speaker off")
+        }
     }
 
     private fun showIncomingCall(number: String) {
