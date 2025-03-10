@@ -6,6 +6,9 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
+import 'package:mobile/screens/board_screen.dart';
+import 'package:mobile/screens/content_detail_screen.dart';
+import 'package:mobile/screens/content_edit_screen.dart';
 import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
@@ -100,6 +103,20 @@ class MyApp extends StatelessWidget {
           final number =
               ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
           return CallEndedScreen(callEndedNumber: number);
+        },
+        '/board': (_) => const BoardScreen(),
+        '/contentDetail': (ctx) {
+          final contentId = ModalRoute.of(ctx)?.settings.arguments as String?;
+          if (contentId == null) {
+            return const Scaffold(body: Center(child: Text('No contentId')));
+          }
+          return ContentDetailScreen(contentId: contentId);
+        },
+        '/contentCreate': (ctx) => const ContentEditScreen(item: null),
+        '/contentEdit': (ctx) {
+          final item =
+              ModalRoute.of(ctx)?.settings.arguments as Map<String, dynamic>?;
+          return ContentEditScreen(item: item);
         },
       },
     );
