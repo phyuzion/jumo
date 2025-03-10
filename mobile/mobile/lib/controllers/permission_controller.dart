@@ -6,6 +6,7 @@ class PermissionController {
     Permission.phone, // CALL_PHONE, READ_PHONE_STATE
     Permission.contacts, // READ_CONTACTS
     Permission.sms, // READ_SMS, RECEIVE_SMS
+    Permission.notification,
     // If needed, add readCallLog or readPhoneNumbers
   ];
 

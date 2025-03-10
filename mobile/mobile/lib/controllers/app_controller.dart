@@ -7,6 +7,7 @@ import 'package:mobile/controllers/permission_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
+import 'package:mobile/services/local_notification_service.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
@@ -27,6 +28,7 @@ class AppController {
 
   Future<void> initializeApp() async {
     await initializeData();
+    await LocalNotificationService.initialize();
 
     phoneStateController.startListening();
   }
