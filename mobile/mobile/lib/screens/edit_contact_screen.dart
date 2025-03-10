@@ -5,11 +5,10 @@ import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
-/// EditContactScreen
-/// - 신규: initialPhone == null → 폰번호 입력 가능
-/// - 기존: initialPhone != null → 폰번호 read-only
+/// 신규: initialPhone==null => 전화번호 입력 가능
+/// 기존: 전화번호 수정불가, contactId, memo, type 편집
 class EditContactScreen extends StatefulWidget {
-  final String? initialContactId; // 새 필드
+  final String? initialContactId;
   final String? initialName;
   final String? initialPhone;
   final String? initialMemo;
@@ -34,8 +33,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
   final _memoCtrl = TextEditingController();
   int _type = 0;
 
-  String get contactId => widget.initialContactId ?? '';
-  bool get isNew => widget.initialPhone == null;
+  bool get isNew => widget.initialPhone == null; // null이면 신규
 
   @override
   void initState() {
@@ -58,7 +56,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
     final name = _nameCtrl.text.trim();
     final phone = _phoneCtrl.text.trim();
     final memo = _memoCtrl.text.trim();
-    final type = _type;
 
     if (name.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(
@@ -67,121 +64,115 @@ class _EditContactScreenState extends State<EditContactScreen> {
       return;
     }
 
-    final hasPermission = await FlutterContacts.requestPermission();
-    if (!hasPermission) {
+    // 1) 주소록 권한
+    final hasPerm = await FlutterContacts.requestPermission();
+    if (!hasPerm) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('주소록 권한이 필요합니다.')));
       return;
     }
 
-    final ContactsController contactsController =
-        context.read<ContactsController>();
+    final contactsCtrl = context.read<ContactsController>();
+
+    // === 디바이스 연락처 수정/추가 ===
     if (isNew) {
-      // 1) 새 연락처 -> insert, 반환된 contact.id 저장
-      final createdContactId = await _insertDeviceContact(name, phone);
-      // 로컬 phonebook에도 추가 (메모/타입)
-      final list = contactsController.getSavedContacts();
-      final exists = list.any((x) => x.phoneNumber == phone);
-      if (!exists) {
-        list.add(
-          PhoneBookModel(
-            contactId: createdContactId,
-            name: name,
-            phoneNumber: phone,
-            memo: memo.isNotEmpty ? memo : null,
-            type: type == 0 ? null : type,
-            updatedAt: DateTime.now().toIso8601String(),
-          ),
-        );
-        await contactsController.saveLocalPhoneBook(list);
-      } else {
-        // 혹시나 race condition
-        // 그냥 updateMemoAndType
-        await contactsController.updateMemoAndType(
-          phoneNumber: phone,
-          memo: memo,
-          type: type,
-          updatedName: name,
-        );
-      }
-    } else {
-      // 2) 기존 연락처 -> update (이름만)
-      await _updateDeviceContact(contactId, name, phone);
-      // 로컬 memo/type 갱신
-      await contactsController.updateMemoAndType(
+      // 신규 -> insert
+      final contactId = await _insertDeviceContact(name, phone);
+      // 로컬 DB에 memo/type 저장
+      final newItem = PhoneBookModel(
+        contactId: contactId,
+        name: name,
         phoneNumber: phone,
-        memo: memo,
-        type: type,
-        updatedName: name,
+        memo: memo.isNotEmpty ? memo : null,
+        type: _type != 0 ? _type : null,
+        updatedAt: DateTime.now().toIso8601String(),
       );
+      await contactsCtrl.addOrUpdateLocalRecord(newItem);
+    } else {
+      // 기존
+      await _updateDeviceContact(widget.initialContactId ?? '', name, phone);
+      // 로컬 DB에 memo/type 갱신
+      final newItem = PhoneBookModel(
+        contactId: widget.initialContactId ?? '',
+        name: name,
+        phoneNumber: phone,
+        memo: memo.isNotEmpty ? memo : null,
+        type: _type != 0 ? _type : null,
+        updatedAt: DateTime.now().toIso8601String(),
+      );
+      await contactsCtrl.addOrUpdateLocalRecord(newItem);
     }
 
-    // 마지막으로 refreshContactsWithDiff
-    await contactsController.refreshContactsWithDiff();
+    // === 전체 동기화 -> 서버 업서트 ===
+    await contactsCtrl.syncContactsAll();
+
     if (!mounted) return;
     Navigator.pop(context, true);
   }
 
-  /// 신규 연락처 삽입 -> return contact.id
+  /// 새 연락처 insert
   Future<String> _insertDeviceContact(String name, String phone) async {
     try {
-      final newContact =
+      final c =
           Contact()
-            ..name.first = name
+            ..name.last =
+                '' // last 비우고
+            ..name.first =
+                name // first에 전체 이름
             ..phones = [Phone(phone)];
-      // insert() 는 void가 아니라 새로 삽입된 Contact를 반환
-      final inserted = await newContact.insert();
-      return inserted.id; // 여기서 contact.id 얻기
+      final inserted = await c.insert();
+      return inserted.id;
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('디바이스 연락처 추가 오류: $e')));
+      ).showSnackBar(SnackBar(content: Text('새 연락처 추가 오류: $e')));
       return '';
     }
   }
 
-  /// 기존 연락처 수정 -> contactId로 찾고, 없으면 전화번호로 찾는다
+  /// 기존 연락처 수정
   Future<void> _updateDeviceContact(
     String contactId,
     String name,
     String phone,
   ) async {
     try {
-      // 우선 contactId로 가져오기 시도
       Contact? found;
       if (contactId.isNotEmpty) {
         found = await FlutterContacts.getContact(
           contactId,
           withProperties: true,
+          withAccounts: true,
         );
       }
       if (found == null) {
-        // fallback: 전화번호로 찾기
-        final all = await FlutterContacts.getContacts(withProperties: true);
+        // fallback: phone
+        final all = await FlutterContacts.getContacts(
+          withProperties: true,
+          withAccounts: true,
+        );
         for (var c in all) {
-          if (c.phones.any(
-            (p) => normalizePhone(p.number) == normalizePhone(phone),
-          )) {
+          if (normalizePhone(c.phones.first.number) == normalizePhone(phone)) {
             found = c;
             break;
           }
         }
       }
+      // 못 찾으면 새로 insert
       if (found == null) {
-        // 못 찾으면 새로 insert
         await _insertDeviceContact(name, phone);
         return;
       }
 
-      // 찾았으면 name만 업데이트
+      // 기존 last 지우고 first=통합이름
+      found.name.last = '';
       found.name.first = name;
-      // phone 수정 안 함
       await found.update();
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('디바이스 연락처 수정 오류: $e')));
+      ).showSnackBar(SnackBar(content: Text('연락처 수정 오류: $e')));
     }
   }
 
@@ -208,7 +199,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: '전화번호'),
-              enabled: isNew, // 기존 연락처면 수정 불가
+              enabled: isNew, // 기존이면 수정 불가
             ),
             // 메모
             TextField(
@@ -220,7 +211,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
             Row(
               children: [
                 const Text('타입:'),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 DropdownButton<int>(
                   value: _type,
                   items: const [

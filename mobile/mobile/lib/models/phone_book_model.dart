@@ -1,9 +1,15 @@
-/// 로컬 주소록 + 메모/타입/업데이트시각/디바이스 contactId 등을 함께 담는 모델
+// lib/models/phone_book_model.dart
+
+/// 로컬 DB에 저장되는 주소록 모델
+/// - 디바이스 연락처의 contactId (flutter_contacts의 Contact.id)
+/// - 이름, 전화번호
+/// - 메모, 타입 (앱에서만 사용)
+/// - updatedAt (diff 여부 판단)
 class PhoneBookModel {
-  /// flutter_contacts 의 고유 id
+  /// flutter_contacts 의 Contact.id (Android에서 rawId 처리 포함)
   final String contactId;
 
-  /// 표시 이름 (디바이스: displayName)
+  /// 표시 이름
   final String name;
 
   /// 실제 전화번호 (normalize 처리된)
@@ -12,10 +18,10 @@ class PhoneBookModel {
   /// 메모 (앱 전용)
   final String? memo;
 
-  /// 타입 (앱 전용: 0=일반, 99=위험번호 등 임의로 사용)
+  /// 타입 (앱 전용: 0=일반, 99=위험번호 등)
   final int? type;
 
-  /// 최종 업데이트 시각 (ISO 등)
+  /// 최종 업데이트 시각 (ISO 형식 등)
   final String? updatedAt;
 
   PhoneBookModel({
@@ -27,7 +33,6 @@ class PhoneBookModel {
     this.updatedAt,
   });
 
-  /// JSON -> Model
   factory PhoneBookModel.fromJson(Map<String, dynamic> json) {
     return PhoneBookModel(
       contactId: json['contactId'] as String? ?? '',
@@ -39,7 +44,6 @@ class PhoneBookModel {
     );
   }
 
-  /// Model -> JSON
   Map<String, dynamic> toJson() {
     return {
       'contactId': contactId,

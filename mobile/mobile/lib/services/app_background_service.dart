@@ -30,7 +30,7 @@ Future<void> onStart(ServiceInstance service) async {
   Timer.periodic(const Duration(seconds: 10), (timer) async {
     await callLogController.refreshCallLogs();
     await smsController.refreshSms();
-    await contactsController.refreshContactsWithDiff();
+    await contactsController.syncContactsAll();
 
     log('timer called');
   });

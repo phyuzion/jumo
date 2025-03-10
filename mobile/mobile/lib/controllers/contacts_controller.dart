@@ -8,40 +8,40 @@ import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/utils/constants.dart';
 
+/// 디바이스 연락처 + (로컬메모/타입) + 서버 업서트 (sync) 담당
 class ContactsController {
-  final box = GetStorage();
+  final _box = GetStorage();
   static const storageKey = 'phonebook';
 
-  /// 1) 디바이스 주소록과 로컬 phonebook 병합
-  Future<void> refreshContactsWithDiff() async {
-    final oldList = _getLocalPhoneBook();
-    final oldMap = <String, PhoneBookModel>{
-      for (var o in oldList) o.phoneNumber: o,
-    };
-
-    // flutter_contacts 로 주소록 읽기
+  /// 메인: 서버&디바이스&로컬 동기화
+  /// 1) 서버에서 getMyRecords
+  /// 2) 디바이스 주소록 불러오기
+  /// 3) 3자 병합
+  /// 4) diff -> 서버 업서트
+  /// 5) 로컬 DB 저장
+  Future<void> syncContactsAll() async {
+    log('[ContactsController] syncContactsAll start...');
+    // A. 서버 목록
+    final serverList = await PhoneRecordsApi.getMyRecords();
+    // B. 디바이스 목록
     final deviceContacts = await FlutterContacts.getContacts(
       withProperties: true,
       withAccounts: true,
     );
     final deviceList = <PhoneBookModel>[];
-
     for (final c in deviceContacts) {
-      // flutter_contacts 의 Contact.id
-      final contactId = c.id;
-      final rawName = '${c.name.last} ${c.name.first}'.trim();
-      final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
-
       if (c.phones.isEmpty) continue;
       final rawPhone = c.phones.first.number.trim();
       if (rawPhone.isEmpty) continue;
 
       final normPhone = normalizePhone(rawPhone);
+      // 이름: last+first
+      final rawName = '${c.name.last} ${c.name.first}'.trim();
+      final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
 
-      // contactId + name + phoneNumber
       deviceList.add(
         PhoneBookModel(
-          contactId: contactId,
+          contactId: c.id,
           name: finalName,
           phoneNumber: normPhone,
           memo: null,
@@ -51,123 +51,183 @@ class ContactsController {
       );
     }
 
-    final mergedList = <PhoneBookModel>[];
-    final diffList = <PhoneBookModel>[];
+    // C. 기존 로컬
+    final oldList = _loadLocalPhoneBook();
 
-    for (final deviceItem in deviceList) {
-      final phoneKey = deviceItem.phoneNumber;
-      final oldItem = oldMap[phoneKey];
+    // D. 병합
+    final merged = _mergeAll(
+      serverList: serverList,
+      deviceList: deviceList,
+      oldList: oldList,
+    );
 
-      if (oldItem == null) {
-        // 새 연락처
-        final newItem = deviceItem.copyWith(
-          updatedAt: DateTime.now().toIso8601String(),
+    // E. diff => 서버 업서트
+    final diffList = _computeDiffForServer(merged, serverList);
+    if (diffList.isNotEmpty) {
+      log('[ContactsController] found ${diffList.length} diff => upsert');
+      await _uploadDiff(diffList);
+    } else {
+      log('[ContactsController] no diff => skip upsert');
+    }
+
+    // F. 로컬 저장
+    await _saveLocalPhoneBook(merged);
+
+    // G. 이벤트
+    appEventBus.fire(ContactsUpdatedEvent());
+    log('[ContactsController] syncContactsAll done');
+  }
+
+  /// 외부에서 "현재 로컬 저장된 연락처" 조회
+  List<PhoneBookModel> getSavedContacts() {
+    return _loadLocalPhoneBook();
+  }
+
+  /// (새 메모/타입/이름)이 생겼을 때 로컬에 추가 or 갱신
+  /// => 이후 syncContactsAll() 하면 서버도 업서트
+  Future<void> addOrUpdateLocalRecord(PhoneBookModel newItem) async {
+    final list = _loadLocalPhoneBook();
+    final idx = list.indexWhere((e) => e.phoneNumber == newItem.phoneNumber);
+    if (idx >= 0) {
+      list[idx] = newItem;
+    } else {
+      list.add(newItem);
+    }
+    await _saveLocalPhoneBook(list);
+  }
+
+  /// 내부: 병합 (server vs device vs oldLocal)
+  List<PhoneBookModel> _mergeAll({
+    required List<Map<String, dynamic>> serverList,
+    required List<PhoneBookModel> deviceList,
+    required List<PhoneBookModel> oldList,
+  }) {
+    // server map
+    final serverMap = <String, Map<String, dynamic>>{};
+    for (var s in serverList) {
+      final phone = normalizePhone(s['phoneNumber']);
+      serverMap[phone] = s;
+    }
+
+    // old map
+    final oldMap = <String, PhoneBookModel>{
+      for (var o in oldList) o.phoneNumber: o,
+    };
+
+    // device map
+    final deviceMap = <String, PhoneBookModel>{
+      for (var d in deviceList) d.phoneNumber: d,
+    };
+
+    final mergedSet = <PhoneBookModel>{};
+
+    // A. 서버 기준
+    for (var entry in serverMap.entries) {
+      final phone = entry.key;
+      final s = entry.value;
+      final deviceItem = deviceMap[phone];
+      final oldItem = oldMap[phone];
+
+      // 메모/타입 => 서버 or oldItem
+      final sMemo = s['memo'] as String? ?? '';
+      final sType = s['type'] as int? ?? 0;
+
+      final finalMemo = sMemo.isNotEmpty ? sMemo : (oldItem?.memo ?? '');
+      final finalType = sType != 0 ? sType : (oldItem?.type ?? 0);
+
+      // 이름 => 디바이스 우선 → deviceItem?.name ?? s.name
+      final sName = s['name'] as String? ?? '';
+      final finalName =
+          (deviceItem != null && deviceItem.name.isNotEmpty)
+              ? deviceItem.name
+              : sName;
+
+      // contactId => oldItem or deviceItem
+      String finalContactId = '';
+      if (oldItem != null && oldItem.contactId.isNotEmpty) {
+        finalContactId = oldItem.contactId;
+      } else if (deviceItem != null && deviceItem.contactId.isNotEmpty) {
+        finalContactId = deviceItem.contactId;
+      }
+
+      mergedSet.add(
+        PhoneBookModel(
+          contactId: finalContactId,
+          name: finalName,
+          phoneNumber: phone,
+          memo: finalMemo.isNotEmpty ? finalMemo : null,
+          type: finalType != 0 ? finalType : null,
+          updatedAt: oldItem?.updatedAt,
+        ),
+      );
+    }
+
+    // B. 디바이스 중 서버에 없는 번호
+    for (var d in deviceList) {
+      if (!serverMap.containsKey(d.phoneNumber)) {
+        final oldItem = oldMap[d.phoneNumber];
+        final finalMemo = oldItem?.memo ?? '';
+        final finalType = oldItem?.type ?? 0;
+        mergedSet.add(
+          d.copyWith(
+            memo: finalMemo.isNotEmpty ? finalMemo : null,
+            type: finalType != 0 ? finalType : null,
+            updatedAt: oldItem?.updatedAt,
+          ),
         );
-        mergedList.add(newItem);
-        diffList.add(newItem);
-      } else {
-        // 기존 연락처 (memo, type 유지)
-        // 만약 contactId가 빈 문자열이었다면 여기서 갱신
-        final newContactId =
-            oldItem.contactId.isEmpty
-                ? deviceItem.contactId
-                : oldItem.contactId;
+      }
+    }
 
-        final changedName = deviceItem.name != oldItem.name;
-        if (changedName) {
-          final updated = oldItem.copyWith(
-            contactId: newContactId,
-            name: deviceItem.name,
-            updatedAt: DateTime.now().toIso8601String(),
+    // C. oldList 중 server/device 모두 없는 => 삭제 or ignore
+    //   여기서는 ignore
+
+    final mergedList = mergedSet.toList();
+    mergedList.sort((a, b) => a.name.compareTo(b.name));
+    return mergedList;
+  }
+
+  /// 서버와의 diff
+  List<PhoneBookModel> _computeDiffForServer(
+    List<PhoneBookModel> mergedList,
+    List<Map<String, dynamic>> serverList,
+  ) {
+    final serverMap = <String, Map<String, dynamic>>{};
+    for (var s in serverList) {
+      final phone = normalizePhone(s['phoneNumber']);
+      serverMap[phone] = s;
+    }
+
+    final diff = <PhoneBookModel>[];
+    for (var m in mergedList) {
+      final s = serverMap[m.phoneNumber];
+      if (s == null) {
+        // 서버에 없는 => diff
+        diff.add(
+          m.copyWith(
+            updatedAt: m.updatedAt ?? DateTime.now().toIso8601String(),
+          ),
+        );
+      } else {
+        final sName = s['name'] as String? ?? '';
+        final sMemo = s['memo'] as String? ?? '';
+        final sType = s['type'] as int? ?? 0;
+
+        final changedName = m.name != sName;
+        final changedMemo = (m.memo ?? '') != sMemo;
+        final changedType = (m.type ?? 0) != sType;
+
+        if (changedName || changedMemo || changedType) {
+          diff.add(
+            m.copyWith(
+              updatedAt: m.updatedAt ?? DateTime.now().toIso8601String(),
+            ),
           );
-          mergedList.add(updated);
-          diffList.add(updated);
-        } else {
-          // contactId만 업데이트가 필요할 수도 있음
-          final changedId = newContactId != oldItem.contactId;
-          if (changedId) {
-            final updated = oldItem.copyWith(
-              contactId: newContactId,
-              updatedAt: DateTime.now().toIso8601String(),
-            );
-            mergedList.add(updated);
-            diffList.add(updated);
-          } else {
-            mergedList.add(oldItem);
-          }
         }
       }
-      oldMap.remove(phoneKey);
     }
-
-    // 로컬에만 남은 번호 => 삭제
-    // => mergedList에는 추가 X
-
-    mergedList.sort((a, b) => a.name.compareTo(b.name));
-
-    if (diffList.isNotEmpty) {
-      log(
-        '[ContactsController] Found ${diffList.length} changed => uploading...',
-      );
-      await _uploadDiff(diffList);
-    }
-
-    await saveLocalPhoneBook(mergedList);
-    appEventBus.fire(ContactsUpdatedEvent());
+    return diff;
   }
 
-  /// 2) 메모/타입만 업데이트 (전화번호는 변경 불가)
-  Future<void> updateMemoAndType({
-    required String phoneNumber,
-    required String memo,
-    required int type,
-    String? updatedName,
-  }) async {
-    final list = _getLocalPhoneBook();
-    final idx = list.indexWhere((e) => e.phoneNumber == phoneNumber);
-    if (idx < 0) {
-      return;
-    }
-
-    final old = list[idx];
-    final newItem = old.copyWith(
-      memo: memo,
-      type: type,
-      name: updatedName ?? old.name,
-      updatedAt: DateTime.now().toIso8601String(),
-    );
-    list[idx] = newItem;
-
-    await saveLocalPhoneBook(list);
-    // 이후 refreshContactsWithDiff() 호출 시 서버 업로드
-  }
-
-  /// 로컬 목록 읽기
-  List<PhoneBookModel> _getLocalPhoneBook() {
-    final raw = box.read<String>(storageKey);
-    if (raw == null) return [];
-    try {
-      final list = jsonDecode(raw) as List;
-      return list.map((e) => PhoneBookModel.fromJson(e)).toList();
-    } catch (e) {
-      log('[ContactsController] parse error: $e');
-      return [];
-    }
-  }
-
-  /// 로컬 목록 쓰기
-  Future<void> saveLocalPhoneBook(List<PhoneBookModel> list) async {
-    final jsonList = list.map((m) => m.toJson()).toList();
-    final raw = jsonEncode(jsonList);
-    await box.write(storageKey, raw);
-  }
-
-  /// 외부에서 호출: 로컬 저장된 연락처 전체 얻기
-  List<PhoneBookModel> getSavedContacts() {
-    return _getLocalPhoneBook();
-  }
-
-  /// 서버 업로드
   Future<void> _uploadDiff(List<PhoneBookModel> diffList) async {
     final records =
         diffList.map((m) {
@@ -180,11 +240,27 @@ class ContactsController {
           };
         }).toList();
 
+    await PhoneRecordsApi.upsertPhoneRecords(records);
+  }
+
+  // ------ 로컬 DB
+
+  // 내부: 로컬 목록 저장
+  Future<void> _saveLocalPhoneBook(List<PhoneBookModel> list) async {
+    final raw = jsonEncode(list.map((e) => e.toJson()).toList());
+    await _box.write(storageKey, raw);
+  }
+
+  // 내부: 로컬 목록 읽기
+  List<PhoneBookModel> _loadLocalPhoneBook() {
+    final raw = _box.read<String>(storageKey);
+    if (raw == null) return [];
     try {
-      log('[ContactsController] upsertPhoneRecords count=${records.length}');
-      await PhoneRecordsApi.upsertPhoneRecords(records);
+      final decoded = jsonDecode(raw) as List;
+      return decoded.map((e) => PhoneBookModel.fromJson(e)).toList();
     } catch (e) {
-      log('[ContactsController] upsertPhoneRecords error: $e');
+      log('[ContactsController] parse error: $e');
+      return [];
     }
   }
 }

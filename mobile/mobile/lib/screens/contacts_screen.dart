@@ -1,3 +1,5 @@
+// lib/screens/contacts_screen.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -17,13 +19,11 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   List<PhoneBookModel> _contacts = [];
-
   StreamSubscription? _eventSub;
 
   @override
   void initState() {
     super.initState();
-
     _loadContacts();
     _eventSub = appEventBus.on<ContactsUpdatedEvent>().listen((event) {
       _loadContacts();
@@ -37,16 +37,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _loadContacts() async {
-    final ContactsController contactsController =
-        context.read<ContactsController>();
-    final list = contactsController.getSavedContacts();
+    final contactsCtrl = context.read<ContactsController>();
+    final list = contactsCtrl.getSavedContacts();
     setState(() => _contacts = list);
   }
 
   Future<void> _refreshContacts() async {
-    final ContactsController contactsController =
-        context.read<ContactsController>();
-    await contactsController.refreshContactsWithDiff();
+    final contactsCtrl = context.read<ContactsController>();
+    await contactsCtrl.syncContactsAll();
     await _loadContacts();
   }
 
@@ -134,8 +132,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
               initialContactId: model.contactId,
               initialName: model.name,
               initialPhone: model.phoneNumber,
-              initialMemo: model.memo ?? '',
-              initialType: model.type ?? 0,
+              initialMemo: model.memo,
+              initialType: model.type,
             ),
       ),
     );
@@ -147,9 +145,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Future<void> _onTapAddContact() async {
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (_) => const EditContactScreen(), // all null
-      ),
+      MaterialPageRoute(builder: (_) => const EditContactScreen()),
     );
     if (result == true) {
       await _refreshContacts();

@@ -36,7 +36,7 @@ class AppController {
 
     await callLogController.refreshCallLogs();
     await smsController.refreshSms();
-    await contactsController.refreshContactsWithDiff();
+    await contactsController.syncContactsAll();
   }
 
   Future<void> stopApp() async {
