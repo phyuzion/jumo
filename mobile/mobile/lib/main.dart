@@ -20,6 +20,10 @@ import 'package:mobile/screens/call_ended_screen.dart';
 import 'package:mobile/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_quill/flutter_quill.dart'
+    show FlutterQuillLocalizations;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -66,11 +70,23 @@ class MyApp extends StatelessWidget {
       navigatorKey: NavigationController.navKey,
       debugShowCheckedModeBanner: false,
       debugShowMaterialGrid: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+        // 2) Flutter Quill delegate
+        FlutterQuillLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ko', ''),
+        Locale('en', ''),
+        // etc...
+      ],
       // 앱 전체 Theme
       theme: ThemeData(
         colorScheme: const ColorScheme.light(
           primary: Colors.black,
-          onPrimary: Colors.black,
+          onPrimary: Colors.white,
           surface: Colors.white,
           onSurface: Colors.black,
         ),

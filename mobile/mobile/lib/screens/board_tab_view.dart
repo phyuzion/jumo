@@ -1,7 +1,7 @@
 // lib/screens/board_tab_view.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/graphql/contents_api.dart';
-import 'package:mobile/utils/constants.dart';
+import 'package:mobile/utils/constants.dart'; // formatDateString
 
 class BoardTabView extends StatefulWidget {
   final int type;
@@ -24,8 +24,8 @@ class _BoardTabViewState extends State<BoardTabView> {
   Future<void> _fetchList() async {
     setState(() => _loading = true);
     try {
-      final result = await ContentsApi.getContents(widget.type);
-      setState(() => _list = result);
+      final data = await ContentsApi.getContents(widget.type);
+      setState(() => _list = data);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
@@ -38,10 +38,10 @@ class _BoardTabViewState extends State<BoardTabView> {
       context,
       '/contentDetail',
       arguments: row['id'],
-    ).then((res) => _fetchList());
+    ).then((_) => _fetchList());
   }
 
-  void _onDeleteItem(Map<String, dynamic> row) async {
+  Future<void> _onDeleteItem(Map<String, dynamic> row) async {
     final yes = await showDialog<bool>(
       context: context,
       builder:
@@ -79,7 +79,7 @@ class _BoardTabViewState extends State<BoardTabView> {
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_list.isEmpty) {
-      return Center(child: Text('게시글 없음 (type=${widget.type})'));
+      return Center(child: Text('게시글이 없습니다. (type=${widget.type})'));
     }
     return RefreshIndicator(
       onRefresh: _fetchList,
@@ -88,14 +88,12 @@ class _BoardTabViewState extends State<BoardTabView> {
         itemBuilder: (ctx, i) {
           final row = _list[i];
           final title = row['title'] ?? '';
-          final id = row['id'] ?? '';
           final userId = row['userId'] ?? '';
-          final createdAt = row['createdAt'] ?? '';
+          final createdAt = formatDateString(row['createdAt'] ?? '');
           return ListTile(
-            title: Text('$title'),
-            subtitle: Text(
-              'ID: $id / user: $userId\n${formatDateString(createdAt)}',
-            ),
+            title: Text(title),
+            subtitle: Text('User: $userId\nCreated: $createdAt'),
+            isThreeLine: true,
             onTap: () => _onTapItem(row),
             trailing: IconButton(
               icon: const Icon(Icons.delete, color: Colors.red),

@@ -24,9 +24,11 @@ class _BoardScreenState extends State<BoardScreen>
     _tabController = TabController(length: _tabs.length, vsync: this);
   }
 
+  // 글쓰기 FAB 클릭 => 현재 탭 index를 함께 넘김
   void _onTapCreate() {
-    Navigator.pushNamed(context, '/contentCreate').then((res) {
-      // 새로고침 필요 시 각 탭의 state를 refresh
+    final type = _tabController.index;
+    Navigator.pushNamed(context, '/contentCreate', arguments: type).then((res) {
+      // 새로고침 or setState
       setState(() {});
     });
   }

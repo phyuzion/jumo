@@ -23,6 +23,8 @@ Future<void> onStart(ServiceInstance service) async {
   final displayedStrList = box.read<List<dynamic>>('displayedNotiIds') ?? [];
   final displayedNotiIds = displayedStrList.map((e) => e.toString()).toSet();
 
+  int lastNotificationId = 0;
+
   final smsController = SmsController();
 
   // 1분마다
@@ -51,7 +53,7 @@ Future<void> onStart(ServiceInstance service) async {
 
       // flutter_local_notifications
       // id: int가 필요하니 sid를 int 변환 or random
-      final idInt = int.tryParse(sid) ?? DateTime.now().millisecondsSinceEpoch;
+      int idInt = lastNotificationId++;
       await LocalNotificationService.showNotification(
         id: idInt,
         title: title,
