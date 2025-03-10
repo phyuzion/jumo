@@ -23,17 +23,23 @@ void main() async {
   await NavigationController.init(); // 네이티브 이벤트 -> navigation 연동
   await GetStorage.init();
 
-  // 1) phoneStateController
-  final phoneStateController = PhoneStateController(
-    NavigationController.navKey,
-  );
-
   final contactsController = ContactsController();
   final callLogContoller = CallLogController();
   final smsController = SmsController();
 
+  // 1) phoneStateController
+  final phoneStateController = PhoneStateController(
+    NavigationController.navKey,
+    callLogContoller,
+  );
+
   // 2) appController (의존성으로 phoneStateController 주입)
-  final appController = AppController(phoneStateController);
+  final appController = AppController(
+    phoneStateController,
+    contactsController,
+    callLogContoller,
+    smsController,
+  );
 
   runApp(
     MultiProvider(

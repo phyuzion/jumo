@@ -10,25 +10,29 @@ import 'package:mobile/services/app_background_service.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
+  final ContactsController contactsController;
+  final CallLogController callLogController;
+  final SmsController smsController;
 
-  AppController(this.phoneStateController);
+  AppController(
+    this.phoneStateController,
+    this.contactsController,
+    this.callLogController,
+    this.smsController,
+  );
 
   Future<bool> checkEssentialPermissions() async {
     return await PermissionController.requestAllEssentialPermissions();
   }
 
   Future<void> initializeApp() async {
-    phoneStateController.startListening();
-
     await initializeData();
+
+    phoneStateController.startListening();
   }
 
   Future<void> initializeData() async {
     // 컨트롤러들(실제 diff 로직)
-
-    final callLogController = CallLogController();
-    final smsController = SmsController();
-    final contactsController = ContactsController();
 
     await callLogController.refreshCallLogs();
     await smsController.refreshSms();

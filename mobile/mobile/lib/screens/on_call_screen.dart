@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/native_methods.dart';
 import '../controllers/contacts_controller.dart';
 
@@ -33,7 +34,7 @@ class _OnCallScreenState extends State<OnCallScreen> {
   }
 
   Future<void> _loadContactName(String number) async {
-    final contactsController = ContactsController();
+    final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
     for (final c in contacts) {
       final ph = c.phoneNumber as String? ?? '';

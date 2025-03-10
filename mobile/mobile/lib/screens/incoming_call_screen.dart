@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../services/native_methods.dart';
 import '../controllers/contacts_controller.dart';
 
@@ -24,7 +25,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
   Future<void> _loadContactName() async {
-    final contactsController = ContactsController();
+    final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
     // e.g. each: {'name':'홍길동','phones':'010-1234-5678,...'}
 

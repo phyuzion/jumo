@@ -1,9 +1,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/models/phone_book_model.dart';
+import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
-import '../controllers/call_log_controller.dart';
+import 'package:mobile/utils/constants.dart';
+import 'package:provider/provider.dart';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -14,8 +19,8 @@ class RecentCallsScreen extends StatefulWidget {
 
 class _RecentCallsScreenState extends State<RecentCallsScreen> {
   final _callLogController = CallLogController();
-  List<Map<String, dynamic>> _callLogs = [];
 
+  List<Map<String, dynamic>> _callLogs = [];
   StreamSubscription? _eventSub;
 
   @override
@@ -59,7 +64,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
 
             // 날짜 & 시간
             final date = DateTime.fromMillisecondsSinceEpoch(ts);
-            final dateStr = '${date.month}월 ${date.day}일 '; // 예: 5/12
+            final dateStr = '${date.month}월 ${date.day}일 ';
             final timeStr =
                 '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
@@ -110,8 +115,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 ],
               ),
               child: ListTile(
-                minTileHeight: 60,
-
+                minVerticalPadding: 8,
                 leading: Icon(iconData, color: iconColor, size: 28),
                 title:
                     name.isNotEmpty
@@ -127,7 +131,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                           ),
                         )
                         : null,
-                // 날짜/시간 2줄
                 trailing: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -158,7 +161,51 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     Navigator.pushNamed(context, '/search', arguments: number);
   }
 
-  void _onTapEdit(String number) {
-    debugPrint('Tap Edit => $number');
+  /// 편집 아이콘 탭:
+  /// - phoneBook 에 있는지 먼저 검사
+  /// - 있으면 기존 contactId/name/memo/type 로 EditContactScreen
+  /// - 없으면 신규 모드
+  Future<void> _onTapEdit(String number) async {
+    final norm = normalizePhone(number);
+
+    final contactsController = context.read<ContactsController>();
+    final localList = contactsController.getSavedContacts();
+    final existing = localList.firstWhere(
+      (c) => c.phoneNumber == norm,
+      orElse:
+          () => PhoneBookModel(
+            contactId: '',
+            name: '',
+            phoneNumber: norm,
+            memo: null,
+            type: null,
+            updatedAt: null,
+          ),
+    );
+
+    final isNew = (existing.updatedAt == null);
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => EditContactScreen(
+              initialContactId:
+                  existing.contactId.isNotEmpty ? existing.contactId : null,
+              initialName: existing.name.isNotEmpty ? existing.name : '',
+              initialPhone:
+                  isNew ? null : existing.phoneNumber, // 새면 phone null
+              initialMemo: existing.memo ?? '',
+              initialType: existing.type ?? 0,
+            ),
+      ),
+    );
+
+    if (result == true) {
+      // callLogs UI에는 큰 차이 없지만, 혹시 이름이 바뀌었으면 갱신 가능
+      await contactsController.refreshContactsWithDiff();
+      // _callLogController.refreshCallLogs(); (원하면 통화내역에 표시된 name도 갱신)
+      // await _loadCalls();
+    }
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:provider/provider.dart';
 
 class CallEndedScreen extends StatefulWidget {
   final String callEndedNumber;
@@ -23,7 +24,7 @@ class _CallEndedScreen extends State<CallEndedScreen> {
 
   /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
   Future<void> _loadContactName() async {
-    final contactsController = ContactsController();
+    final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
     // e.g. each: {'name':'홍길동','phones':'010-1234-5678,...'}
 

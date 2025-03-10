@@ -7,10 +7,10 @@ import 'package:mobile/services/native_default_dialer_methods.dart';
 
 class PhoneStateController {
   final GlobalKey<NavigatorState> navKey;
-  PhoneStateController(this.navKey);
+  final CallLogController callLogController;
+  PhoneStateController(this.navKey, this.callLogController);
 
   StreamSubscription<PhoneState>? _subscription;
-  final callLogController = CallLogController();
 
   bool outgoingCallFromApp = false; // 앱 발신여부
   bool _isOnCallScreen = false;
