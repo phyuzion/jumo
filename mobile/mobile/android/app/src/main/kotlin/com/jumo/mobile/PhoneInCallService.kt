@@ -1,46 +1,48 @@
 package com.jumo.mobile
 
+import android.content.Context
+import android.content.Intent
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.os.Build
 import android.telecom.Call
+import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
 import android.util.Log
-import android.content.Intent
-import android.media.AudioManager
-import android.media.AudioDeviceInfo
-
-import android.content.Context
 
 class PhoneInCallService : InCallService() {
+
     companion object {
         private var instance: PhoneInCallService? = null
         private val activeCalls = mutableListOf<Call>()
 
+        // 외부에서 불릴 공개 메서드
         fun acceptCall() { instance?.acceptTopCall() }
         fun rejectCall() { instance?.rejectTopCall() }
         fun hangUpCall() { instance?.hangUpTopCall() }
-        fun toggleMute(mute: Boolean) { instance?.setMuted(mute) }
+        fun toggleMute(mute: Boolean) { instance?.toggleMuteCall(mute) }
         fun toggleHold(hold: Boolean) { instance?.toggleHoldTopCall(hold) }
-        fun toggleSpeaker(speaker: Boolean) { instance?.toggleSpeaker(speaker) }
+        fun toggleSpeaker(speaker: Boolean) { instance?.toggleSpeakerCall(speaker) }
     }
 
     override fun onCreate() {
         super.onCreate()
         instance = this
-        Log.d("PhoneInCallService", "InCallService created")
+        Log.d("PhoneInCallService", "[onCreate] InCallService created.")
     }
 
     override fun onDestroy() {
         super.onDestroy()
         instance = null
         activeCalls.clear()
-        Log.d("PhoneInCallService", "InCallService destroyed")
+        Log.d("PhoneInCallService", "[onDestroy] InCallService destroyed.")
     }
 
     override fun onCallAdded(call: Call) {
         super.onCallAdded(call)
         activeCalls.add(call)
-        Log.d("PhoneInCallService", "onCallAdded: $call")
+        Log.d("PhoneInCallService", "[onCallAdded] $call")
 
         call.registerCallback(object : Call.Callback() {
             override fun onStateChanged(call: Call, newState: Int) {
@@ -57,14 +59,14 @@ class PhoneInCallService : InCallService() {
     }
 
     private fun handleCallState(call: Call, newState: Int) {
-        Log.d("PhoneInCallService", "handleCallState: $newState")
+        Log.d("PhoneInCallService", "[handleCallState] newState=$newState")
 
         when (newState) {
             Call.STATE_RINGING -> {
+                // 수신
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     if (call.details.callDirection == Call.Details.DIRECTION_INCOMING) {
                         val number = call.details.handle?.schemeSpecificPart ?: ""
-                        Log.d("PhoneInCallService", "Incoming call => $number")
                         showIncomingCall(number)
                     }
                 } else {
@@ -73,83 +75,125 @@ class PhoneInCallService : InCallService() {
                 }
             }
             Call.STATE_DIALING -> {
-                Log.d("PhoneInCallService", "Outgoing Dialing...")
+                // 발신
+                Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing...")
             }
             Call.STATE_ACTIVE -> {
-                Log.d("PhoneInCallService", "Call ACTIVE (connected)")
-                // TODO: if you want to show OnCall screen here, do it
+                // 통화 연결됨
+                Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE")
             }
             Call.STATE_DISCONNECTED -> {
-                Log.d("PhoneInCallService", "Call DISCONNECTED => show ended")
+                // 통화 종료
                 val number = call.details.handle?.schemeSpecificPart ?: ""
+                Log.d("PhoneInCallService", "[handleCallState] DISCONNECTED => $number")
                 showCallEnded(number)
             }
         }
     }
 
+    /** 수신 */
     private fun acceptTopCall() {
         activeCalls.lastOrNull()?.answer(VideoProfile.STATE_AUDIO_ONLY)
     }
 
+    /** 거절 */
     private fun rejectTopCall() {
         activeCalls.lastOrNull()?.reject(Call.REJECT_REASON_DECLINED)
     }
 
+    /** 종료 */
     private fun hangUpTopCall() {
         activeCalls.lastOrNull()?.disconnect()
     }
 
+    /** 홀드 on/off */
     private fun toggleHoldTopCall(hold: Boolean) {
         val c = activeCalls.lastOrNull() ?: return
         if (hold) c.hold() else c.unhold()
     }
 
-        // PhoneInCallService.kt (예시)
-    private fun toggleSpeaker(enable: Boolean) {
-        val audioManager = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+    /** ===========================
+     *  (1) 스피커 On/Off
+     * ========================== */
+    private fun toggleSpeakerCall(enable: Boolean) {
+        val call = activeCalls.lastOrNull() ?: return
 
-        val manager = getSystemService(AudioManager::class.java)
-        manager.mode = AudioManager.MODE_IN_CALL
-
-        if (enable) {
-            val devices = manager.availableCommunicationDevices
-            val speaker = devices.firstOrNull {
-                it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        when {
+            // A) Android 13 (API 33 이상)
+            
+            // B) Android 12 (API 31~32)
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                // setAudioRoute(CallAudioState.ROUTE_SPEAKER or ...)
+                setAudioRoute(
+                    if (enable) CallAudioState.ROUTE_SPEAKER
+                    else CallAudioState.ROUTE_EARPIECE
+                )
             }
-            if (speaker != null) {
-                manager.setCommunicationDevice(speaker)
+            // C) 하위 버전
+            else -> {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                audioManager.mode = AudioManager.MODE_IN_CALL
+                audioManager.isSpeakerphoneOn = enable
             }
-        } else {
-            manager.clearCommunicationDevice()
-        }
-
-        if(enable){
-            Log.d("PhoneInCallService", "Call Speaker")
-        }else{
-            Log.d("PhoneInCallService", "Call Speaker off")
         }
     }
 
+    /** ===========================
+     *  (2) 뮤트 On/Off
+     * ========================== */
+    private fun toggleMuteCall(muteOn: Boolean) {
+        
+
+        /*
+        val call = activeCalls.lastOrNull() ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val current = callAudioState
+            if (current != null) {
+                // 기존 route, supportedRouteMask 유지
+                val newState = CallAudioState(
+                    muteOn,
+                    current.route,
+                    current.supportedRouteMask
+                )
+                updateCallAudioState(newState)
+            } else {
+                Log.w("PhoneInCallService", "toggleMuteCall() => callAudioState is null")
+            }
+        } else {
+            // 하위 버전 => AudioManager
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.isMicrophoneMute = muteOn
+        }
+            */
+    }
+
+    /** ===========================
+     *  showIncomingCall & showCallEnded
+     * ========================== */
     private fun showIncomingCall(number: String) {
         val context = JumoApp.context
         val intent = Intent(context, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            )
             putExtra("incoming_call", true)
             putExtra("incoming_number", number)
         }
         context.startActivity(intent)
     }
 
-    fun showCallEnded(number: String) {
+    private fun showCallEnded(number: String) {
         val context = JumoApp.context
         val intent = Intent(context, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
-                     Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                     Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            )
             putExtra("call_ended", true)
-            putExtra("call_ended_number", number) // 넘겨줌
+            putExtra("call_ended_number", number)
         }
         context.startActivity(intent)
     }
