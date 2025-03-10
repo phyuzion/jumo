@@ -32,6 +32,7 @@ module.exports = gql`
   extend type Query {
     getPhoneNumber(phoneNumber: String!): PhoneNumber
     getPhoneNumbersByType(type: Int!): [PhoneNumber!]!
+    getMyRecords: [UserPhoneRecord!]! 
   }
 
   extend type Mutation {

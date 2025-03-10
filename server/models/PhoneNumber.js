@@ -23,4 +23,7 @@ const phoneNumberSchema = new mongoose.Schema({
   records: [recordSchema],
 });
 
+// **스키마 레벨에서 index 선언**
+phoneNumberSchema.index({ 'records.userId': 1 });
+
 module.exports = mongoose.model('PhoneNumber', phoneNumberSchema);

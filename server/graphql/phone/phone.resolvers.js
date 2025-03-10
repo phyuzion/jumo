@@ -193,5 +193,38 @@ module.exports = {
       if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
       return PhoneNumber.find({ type });
     },
+
+    getMyRecords: async (_, __, { tokenData }) => {
+      const { isAdmin, user } = await checkUserOrAdmin(tokenData);
+      if (!user) {
+        throw new AuthenticationError('로그인이 필요합니다.');
+      }
+    
+      // 1) phoneNumber docs 중 records.userId = user._id 인 것 찾기
+      const phoneDocs = await PhoneNumber.find({
+        'records.userId': user._id
+      });
+    
+      // 2) 해당 docs.records[]에서 userId = user._id 인 레코드만 뽑아,
+      //    phoneNumber, name, memo, type, createdAt 등 리턴
+      let result = [];
+      for (const doc of phoneDocs) {
+        const matched = doc.records.filter(r => r.userId?.toString() === user._id.toString());
+        // matched => [{ userId, userName, name, memo, type, createdAt, ...}]
+        // => 원하는 형태로 변환
+        for (const r of matched) {
+          result.push({
+            phoneNumber: doc.phoneNumber,
+            name: r.name,
+            memo: r.memo,
+            type: r.type,
+            createdAt: r.createdAt,
+          });
+        }
+      }
+    
+      return result;
+    },
+    
   },
 };
