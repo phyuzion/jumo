@@ -34,6 +34,7 @@ const rootTypeDefs = `
   type AuthPayload {
     accessToken: String!
     refreshToken: String!
+    user: User!
   }
 `;
 

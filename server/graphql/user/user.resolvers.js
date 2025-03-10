@@ -230,7 +230,7 @@ module.exports = {
       user.refreshToken = refreshToken;
       await user.save();
 
-      return { accessToken, refreshToken };
+      return { accessToken, refreshToken, user };
     },
 
     // 유저 비번 변경
