@@ -78,12 +78,13 @@ module.exports = {
       } else {
         const user = await checkUserValid(tokenData);
         userIdStr = user._id.toString();
-        userNameStr = user.name.toString();
+        const userDetail = await User.findById(user._id);
+        userNameStr = userDetail.name.toString();
       }
 
       const newDoc = new Content({
         userId: userIdStr,
-        userName: userName.toString,
+        userName: userNameStr,
         type: type || 0,
         title: title || '',
         content: content, // 그대로 JSON 객체
@@ -133,7 +134,12 @@ module.exports = {
       } else {
         const user = await checkUserValid(tokenData);
         userIdStr = user._id.toString();
-        userNameStr = user.name.toString();
+
+        const userDetail = await User.findById(tokenData.userId);
+        
+        console.log('user ID : ', userIdStr);
+        console.log('token ID : ', tokenData.userId);
+        userNameStr = userDetail.name.toString();
       }
 
       const found = await Content.findById(contentId);
