@@ -47,7 +47,7 @@ module.exports = {
         .sort({ createdAt: -1 });
 
       // 🟢 **userId -> userName 변환**
-      const userIds = [...new Set(docs.map(doc => doc.userId))]; // 유니크한 userId 추출
+      const userIds = [...new Set(docs.map(doc => doc.userId).filter(id => mongoose.Types.ObjectId.isValid(id)))];
       const users = await User.find({ _id: { $in: userIds } }).select('name');
       const userMap = Object.fromEntries(users.map(u => [u.id.toString(), u.name || 'Unknown']));
 
