@@ -97,7 +97,7 @@ export const GET_CONTENTS = gql`
   query getContents($type: Int) {
     getContents(type: $type) {
       id
-      userId
+      userName
       type
       title
       createdAt
@@ -109,14 +109,14 @@ export const GET_SINGLE_CONTENT = gql`
   query getSingleContent($contentId: ID!) {
     getSingleContent(contentId: $contentId) {
       id
-      userId
+      userName
       type
       title
       createdAt
       # content: Delta(JSON) -> we'll get it as an object string?
       content
       comments {
-        userId
+        userName
         comment
         createdAt
       }
