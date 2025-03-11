@@ -20,9 +20,6 @@ Future<void> onStart(ServiceInstance service) async {
 
   final box = GetStorage();
 
-  final displayedStrList = box.read<List<dynamic>>('displayedNotiIds') ?? [];
-  final displayedNotiIds = displayedStrList.map((e) => e.toString()).toSet();
-
   int lastNotificationId = 0;
 
   final smsController = SmsController();
@@ -31,6 +28,9 @@ Future<void> onStart(ServiceInstance service) async {
   Timer.periodic(const Duration(minutes: 1), (timer) async {
     // SMS
     await smsController.refreshSms();
+
+    final displayedStrList = box.read<List<dynamic>>('displayedNotiIds') ?? [];
+    final displayedNotiIds = displayedStrList.map((e) => e.toString()).toSet();
 
     // 서버 알림
     final notiList = await NotificationApi.getNotifications();

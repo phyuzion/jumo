@@ -137,35 +137,26 @@ class PhoneInCallService : InCallService() {
             }
         }
     }
-
-    /** ===========================
+        /** ===========================
      *  (2) 뮤트 On/Off
      * ========================== */
     private fun toggleMuteCall(muteOn: Boolean) {
-        
-
-        /*
         val call = activeCalls.lastOrNull() ?: return
+
+        // Android 12 (API 31) 이상
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val current = callAudioState
-            if (current != null) {
-                // 기존 route, supportedRouteMask 유지
-                val newState = CallAudioState(
-                    muteOn,
-                    current.route,
-                    current.supportedRouteMask
-                )
-                updateCallAudioState(newState)
-            } else {
-                Log.w("PhoneInCallService", "toggleMuteCall() => callAudioState is null")
-            }
-        } else {
-            // 하위 버전 => AudioManager
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioManager.isMicrophoneMute = muteOn  // 마이크 뮤트 설정
+            Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn (API >= 31)")
+        } 
+        // Android 11 이하 (API 30 이하)
+        else {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioManager.isMicrophoneMute = muteOn
+            Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn (API < 31)")
         }
-            */
     }
+
 
     /** ===========================
      *  showIncomingCall & showCallEnded
