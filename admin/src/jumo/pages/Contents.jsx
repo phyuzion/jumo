@@ -299,7 +299,7 @@ function Contents() {
       >
         <ColumnsDirective>
           <ColumnDirective field="id" headerText="ID" width="80" />
-          <ColumnDirective field="name" headerText="User" width="100" />
+          <ColumnDirective field="userId" headerText="User" width="100" />
           <ColumnDirective field="title" headerText="Title" width="150" />
           <ColumnDirective field="type" headerText="Type" width="60" textAlign="Center" />
           <ColumnDirective
@@ -410,7 +410,7 @@ function Contents() {
                 <h2 className="text-xl font-bold mb-2">상세 보기</h2>
                 <div className="flex-none mb-2">
                   <p>ID: {detailItem.id}</p>
-                  <p>User: {detailItem.name}</p>
+                  <p>User: {detailItem.userId}</p>
                   <p>Type: {detailItem.type}</p>
                   <p>Title: {detailItem.title}</p>
                   <p>CreatedAt: {formatDate(detailItem.createdAt)}</p>
@@ -425,7 +425,7 @@ function Contents() {
                   <h3>댓글 ({detailItem.comments.length})</h3>
                   {detailItem.comments.map((c, idx) => (
                     <div key={idx} className="border p-1 my-1">
-                      <p>작성자: {c.name}</p>
+                      <p>작성자: {c.userId}</p>
                       <p>{c.comment}</p>
                       <p>{formatDate(c.createdAt)}</p>
                       <button

@@ -37,56 +37,33 @@ async function checkAuthorOrAdmin(tokenData, content) {
 
 module.exports = {
   JSON: GraphQLJSON,
+
   Query: {
     getContents: async (_, { type }) => {
+      // 부분 필드만 가져오기
       const filter = {};
       if (type !== undefined) filter.type = type;
-
       const docs = await Content.find(filter)
         .select('_id userId type title createdAt')
         .sort({ createdAt: -1 });
 
-      // 🟢 **userId -> userName 변환**
-      const userIds = [...new Set(docs.map(doc => doc.userId))]; // 유니크한 userId 추출
-      const users = await User.find({ _id: { $in: userIds } }).select('name');
-      const userMap = Object.fromEntries(users.map(u => [u.id.toString(), u.name || 'Unknown']));
-
+      // content, comments 생략 => 빈 값
       return docs.map(doc => ({
         id: doc._id,
-        userId: doc.userId,
-        userName: userMap[doc.userId] || 'Unknown', // 🟢 userName 추가
+        userId: doc.userId, // string
         type: doc.type,
         title: doc.title,
         createdAt: doc.createdAt,
+        content: {}, // empty object
+        comments: [],
       }));
     },
-
     getSingleContent: async (_, { contentId }) => {
       const doc = await Content.findById(contentId);
       if (!doc) throw new UserInputError('해당 글 없음');
-
-      // 🟢 userId -> userName 변환
-      const user = await User.findById(doc.userId).select('name');
-      const userName = user ? user.name : 'Unknown';
-
-      return {
-        id: doc._id,
-        userId: doc.userId,
-        userName, // 🟢 userName 추가
-        type: doc.type,
-        title: doc.title,
-        createdAt: doc.createdAt,
-        content: doc.content,
-        comments: doc.comments.map(c => ({
-          userId: c.userId,
-          userName: userMap[c.userId] || 'Unknown', // 🟢 댓글 작성자도 userName 포함
-          comment: c.comment,
-          createdAt: c.createdAt,
-        })),
-      };
+      return doc; // doc.content는 Mixed(JSON)
     },
   },
-
 
   Mutation: {
     createContent: async (_, { type, title, content }, { tokenData }) => {
