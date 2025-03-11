@@ -76,12 +76,14 @@ export const CREATE_CONTENT = gql`
     createContent(type: $type, title: $title, content: $content) {
       id
       userId
+      userName
       type
       title
       createdAt
       content
       comments {
         userId
+        userName
         comment
         createdAt
       }
@@ -94,12 +96,14 @@ export const UPDATE_CONTENT = gql`
     updateContent(contentId: $contentId, title: $title, content: $content, type: $type) {
       id
       userId
+      userName
       type
       title
       createdAt
       content
       comments {
         userId
+        userName
         comment
         createdAt
       }
@@ -119,6 +123,7 @@ export const CREATE_REPLY = gql`
       id
       comments {
         userId
+        userName
         comment
         createdAt
       }
