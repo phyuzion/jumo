@@ -78,8 +78,7 @@ module.exports = {
       } else {
         const user = await checkUserValid(tokenData);
         userIdStr = user._id.toString();
-        
-        const userDetail = await User.findById(tokenData.userId);
+        const userDetail = await User.findById(user._id);
         userNameStr = userDetail.name.toString();
       }
 
