@@ -98,7 +98,6 @@ export const GET_CONTENTS = gql`
     getContents(type: $type) {
       id
       userId
-      userName
       type
       title
       createdAt
@@ -111,7 +110,6 @@ export const GET_SINGLE_CONTENT = gql`
     getSingleContent(contentId: $contentId) {
       id
       userId
-      userName
       type
       title
       createdAt
@@ -119,7 +117,6 @@ export const GET_SINGLE_CONTENT = gql`
       content
       comments {
         userId
-        userName
         comment
         createdAt
       }

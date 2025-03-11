@@ -6,7 +6,6 @@ module.exports = gql`
 
   type Comment {
     userId: String!
-    userName: String
     comment: String
     createdAt: String
   }
@@ -14,7 +13,6 @@ module.exports = gql`
   type Content {
     id: ID!
     userId: String
-    userName: String
     type: Int
     title: String
     createdAt: String

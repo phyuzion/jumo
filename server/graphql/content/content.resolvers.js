@@ -51,7 +51,6 @@ module.exports = {
       return docs.map(doc => ({
         id: doc._id,
         userId: doc.userId, // string
-        userName: doc.userName,
         type: doc.type,
         title: doc.title,
         createdAt: doc.createdAt,
@@ -71,19 +70,15 @@ module.exports = {
       // content는 이미 JSON 형태로 GraphQL이 파싱해 줌!
       // 관리자 or 유저
       let userIdStr = '';
-      let userNameStr = '';
       if (tokenData?.adminId) {
         userIdStr = 'admin';
-        userNameStr = 'admin';
       } else {
         const user = await checkUserValid(tokenData);
         userIdStr = user._id.toString();
-        userNameStr = user.name.toString();
       }
 
       const newDoc = new Content({
         userId: userIdStr,
-        userName: userName.toString,
         type: type || 0,
         title: title || '',
         content: content, // 그대로 JSON 객체
@@ -126,14 +121,11 @@ module.exports = {
 
       // 관리자 or 유저
       let userIdStr = '';
-      let userNameStr = '';
       if (tokenData?.adminId) {
         userIdStr = 'admin';
-        userNameStr = 'admin';
       } else {
         const user = await checkUserValid(tokenData);
         userIdStr = user._id.toString();
-        userNameStr = user.name.toString();
       }
 
       const found = await Content.findById(contentId);
@@ -143,8 +135,7 @@ module.exports = {
 
       // 댓글 작성
       found.comments.push({
-        userId: userIdStr,
-        usetName: userNameStr,
+        userId: userIdStr, 
         comment,
         createdAt: new Date(),
       });
