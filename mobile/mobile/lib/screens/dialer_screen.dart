@@ -19,27 +19,6 @@ class _DialerScreenState extends State<DialerScreen> {
 
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
-      // 앱 발신임을 표시
-      /*
-      // 2) number 저장
-      final box = GetStorage();
-      await box.write('search_number', '01089236835');
-
-      // 3) 오버레이 실행
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true,
-        alignment: OverlayAlignment.center,
-        height: WindowSize.matchParent,
-        width: WindowSize.matchParent,
-        overlayTitle: "CallResultOverlay",
-        overlayContent: "수신전화감지", // 알림 표기용
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
-      );
-*/
-      final phoneState = context.read<PhoneStateController>();
-      phoneState.outgoingCallFromApp = true;
       await NativeMethods.makeCall(_number);
     }
   }

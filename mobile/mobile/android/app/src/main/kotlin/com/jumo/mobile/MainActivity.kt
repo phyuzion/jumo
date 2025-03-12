@@ -74,7 +74,8 @@ class MainActivity : FlutterFragmentActivity() {
             // 통화 종료
             Log.d(TAG, "Call ended intent received")
             val endedNumber = intent.getStringExtra("call_ended_number") ?: ""
-            NativeBridge.notifyCallEnded(endedNumber) 
+            val reason = intent.getStringExtra("call_ended_reason") ?: ""
+            NativeBridge.notifyCallEnded(endedNumber, reason) 
             // 통화 종료 + 번호
         }
 

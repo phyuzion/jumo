@@ -1,6 +1,10 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/user_api.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/utils/constants.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,13 +23,16 @@ class _LoginScreenState extends State<LoginScreen> {
   // "아이디/비번 기억하기" 체크 여부
   bool _rememberMe = true;
 
-  @override
-  void initState() {
-    super.initState();
-    final box = GetStorage();
+  final box = GetStorage();
 
-    // 1) 내 휴대폰번호 가져오기
-    _myNumber = box.read<String>('myNumber') ?? '';
+  @override
+  Future<void> initState() async {
+    super.initState();
+
+    _myNumber = await NativeMethods.getMyPhoneNumber();
+    log('myNumber=$_myNumber');
+    final myRealnumber = normalizePhone(_myNumber);
+    box.write('myNumber', myRealnumber);
 
     // 2) 저장된 아이디/비번이 있는지 확인
     final savedId = box.read<String>('savedLoginId');
@@ -51,10 +58,13 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       // 성공 -> 홈으로
       if (!mounted) return;
+      box.write('loginStatus', true);
+
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       debugPrint('자동 로그인 실패: $e');
       // 실패 시 그냥 로그인 화면 보여줌
+      box.write('loginStatus', false);
     } finally {
       setState(() => _loading = false);
     }

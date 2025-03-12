@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
@@ -74,6 +75,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
     }
 
     final contactsCtrl = context.read<ContactsController>();
+    final callLogCtrl = context.read<CallLogController>();
 
     // === 디바이스 연락처 수정/추가 ===
     if (isNew) {
@@ -106,6 +108,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     // === 전체 동기화 -> 서버 업서트 ===
     await contactsCtrl.syncContactsAll();
+    await callLogCtrl.refreshCallLogs();
 
     if (!mounted) return;
     Navigator.pop(context, true);

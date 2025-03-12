@@ -149,9 +149,17 @@ class MyApp extends StatelessWidget {
         },
         '/onCall': (_) => const OnCallScreen(),
         '/callEnded': (ctx) {
-          final number =
-              ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
-          return CallEndedScreen(callEndedNumber: number);
+          final args = ModalRoute.of(ctx)?.settings.arguments;
+          String number = '';
+          String reason = '';
+          if (args is Map<String, dynamic>) {
+            number = args['number'] as String? ?? '';
+            reason = args['reason'] as String? ?? '';
+          }
+          return CallEndedScreen(
+            callEndedNumber: number,
+            callEndedReason: reason,
+          );
         },
         '/board': (_) => const BoardScreen(),
         '/contentDetail': (ctx) {

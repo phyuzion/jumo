@@ -15,7 +15,13 @@ class NavigationController {
           _goToOnCall(call.arguments as String);
           break;
         case 'onCallEnded':
-          _goToCallEnded(call.arguments as String? ?? '');
+          final map = call.arguments as Map?; // or Map<String,dynamic>
+          if (map != null) {
+            final endedNumber = map['number'] as String? ?? '';
+            final reason = map['reason'] as String? ?? '';
+            // 사용 로직
+            _goToCallEnded(endedNumber, reason);
+          }
           break;
       }
     });
@@ -37,13 +43,15 @@ class NavigationController {
     Navigator.of(ctx).pushReplacementNamed('/onCall', arguments: number);
   }
 
-  static void _goToCallEnded(String endedNumber) {
+  static void _goToCallEnded(String endedNumber, String reason) {
     // 기본 전화앱 시나리오에서 종료
     final ctx = navKey.currentContext;
     if (ctx == null) return;
     // 종료화면은 OnCall→CallEnded 치환이 일반적 → pushReplacementNamed
-    Navigator.of(
-      ctx,
-    ).pushReplacementNamed('/callEnded', arguments: endedNumber);
+
+    Navigator.of(ctx).pushReplacementNamed(
+      '/callEnded',
+      arguments: {'number': endedNumber, 'reason': reason},
+    );
   }
 }

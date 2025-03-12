@@ -14,8 +14,6 @@ class PhoneStateController {
 
   StreamSubscription<PhoneState>? _subscription;
 
-  bool outgoingCallFromApp = false; // 앱 발신여부
-
   void startListening() {
     _subscription = PhoneState.stream.listen((event) async {
       switch (event.status) {
@@ -73,16 +71,9 @@ class PhoneStateController {
   Future<void> _onCallEnded(String? number) async {
     log('[PhoneState] callEnded => sync logs');
 
-    callLogController.refreshCallLogs();
-
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
-    if (!isDef && outgoingCallFromApp) {
-      outgoingCallFromApp = false;
-      final state = navKey.currentState;
-      if (state != null) {
-        final endedNum = number ?? '';
-        state.pushReplacementNamed('/callEnded', arguments: endedNum);
-      }
+    if (!isDef) {
+      callLogController.refreshCallLogs();
     }
   }
 }

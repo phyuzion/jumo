@@ -93,7 +93,11 @@ object NativeBridge {
         methodChannel?.invokeMethod("onCall", number)
     }
 
-    fun notifyCallEnded(endedNumber: String) {
-        methodChannel?.invokeMethod("onCallEnded", endedNumber)
+    fun notifyCallEnded(endedNumber: String, reason: String) {
+        val args = mapOf(
+        "number" to endedNumber,
+        "reason" to reason,
+        )
+        methodChannel?.invokeMethod("onCallEnded", args)
     }
 }

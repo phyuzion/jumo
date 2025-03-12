@@ -9,6 +9,7 @@ import android.telecom.Call
 import android.telecom.CallAudioState
 import android.telecom.InCallService
 import android.telecom.VideoProfile
+import android.telecom.DisconnectCause
 import android.util.Log
 
 class PhoneInCallService : InCallService() {
@@ -86,7 +87,6 @@ class PhoneInCallService : InCallService() {
             }
             Call.STATE_ACTIVE -> {
                 // 통화 연결됨
-
                 val number = call.details.handle?.schemeSpecificPart ?: ""
                 Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE  => $number ")
                 showOnCall(number);
@@ -94,8 +94,19 @@ class PhoneInCallService : InCallService() {
             Call.STATE_DISCONNECTED -> {
                 // 통화 종료
                 val number = call.details.handle?.schemeSpecificPart ?: ""
+                var reason = "ended"
+
+                val disconnectCause = call.details.disconnectCause
+                val code = disconnectCause.code
                 Log.d("PhoneInCallService", "[handleCallState] DISCONNECTED => $number")
-                showCallEnded(number)
+
+                when (code) {
+                    DisconnectCause.MISSED -> {
+                        reason = "missed"
+                    }
+                }
+                
+                showCallEnded(number, reason)
             }
         }
     }
@@ -199,7 +210,7 @@ class PhoneInCallService : InCallService() {
         context.startActivity(intent)
     }
 
-    private fun showCallEnded(number: String) {
+    private fun showCallEnded(number: String, reason: String) {
         val context = JumoApp.context
         val intent = Intent(context, MainActivity::class.java).apply {
             addFlags(
@@ -209,6 +220,7 @@ class PhoneInCallService : InCallService() {
             )
             putExtra("call_ended", true)
             putExtra("call_ended_number", number)
+            putExtra("call_ended_reason", reason)
         }
         context.startActivity(intent)
     }

@@ -10,13 +10,6 @@ import 'package:mobile/services/local_notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
-  if (service is AndroidServiceInstance) {
-    service.setForegroundNotificationInfo(
-      title: "Data Sync Service",
-      content: "Synchronizing call log, sms, notifications every minute...",
-    );
-  }
-
   final box = GetStorage();
 
   int lastNotificationId = 0;

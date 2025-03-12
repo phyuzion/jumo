@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
 class CallEndedScreen extends StatefulWidget {
   final String callEndedNumber;
-  const CallEndedScreen({super.key, required this.callEndedNumber});
+  final String callEndedReason;
+
+  const CallEndedScreen({
+    super.key,
+    required this.callEndedNumber,
+    required this.callEndedReason,
+  });
 
   @override
   State<CallEndedScreen> createState() => _CallEndedScreen();
@@ -14,29 +21,31 @@ class CallEndedScreen extends StatefulWidget {
 class _CallEndedScreen extends State<CallEndedScreen> {
   String? _displayName;
   String? _phones;
-  // or additional contact info
-  // We'll search from contactsController
 
   @override
   void initState() {
     super.initState();
     _loadContactName();
+    _updateCallLog();
+  }
+
+  void _updateCallLog() {
+    final callLogController = context.read<CallLogController>();
+    callLogController.refreshCallLogs();
   }
 
   /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
   Future<void> _loadContactName() async {
     final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
-    // e.g. each: {'name':'홍길동','phones':'010-1234-5678,...'}
 
-    // 단순히 'phones' 에 widget.incomingNumber 가 포함되는지 검사 (문자열로)
     for (final c in contacts) {
-      final phoneStr = c.phoneNumber as String? ?? '';
+      final phoneStr = c.phoneNumber ?? '';
       final normPhone = normalizePhone(phoneStr);
 
       if (normPhone == normalizePhone(widget.callEndedNumber)) {
         setState(() {
-          _displayName = c.name as String?;
+          _displayName = c.name;
           _phones = normPhone;
         });
         break;
@@ -47,15 +56,25 @@ class _CallEndedScreen extends State<CallEndedScreen> {
   @override
   Widget build(BuildContext context) {
     final number = widget.callEndedNumber;
-    final contactName = _displayName ?? number; // fallback to number
-    final contactPhones = _phones ?? number; //
+    final reason = widget.callEndedReason; // 'missed' or 'ended' etc.
+    final contactName = _displayName ?? number;
+    final contactPhones = _phones ?? number;
+
+    // reason 에 따라 문구 분기
+    String statusMessage;
+    if (reason == 'missed') {
+      statusMessage = '부재중 전화입니다.';
+    } else {
+      statusMessage = '통화가 종료되었습니다.';
+    }
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
             const SizedBox(height: 100),
-            // 상단: 이름 / 번호
+
+            // 이름 / 번호
             Text(
               contactName,
               style: const TextStyle(
@@ -70,15 +89,19 @@ class _CallEndedScreen extends State<CallEndedScreen> {
               style: const TextStyle(color: Colors.black, fontSize: 16),
             ),
             const SizedBox(height: 20),
-            // "통화가 종료되었습니다" 등 안내 문구
-            const Text(
-              '통화가 종료되었습니다.',
-              style: TextStyle(fontSize: 18, color: Colors.red),
+
+            // reason 에 따른 안내 문구
+            Text(
+              statusMessage,
+              style: TextStyle(
+                fontSize: 18,
+                color: reason == 'missed' ? Colors.orange : Colors.red,
+              ),
             ),
 
             const Spacer(),
 
-            // 하단 아이콘들(검색, 편집, 신고)
+            // 검색, 편집, 신고 액션
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -121,14 +144,11 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                 ),
               ),
               onPressed: () {
-                // 단순 종료 => pop
                 Navigator.pushNamedAndRemoveUntil(
                   context,
                   '/home',
                   (route) => false,
                 );
-
-                // 또는 Navigator.pushNamedAndRemoveUntil(...)
               },
               child: const Text(
                 '종료',

@@ -36,9 +36,9 @@ class AppController {
   Future<void> initializeData() async {
     // 컨트롤러들(실제 diff 로직)
 
+    await contactsController.syncContactsAll();
     await callLogController.refreshCallLogs();
     await smsController.refreshSms();
-    await contactsController.syncContactsAll();
   }
 
   Future<void> stopApp() async {
