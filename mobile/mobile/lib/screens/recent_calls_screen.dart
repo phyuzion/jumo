@@ -135,11 +135,11 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                   children: [
                     Text(
                       dateStr,
-                      style: const TextStyle(fontSize: 15, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                     Text(
                       timeStr,
-                      style: const TextStyle(fontSize: 15, color: Colors.grey),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -180,7 +180,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     );
     final isNew = (existing.updatedAt == null);
 
-    final result = await Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
@@ -194,13 +194,5 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
             ),
       ),
     );
-
-    if (result == true) {
-      // 편집 후
-      await contactsCtrl.syncContactsAll();
-      // 필요하면 call log에도 업데이트
-      // _callLogController.refreshCallLogs();
-      // await _loadCalls();
-    }
   }
 }

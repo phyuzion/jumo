@@ -1,9 +1,3 @@
-// lib/models/phone_number_model.dart
-
-/// "통합 전화번호부" 한 개 문서(PhoneNumber)의 모델
-///  - phoneNumber: 실제 전화번호 (string)
-///  - type: 위험/분류 등(예: 0=일반, 99=위험번호)
-///  - records: 이 번호에 대해 등록된 여러 레코드(누가 어떤 메모/이름/타입을 달았는지)
 class PhoneNumberModel {
   final String phoneNumber;
   final int type;
@@ -15,20 +9,29 @@ class PhoneNumberModel {
     required this.records,
   });
 
-  /// fromJson: GraphQL 응답(JSON Map)을 Model로 변환
+  // fromJson, toJson
   factory PhoneNumberModel.fromJson(Map<String, dynamic> json) {
+    final recs =
+        (json['records'] as List<dynamic>? ?? [])
+            .map((r) => PhoneRecordModel.fromJson(r))
+            .toList();
+
     return PhoneNumberModel(
-      phoneNumber: json['phoneNumber'] as String? ?? '',
-      type: json['type'] as int? ?? 0,
-      records:
-          (json['records'] as List<dynamic>? ?? [])
-              .map((r) => PhoneRecordModel.fromJson(r as Map<String, dynamic>))
-              .toList(),
+      phoneNumber: json['phoneNumber'] as String,
+      type: json['type'] as int,
+      records: recs,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'phoneNumber': phoneNumber,
+      'type': type,
+      'records': records.map((r) => r.toJson()).toList(),
+    };
   }
 }
 
-/// 한 개 레코드(누군가가 등록한 메모/이름/type 등)
 class PhoneRecordModel {
   final String userName;
   final int userType;
@@ -55,5 +58,16 @@ class PhoneRecordModel {
       type: json['type'] as int? ?? 0,
       createdAt: json['createdAt'] as String? ?? '',
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'userName': userName,
+      'userType': userType,
+      'name': name,
+      'memo': memo,
+      'type': type,
+      'createdAt': createdAt,
+    };
   }
 }

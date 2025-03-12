@@ -16,9 +16,9 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _error;
   PhoneNumberModel? _result; // 검색 결과
 
-  void _onSubmit(String value) async {
-    final query = value.trim();
-    if (query.isEmpty) return;
+  void _onSubmit(String num) async {
+    final numResult = num.trim();
+    if (numResult.isEmpty) return;
 
     setState(() {
       _loading = true;
@@ -27,7 +27,7 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final data = await SearchRecordsController.searchPhone(query);
+      final data = await SearchRecordsController.searchPhone(numResult);
       setState(() => _result = data);
     } catch (e) {
       setState(() => _error = '$e');

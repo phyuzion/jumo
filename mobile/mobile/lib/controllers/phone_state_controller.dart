@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
@@ -21,12 +22,16 @@ class PhoneStateController {
           _onNothing();
           break;
         case PhoneStateStatus.CALL_INCOMING:
-          await _onIncoming(event.number);
+          if (event.number != null && event.number != '') {
+            await _onIncoming(event.number);
+          }
           break;
         case PhoneStateStatus.CALL_STARTED:
           break;
         case PhoneStateStatus.CALL_ENDED:
-          await _onCallEnded(event.number);
+          if (event.number != null && event.number != '') {
+            await _onCallEnded(event.number);
+          }
           break;
       }
     });
@@ -44,27 +49,13 @@ class PhoneStateController {
   Future<void> _onIncoming(String? number) async {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
 
-    if (!isDef) {
-      if (await FlutterOverlayWindow.isActive()) {
-        FlutterOverlayWindow.closeOverlay();
+    if (!isDef && await FlutterOverlayWindow.isPermissionGranted()) {
+      final data = await SearchRecordsController.searchPhone(number!);
+      if (data != null) {
+        final dataMap = data.toJson();
+        FlutterOverlayWindow.shareData(dataMap);
       }
-      final box = GetStorage();
-      await box.write('search_number', number ?? '');
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true,
-        alignment: OverlayAlignment.center,
-        height: WindowSize.matchParent,
-        width: WindowSize.matchParent,
-        overlayTitle: "CallResultOverlay",
-        overlayContent: "수신전화감지", // 알림 표기용
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
-      );
-    } else {
-      log('[PhoneState] default dialer => skip phone_state incoming UI');
     }
-
     log('[PhoneState] not default => overlay shown for $number');
   }
 
