@@ -85,6 +85,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// 오버레이 권한
   Future<void> _onRequestOverlayPermission() async {
+    if (!mounted) return;
+
     final granted = await FlutterOverlayWindow.isPermissionGranted();
     if (granted) {
       ScaffoldMessenger.of(
@@ -94,7 +96,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     final result = await FlutterOverlayWindow.requestPermission();
     // result == true 면 성공
-    if (!mounted) return;
     if (result == true) {
       setState(() => _overlayGranted = true);
       ScaffoldMessenger.of(
