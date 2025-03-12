@@ -135,11 +135,11 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                   children: [
                     Text(
                       dateStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 15, color: Colors.grey),
                     ),
                     Text(
                       timeStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      style: const TextStyle(fontSize: 15, color: Colors.grey),
                     ),
                   ],
                 ),
