@@ -68,19 +68,28 @@ class PhoneInCallService : InCallService() {
                     if (call.details.callDirection == Call.Details.DIRECTION_INCOMING) {
                         val number = call.details.handle?.schemeSpecificPart ?: ""
                         showIncomingCall(number)
+                        
+                        Log.d("PhoneInCallService", "[handleCallState] incoming Dialing...  => $number")
                     }
                 } else {
                     val number = call.details.handle?.schemeSpecificPart ?: ""
                     showIncomingCall(number)
+
+                    Log.d("PhoneInCallService", "[handleCallState] incoming Dialing...  => $number")
                 }
+
             }
             Call.STATE_DIALING -> {
                 // 발신
-                Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing...")
+                val number = call.details.handle?.schemeSpecificPart ?: ""
+                Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing...  => $number")
             }
             Call.STATE_ACTIVE -> {
                 // 통화 연결됨
-                Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE")
+
+                val number = call.details.handle?.schemeSpecificPart ?: ""
+                Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE  => $number ")
+                showOnCall(number);
             }
             Call.STATE_DISCONNECTED -> {
                 // 통화 종료
@@ -159,7 +168,7 @@ class PhoneInCallService : InCallService() {
 
 
     /** ===========================
-     *  showIncomingCall & showCallEnded
+     *  showIncomingCall & show Oncall & showCallEnded
      * ========================== */
     private fun showIncomingCall(number: String) {
         val context = JumoApp.context
@@ -171,6 +180,21 @@ class PhoneInCallService : InCallService() {
             )
             putExtra("incoming_call", true)
             putExtra("incoming_number", number)
+        }
+        context.startActivity(intent)
+    }
+
+
+    private fun showOnCall(number: String) {
+        val context = JumoApp.context
+        val intent = Intent(context, MainActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            )
+            putExtra("on_call", true)
+            putExtra("on_call_number", number)
         }
         context.startActivity(intent)
     }

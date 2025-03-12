@@ -9,7 +9,7 @@ class LocalNotificationService {
 
   // 초기화
   static Future<void> initialize() async {
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('app_icon');
     // iOS 설정 필요 시...
     const initSettings = InitializationSettings(android: androidInit);
     await _flutterLocalNotificationsPlugin.initialize(initSettings);
@@ -23,6 +23,7 @@ class LocalNotificationService {
     const androidDetails = AndroidNotificationDetails(
       'jumo_channel_id', // 임의
       'jumo_channel_name', // 임의
+
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,

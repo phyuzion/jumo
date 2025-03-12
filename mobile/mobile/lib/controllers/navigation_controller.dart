@@ -11,6 +11,9 @@ class NavigationController {
         case 'onIncomingNumber':
           _goToIncoming(call.arguments as String);
           break;
+        case 'onCall':
+          _goToOnCall(call.arguments as String);
+          break;
         case 'onCallEnded':
           _goToCallEnded(call.arguments as String? ?? '');
           break;
@@ -24,6 +27,14 @@ class NavigationController {
     if (ctx == null) return;
     // "pushNamed"로 -> 뒤로가기 시 이전화면
     Navigator.of(ctx).pushNamed('/incoming', arguments: number);
+  }
+
+  static void _goToOnCall(String number) {
+    // 기본 전화앱 시나리오에서 수신
+    final ctx = navKey.currentContext;
+    if (ctx == null) return;
+    // "pushNamed"로 -> 뒤로가기 시 이전화면
+    Navigator.of(ctx).pushReplacementNamed('/onCall', arguments: number);
   }
 
   static void _goToCallEnded(String endedNumber) {

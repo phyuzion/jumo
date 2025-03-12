@@ -64,6 +64,12 @@ class MainActivity : FlutterFragmentActivity() {
             val number = intent.getStringExtra("incoming_number") ?: ""
             NativeBridge.notifyIncomingNumber(number)
 
+        } else if (intent.getBooleanExtra("on_call", false)) {
+            // 통화시작
+            Log.d(TAG, "On Call intent received")
+            val onCallNumber = intent.getStringExtra("on_call_number") ?: ""
+            NativeBridge.notifyOnCall(onCallNumber) 
+            // 통화 종료 + 번호
         } else if (intent.getBooleanExtra("call_ended", false)) {
             // 통화 종료
             Log.d(TAG, "Call ended intent received")

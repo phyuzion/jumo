@@ -88,6 +88,11 @@ object NativeBridge {
         methodChannel?.invokeMethod("onIncomingNumber", number)
     }
 
+
+    fun notifyOnCall(number: String) {
+        methodChannel?.invokeMethod("onCall", number)
+    }
+
     fun notifyCallEnded(endedNumber: String) {
         methodChannel?.invokeMethod("onCallEnded", endedNumber)
     }

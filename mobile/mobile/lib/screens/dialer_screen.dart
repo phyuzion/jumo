@@ -41,10 +41,6 @@ class _DialerScreenState extends State<DialerScreen> {
       final phoneState = context.read<PhoneStateController>();
       phoneState.outgoingCallFromApp = true;
       await NativeMethods.makeCall(_number);
-
-      if (context.mounted) {
-        Navigator.pushNamed(context, '/onCall', arguments: _number);
-      }
     }
   }
 
