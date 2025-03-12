@@ -4,6 +4,9 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
+import 'package:mobile/models/phone_book_model.dart';
+import 'package:mobile/screens/edit_contact_screen.dart';
+
 class CallEndedScreen extends StatefulWidget {
   final String callEndedNumber;
   final String callEndedReason;
@@ -117,17 +120,7 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                   icon: Icons.edit,
                   color: Colors.blueGrey,
                   label: '편집',
-                  onTap: () {
-                    // TODO
-                  },
-                ),
-                _buildActionButton(
-                  icon: Icons.report,
-                  color: Colors.redAccent,
-                  label: '신고',
-                  onTap: () {
-                    // TODO
-                  },
+                  onTap: () => _onTapEdit(number),
                 ),
               ],
             ),
@@ -182,6 +175,43 @@ class _CallEndedScreen extends State<CallEndedScreen> {
         const SizedBox(height: 8),
         Text(label, style: const TextStyle(color: Colors.black)),
       ],
+    );
+  }
+
+  /// 편집 아이콘 탭:
+  /// 1) phoneBook 에 있는지 -> 기존이면 EditContactScreen(기존 모드)
+  /// 2) 없으면 신규 모드
+  Future<void> _onTapEdit(String number) async {
+    final norm = normalizePhone(number);
+    final contactsCtrl = context.read<ContactsController>();
+    final localList = contactsCtrl.getSavedContacts();
+    final existing = localList.firstWhere(
+      (c) => c.phoneNumber == norm,
+      orElse:
+          () => PhoneBookModel(
+            contactId: '',
+            name: '',
+            phoneNumber: norm,
+            memo: null,
+            type: null,
+            updatedAt: null,
+          ),
+    );
+    final isNew = (existing.updatedAt == null);
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder:
+            (_) => EditContactScreen(
+              initialContactId:
+                  existing.contactId.isNotEmpty ? existing.contactId : null,
+              initialName: existing.name.isNotEmpty ? existing.name : '',
+              initialPhone: isNew ? norm : existing.phoneNumber,
+              initialMemo: existing.memo ?? '',
+              initialType: existing.type ?? 0,
+            ),
+      ),
     );
   }
 }

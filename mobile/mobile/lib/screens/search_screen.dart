@@ -1,7 +1,6 @@
-// lib/screens/search_screen.dart
-
 import 'package:flutter/material.dart';
-import 'package:mobile/utils/constants.dart';
+import 'package:mobile/controllers/search_records_controller.dart';
+import 'package:mobile/models/phone_number_model.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -13,52 +12,42 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final _textCtrl = TextEditingController();
-  final _focusNode = FocusNode();
+  bool _loading = false;
+  String? _error;
+  PhoneNumberModel? _result; // 검색 결과
 
-  // 검색 실행 버튼을 누를 때마다 phoneNumber를 set => SearchResultWidget 로 교체
-  String? _searchPhone;
+  void _onSubmit(String value) async {
+    final query = value.trim();
+    if (query.isEmpty) return;
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final args = ModalRoute.of(context)?.settings.arguments;
-      if (args is String) {
-        final norm = normalizePhone(args);
-        _textCtrl.text = norm;
-        setState(() => _searchPhone = norm);
-      }
-      _focusNode.requestFocus();
+    setState(() {
+      _loading = true;
+      _error = null;
+      _result = null;
     });
+
+    try {
+      final data = await SearchRecordsController.searchPhone(query);
+      setState(() => _result = data);
+    } catch (e) {
+      setState(() => _error = '$e');
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 
   @override
   void dispose() {
-    _focusNode.dispose();
     _textCtrl.dispose();
     super.dispose();
-  }
-
-  void _onSubmit(String value) {
-    final query = value.trim();
-    if (query.isNotEmpty) {
-      final normalized = normalizePhone(query);
-      setState(() => _searchPhone = normalized);
-    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // 상단 검색 AppBar
       appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
         title: TextField(
           controller: _textCtrl,
-          focusNode: _focusNode,
           textInputAction: TextInputAction.search,
           onSubmitted: _onSubmit,
           decoration: const InputDecoration(
@@ -72,13 +61,21 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Widget _buildBody() {
-    // 만약 아직 검색 안했으면 안내 문구
-    if (_searchPhone == null || _searchPhone!.isEmpty) {
-      return const Center(
-        child: Text('검색어를 입력하세요.', style: TextStyle(color: Colors.grey)),
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Text('에러: $_error', style: const TextStyle(color: Colors.red)),
       );
     }
-    // 이미 입력이 있다면 => SearchResultWidget 로 교체
-    return SearchResultWidget(phoneNumber: _searchPhone!);
+    if (_result == null) {
+      return const Center(
+        child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    // 결과가 있다면 -> SearchResultWidget(전화번호 모델)
+    return SearchResultWidget(phoneNumberModel: _result!);
   }
 }

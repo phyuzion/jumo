@@ -1,72 +1,15 @@
 // lib/widgets/search_result_widget.dart
 
 import 'package:flutter/material.dart';
-import 'package:mobile/graphql/search_api.dart';
 import 'package:mobile/models/phone_number_model.dart';
-import 'package:mobile/utils/constants.dart'; // normalizePhone (optional)
 
-/// 간단히 "전화번호" 하나만 주면, 내부적으로 fetch 후
-/// 결과 UI(에러/로딩/결과없음/결과리스트) 를 보여주는 재사용 위젯
-class SearchResultWidget extends StatefulWidget {
-  final String phoneNumber;
-  const SearchResultWidget({Key? key, required this.phoneNumber})
+class SearchResultWidget extends StatelessWidget {
+  final PhoneNumberModel phoneNumberModel;
+  const SearchResultWidget({Key? key, required this.phoneNumberModel})
     : super(key: key);
 
   @override
-  State<SearchResultWidget> createState() => _SearchResultWidgetState();
-}
-
-class _SearchResultWidgetState extends State<SearchResultWidget> {
-  bool _loading = false;
-  String? _error;
-  PhoneNumberModel? _result;
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchResult();
-  }
-
-  Future<void> _fetchResult() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-      _result = null;
-    });
-
-    try {
-      // 전화번호 정규화
-      final normalized = normalizePhone(widget.phoneNumber);
-      final data = await SearchApi.getPhoneNumber(normalized);
-      setState(() => _result = data); // null 이면 결과없음
-    } catch (e) {
-      setState(() => _error = '$e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (_loading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    if (_error != null) {
-      return Center(
-        child: Text('에러: $_error', style: const TextStyle(color: Colors.red)),
-      );
-    }
-    if (_result == null) {
-      return const Center(
-        child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
-      );
-    }
-
-    // 결과 존재
-    return _buildResultView(_result!);
-  }
-
-  Widget _buildResultView(PhoneNumberModel model) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -77,11 +20,14 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '번호: ${model.phoneNumber}',
+                '번호: ${phoneNumberModel.phoneNumber}',
                 style: const TextStyle(fontSize: 18),
               ),
               SizedBox(width: 30),
-              Text('type: ${model.type}', style: const TextStyle(fontSize: 16)),
+              Text(
+                'type: ${phoneNumberModel.type}',
+                style: const TextStyle(fontSize: 16),
+              ),
             ],
           ),
         ),
@@ -89,7 +35,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
 
         Expanded(
           child:
-              model.records.isEmpty
+              phoneNumberModel.records.isEmpty
                   ? const Center(
                     child: Text(
                       '레코드가 없습니다.',
@@ -97,9 +43,9 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
                     ),
                   )
                   : ListView.builder(
-                    itemCount: model.records.length,
+                    itemCount: phoneNumberModel.records.length,
                     itemBuilder: (context, index) {
-                      final r = model.records[index];
+                      final r = phoneNumberModel.records[index];
                       return _buildRecordItem(r);
                     },
                   ),
