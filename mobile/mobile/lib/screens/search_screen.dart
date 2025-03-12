@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:mobile/models/phone_number_model.dart';
+import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -15,6 +16,26 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _loading = false;
   String? _error;
   PhoneNumberModel? _result; // 검색 결과
+
+  final _focusNode = FocusNode();
+
+  // 검색 실행 버튼을 누를 때마다 phoneNumber를 set => SearchResultWidget 로 교체
+  String _searchPhone = '';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args is String) {
+        _searchPhone = normalizePhone(args);
+        _textCtrl.text = _searchPhone;
+        _onSubmit(_searchPhone);
+        setState(() {});
+      }
+      _focusNode.requestFocus();
+    });
+  }
 
   void _onSubmit(String num) async {
     final numResult = num.trim();
@@ -38,6 +59,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _textCtrl.dispose();
     super.dispose();
   }
@@ -48,6 +70,7 @@ class _SearchScreenState extends State<SearchScreen> {
       appBar: AppBar(
         title: TextField(
           controller: _textCtrl,
+          keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.search,
           onSubmitted: _onSubmit,
           decoration: const InputDecoration(

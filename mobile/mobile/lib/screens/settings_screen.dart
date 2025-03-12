@@ -205,7 +205,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('설정/계정정보')),
       body: ListView(
         children: [
           ListTile(

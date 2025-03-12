@@ -91,6 +91,7 @@ class GraphQLClientManager {
       if (result.exception?.graphqlErrors.isNotEmpty == true) {
         final msg = result.exception!.graphqlErrors.first.message;
         if (msg.contains('로그인이 필요합니다')) {
+          log('new login start');
           tryAutoLogin();
         }
         throw Exception(msg);
