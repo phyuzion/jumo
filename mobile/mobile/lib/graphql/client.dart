@@ -3,6 +3,8 @@ import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/utils/constants.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -25,22 +27,29 @@ class GraphQLClientManager {
 
   // ===============================
   // 1) 자동로그인 함수 (id/pw 재로그인)
-  Future<void> tryAutoLogin() async {
+  static Future<void> tryAutoLogin() async {
     final box = GetStorage();
     final savedId = box.read<String>('savedLoginId');
     final savedPw = box.read<String>('savedPassword');
-    final myNumber = box.read<String>('myNumber');
-    if ((savedId == null && savedId == '') ||
-        (savedPw == null && savedPw == '') ||
-        (myNumber == null && myNumber == '')) {
+
+    final myNumber = await NativeMethods.getMyPhoneNumber();
+    log('myNumber=$myNumber');
+    if (myNumber == '') {
+      //kill app
+    }
+    final myRealnumber = normalizePhone(myNumber);
+    box.write('myNumber', myRealnumber);
+    if ((savedId == null || savedId == '') ||
+        (savedPw == null || savedPw == '') ||
+        (myRealnumber == null || myRealnumber == '')) {
       logout();
     } else {
       try {
         // 예: UserApi.userLogin(...)
         await UserApi.userLogin(
-          loginId: savedId!,
-          password: savedPw!,
-          phoneNumber: myNumber!,
+          loginId: savedId,
+          password: savedPw,
+          phoneNumber: myRealnumber,
         );
         log('[tryAutoLogin] re-login success with $savedId , $myNumber');
       } catch (e) {
@@ -81,6 +90,9 @@ class GraphQLClientManager {
     if (result.hasException) {
       if (result.exception?.graphqlErrors.isNotEmpty == true) {
         final msg = result.exception!.graphqlErrors.first.message;
+        if (msg.contains('로그인이 필요합니다')) {
+          tryAutoLogin();
+        }
         throw Exception(msg);
       } else if (result.exception?.linkException != null) {
         // 네트워크/서버접속 에러 등

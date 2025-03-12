@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/controllers/search_records_controller.dart';
+import 'package:mobile/models/phone_number_model.dart';
+import 'package:mobile/widgets/search_result_widget.dart';
 import 'package:provider/provider.dart';
 import '../services/native_methods.dart';
 import '../controllers/contacts_controller.dart';
@@ -14,6 +17,11 @@ class IncomingCallScreen extends StatefulWidget {
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   String? _displayName;
   String? _phones;
+
+  String? _error;
+  bool _loading = false;
+  PhoneNumberModel? _result; // 검색 결과
+
   // or additional contact info
   // We'll search from contactsController
 
@@ -21,6 +29,22 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   void initState() {
     super.initState();
     _loadContactName();
+
+    _loadSearchData();
+  }
+
+  Future<void> _loadSearchData() async {
+    try {
+      final searchResult = await SearchRecordsController.searchPhone(
+        widget.incomingNumber,
+      );
+
+      setState(() => _result = searchResult);
+    } catch (e) {
+      setState(() => _error = '$e');
+    } finally {
+      setState(() => _loading = false);
+    }
   }
 
   /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
@@ -46,14 +70,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     await NativeMethods.acceptCall();
     // 수락 -> 전화가 STATE_ACTIVE -> onCall
     if (!mounted) return;
-    Navigator.pop(context);
   }
 
   Future<void> _rejectCall() async {
     await NativeMethods.rejectCall();
     // 거절 -> DISCONNECTED -> callEnded
     if (!mounted) return;
-    Navigator.pop(context);
+    //Navigator.pop(context);
   }
 
   @override
@@ -85,14 +108,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // "리스트 들어갈 곳"
-                const Text(
-                  '리스트 들어갈곳',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
+                Expanded(child: _buildBody()),
 
-                // ex) Expanded(child: ListView(...))
-                const Spacer(),
                 // 4) 하단 전화 버튼(수락/거절)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -133,6 +150,26 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     );
   }
 */
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return Center(
+        child: Text('에러: $_error', style: const TextStyle(color: Colors.red)),
+      );
+    }
+    if (_result == null) {
+      return const Center(
+        child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    // 결과가 있다면 -> SearchResultWidget(전화번호 모델)
+    return SearchResultWidget(phoneNumberModel: _result!);
+  }
+
   Widget _buildCallButton({
     required IconData icon,
     required Color color,

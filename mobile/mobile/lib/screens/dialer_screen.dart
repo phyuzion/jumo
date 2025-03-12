@@ -10,17 +10,23 @@ class DialerScreen extends StatefulWidget {
 
 class _DialerScreenState extends State<DialerScreen> {
   String _number = '';
+  static const int _maxDigits = 15;
 
+  /// 숫자 클릭
   void _onDigit(String d) {
-    setState(() => _number += d);
+    if (_number.length < _maxDigits) {
+      setState(() => _number += d);
+    }
   }
 
+  /// 백스페이스
   void _onBackspace() {
     if (_number.isNotEmpty) {
       setState(() => _number = _number.substring(0, _number.length - 1));
     }
   }
 
+  /// 전화걸기
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
       await NativeMethods.makeCall(_number);
@@ -39,35 +45,25 @@ class _DialerScreenState extends State<DialerScreen> {
     return SafeArea(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // 화면 높이/너비
           final screenW = constraints.maxWidth;
-          final screenH = constraints.maxHeight;
+          //final screenH = constraints.maxHeight;
 
           return Column(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            // 아래부터 쌓아 올림
+            mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              // 1) 전화번호 표시 영역
-              Padding(
-                padding: EdgeInsets.only(top: screenH * 0.02),
-                child: Text(_number, style: const TextStyle(fontSize: 30)),
-              ),
+              // 1) 번호 표시
+              Text(_number, style: const TextStyle(fontSize: 35)),
 
-              // 2) 다이얼 패드 (Expanded로 키워 세로 공간 유연 확보)
-              Expanded(child: Center(child: _buildDialPad(digits, screenW))),
+              const SizedBox(height: 30),
 
-              // 3) 통화 버튼
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    shape: const CircleBorder(),
-                    padding: const EdgeInsets.all(24),
-                    backgroundColor: Colors.green,
-                  ),
-                  onPressed: _makeCall,
-                  child: const Icon(Icons.call, color: Colors.white, size: 32),
-                ),
-              ),
+              // 2) 키패드
+              _buildDialPad(digits, screenW),
+
+              // 3) 통화 + 백스페이스
+              const SizedBox(height: 20),
+              _buildCallRow(screenW),
+              const SizedBox(height: 20),
             ],
           );
         },
@@ -75,40 +71,31 @@ class _DialerScreenState extends State<DialerScreen> {
     );
   }
 
-  /// 원형 버튼 여러 개(4행x3열 + 백스페이스)를 만드는 메서드
+  /// (A) 키패드
   Widget _buildDialPad(List<List<String>> digits, double screenW) {
-    // 화면 폭에 맞춰 버튼 크기를 적당히 계산
-    // 여기서는 "한 행에 3개 버튼" 기준으로, 남는 여유를 조금 주는 방식
-    final buttonSize = screenW / 6; // 적절히 조정
+    // 버튼 크기/간격 조절
+    final buttonSize = screenW / 6.0;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (int i = 0; i < digits.length; i++)
+        for (final row in digits)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
-            children:
-                digits[i].map((d) {
-                  return _buildDialButton(d, buttonSize);
-                }).toList(),
+            children: row.map((d) => _buildDialButton(d, buttonSize)).toList(),
           ),
-        // 마지막 줄에 백스페이스 버튼만 넣기
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [_buildBackspaceButton(buttonSize)],
-        ),
       ],
     );
   }
 
+  /// 개별 숫자 버튼
   Widget _buildDialButton(String digit, double size) {
     return Padding(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
       child: InkResponse(
         onTap: () => _onDigit(digit),
-        // InkResponse: 원형 리플 효과
         highlightShape: BoxShape.circle,
-        radius: size / 3, // 원형 범위
+        radius: size / 3,
         child: Container(
           width: size,
           height: size,
@@ -123,24 +110,65 @@ class _DialerScreenState extends State<DialerScreen> {
     );
   }
 
-  Widget _buildBackspaceButton(double size) {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: InkResponse(
-        onTap: _onBackspace,
-        highlightShape: BoxShape.circle,
-        radius: size / 3,
-        child: Container(
-          width: size,
-          height: size,
-          decoration: const BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white,
+  /// 통화 버튼은 가운데, 백스페이스는 오른쪽 끝에 (있으면 보이고, 없으면 동일크기의 빈칸)
+  Widget _buildCallRow(double size) {
+    // 통화 버튼 크기
+    final callButtonSize = 60.0;
+    // 백스페이스 버튼 크기(키패드와 동일하게 맞출 수도 있음)
+    final backspaceSize = 56.0;
+
+    return Row(
+      // Row 전체 너비를 화면 가득 차지
+      // -> 통화 버튼이 '절대' 화면 중앙에 위치 가능
+      mainAxisSize: MainAxisSize.max,
+      children: [
+        SizedBox(width: backspaceSize, height: backspaceSize),
+        SizedBox(width: backspaceSize, height: backspaceSize),
+        // 1) 왼쪽 Spacer -> 통화 버튼을 중앙 부근으로
+        const Spacer(),
+
+        // 2) 통화 버튼 (고정 크기)
+        SizedBox(
+          width: callButtonSize,
+          height: callButtonSize,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              shape: const CircleBorder(),
+              padding: EdgeInsets.zero, // 직접 사이즈를 맞출 것이므로
+              backgroundColor: Colors.green,
+            ),
+            onPressed: _makeCall,
+            child: const Icon(Icons.call, color: Colors.white, size: 28),
           ),
-          alignment: Alignment.center,
-          child: const Icon(Icons.backspace, size: 35),
         ),
-      ),
+
+        // 3) 오른쪽 Spacer -> 통화 버튼이 전체 가로폭 중 중앙 위치로
+        const Spacer(),
+
+        // 4) 백스페이스 버튼 or 동일 크기 자리
+        if (_number.isNotEmpty)
+          // 백스페이스 버튼
+          InkResponse(
+            onTap: _onBackspace,
+            highlightShape: BoxShape.circle,
+            radius: backspaceSize / 3,
+            child: Container(
+              width: backspaceSize,
+              height: backspaceSize,
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white, // 키패드와 동일 스타일 (흰 동그라미)
+              ),
+              alignment: Alignment.center,
+              child: const Icon(Icons.backspace, size: 35),
+            ),
+          )
+        else
+          // 동일 자리 차지 -> 통화 버튼이 절대 이동하지 않음
+          SizedBox(width: backspaceSize, height: backspaceSize),
+
+        SizedBox(width: backspaceSize, height: backspaceSize),
+      ],
     );
   }
 }
