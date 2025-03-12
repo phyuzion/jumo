@@ -121,6 +121,14 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                   label: '편집',
                   onTap: () => _onTapEdit(number),
                 ),
+                _buildActionButton(
+                  icon: Icons.report,
+                  color: Colors.redAccent,
+                  label: '신고',
+                  onTap: () {
+                    // TODO
+                  },
+                ),
               ],
             ),
             const SizedBox(height: 40),
@@ -197,7 +205,8 @@ class _CallEndedScreen extends State<CallEndedScreen> {
           ),
     );
     final isNew = (existing.updatedAt == null);
-    await Navigator.push(
+
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
@@ -211,5 +220,13 @@ class _CallEndedScreen extends State<CallEndedScreen> {
             ),
       ),
     );
+
+    if (result == true) {
+      // 편집 후
+      await contactsCtrl.syncContactsAll();
+      // 필요하면 call log에도 업데이트
+      // _callLogController.refreshCallLogs();
+      // await _loadCalls();
+    }
   }
 }

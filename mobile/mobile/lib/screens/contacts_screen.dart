@@ -124,7 +124,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _onTapEdit(PhoneBookModel model) async {
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
@@ -137,13 +137,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ),
       ),
     );
+    if (result == true) {
+      await _refreshContacts();
+    }
   }
 
   Future<void> _onTapAddContact() async {
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const EditContactScreen()),
     );
+    if (result == true) {
+      await _refreshContacts();
+    }
   }
 
   Color _pickColorFromChar(String char) {
