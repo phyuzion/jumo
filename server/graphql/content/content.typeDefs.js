@@ -1,18 +1,18 @@
-// graphql/content/content.typeDefs.js
 const { gql } = require('apollo-server-express');
 
 module.exports = gql`
   scalar JSON
 
+  # 댓글: user -> User
   type Comment {
-    userId: String!
+    user: User
     comment: String
     createdAt: String
   }
 
   type Content {
     id: ID!
-    userId: String
+    user: User
     type: Int
     title: String
     createdAt: String
@@ -26,10 +26,6 @@ module.exports = gql`
   }
 
   extend type Mutation {
-    """
-    content: JSON 으로 전송 가능
-    클라이언트에서 Delta 객체 통째로 전송 가능
-    """
     createContent(type: Int, title: String, content: JSON!): Content
     updateContent(contentId: ID!, title: String, content: JSON, type: Int): Content
     deleteContent(contentId: ID!): Boolean
