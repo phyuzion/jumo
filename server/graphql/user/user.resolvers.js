@@ -1,5 +1,3 @@
-// graphql/user/user.resolvers.js
-
 const bcrypt = require('bcrypt');
 const {
   UserInputError,
@@ -59,24 +57,12 @@ async function checkUserValid(tokenData) {
   return user;
 }
 
-
-/* =========================================================
-   새 유틸:
-   - pushNewLog(arr, newLog, max=200)
-   - 중복 체크 -> 없으면 arr.unshift(newLog)
-   - if arr.length > max => arr.pop() (가장 오래된 제거)
-========================================================= */
+/* 로그 배열에 새 로그 추가 (중복시 무시) */
 function pushNewLog(logArray, newLog, maxLen = 200) {
-  // 중복 판단: phoneNumber + time + (callType or smsType) + content?
-  // 여기서는 "stringify" 방식 or partial match
   const newLogKey = JSON.stringify(newLog); 
   const isDup = logArray.some((item) => JSON.stringify(item) === newLogKey);
-  if (isDup) return; // 중복이면 무시
-
-  // 맨 앞에 삽입 -> "최신이 위"
+  if (isDup) return; 
   logArray.unshift(newLog);
-
-  // 최대 길이 초과 -> pop()
   if (logArray.length > maxLen) {
     logArray.pop();
   }
@@ -84,29 +70,23 @@ function pushNewLog(logArray, newLog, maxLen = 200) {
 
 module.exports = {
   Query: {
-
-    // --------------------------------------------------
     // (Admin 전용) 유저 전화 내역
-    // --------------------------------------------------
     getUserCallLog: async (_, { userId }, { tokenData }) => {
-      // 어드민만
       if (!tokenData?.adminId) {
         throw new ForbiddenError('관리자 권한이 필요합니다.');
       }
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
-      // callLogs를 최신순(이미 unshift로 관리) 그대로 반환
+      // callLogs 최신순 반환
       return user.callLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
-        time: log.time.toISOString(),   // 클라이언트엔 string
+        time: log.time.toISOString(),
         callType: log.callType,
       }));
     },
 
-    // --------------------------------------------------
     // (Admin 전용) 유저 문자 내역
-    // --------------------------------------------------
     getUserSMSLog: async (_, { userId }, { tokenData }) => {
       if (!tokenData?.adminId) {
         throw new ForbiddenError('관리자 권한이 필요합니다.');
@@ -128,34 +108,26 @@ module.exports = {
       return User.find({});
     },
 
-   // 특정 유저 + 그 유저가 저장한 전화번호 레코드 조회
+    // 특정 유저 + 그 유저가 저장한 전화번호부 레코드
     getUserRecords: async (_, { userId }, { tokenData }) => {
-      // 권한 처리
       if (tokenData?.adminId) {
-        // 관리자면 어떤 userId든 조회 가능
+        // admin => ok
       } else {
-        // 일반 유저면 본인만 가능
+        // 일반 유저 => 본인만
         if (!tokenData?.userId || tokenData.userId !== userId) {
           throw new ForbiddenError('본인 계정만 조회 가능합니다.');
         }
       }
 
-      // 유저 조회
       const user = await User.findById(userId);
       if (!user) {
         throw new UserInputError('해당 유저가 존재하지 않습니다.');
       }
 
-      // phoneNumber 컬렉션에서 records.userId == userId 인 문서들 찾기
       const phoneDocs = await PhoneNumber.find({ 'records.userId': userId });
-
-      // phoneDocs를 순회하면서, 해당 userId 레코드만 추출
       let recordList = [];
       for (const doc of phoneDocs) {
-        const matchedRecords = doc.records.filter(
-          (r) => r.userId.toString() === userId
-        );
-        // matchedRecords 각각 -> { phoneNumber, name, memo, type, createdAt }
+        const matchedRecords = doc.records.filter(r => String(r.userId) === userId);
         for (const rec of matchedRecords) {
           recordList.push({
             phoneNumber: doc.phoneNumber,
@@ -176,7 +148,7 @@ module.exports = {
 
   Mutation: {
     // (Admin 전용) 유저 생성
-    createUser: async (_, { phoneNumber, name }, { tokenData }) => {
+    createUser: async (_, { phoneNumber, name, region }, { tokenData }) => {
       await checkAdminValid(tokenData);
       if (!phoneNumber || !name) {
         throw new UserInputError('phoneNumber와 name은 필수 입력입니다.');
@@ -184,8 +156,7 @@ module.exports = {
 
       const systemId = generateRandomString(6);
       const loginId = generateRandomString(6);
-      const generatedPassword = generateRandomString(6); // 임시 비번
-
+      const generatedPassword = generateRandomString(6);
       const hashedPw = await bcrypt.hash(generatedPassword, 10);
 
       const oneMonthLater = new Date();
@@ -197,6 +168,7 @@ module.exports = {
         password: hashedPw,
         name,
         phoneNumber,
+        region: region || '',          // region 저장
         validUntil: oneMonthLater,
       });
       await newUser.save();
@@ -233,7 +205,7 @@ module.exports = {
       return { accessToken, refreshToken, user };
     },
 
-    // 유저 비번 변경
+    // 유저 비밀번호 변경
     userChangePassword: async (_, { oldPassword, newPassword }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
       if (!oldPassword || !newPassword) {
@@ -255,7 +227,7 @@ module.exports = {
     },
 
     // (Admin 전용) 유저 정보 업데이트
-    updateUser: async (_, { userId, name, phoneNumber, validUntil, type }, { tokenData }) => {
+    updateUser: async (_, { userId, name, phoneNumber, validUntil, type, region }, { tokenData }) => {
       await checkAdminValid(tokenData);
 
       const user = await User.findById(userId);
@@ -268,6 +240,11 @@ module.exports = {
       if (validUntil !== undefined) {
         user.validUntil = new Date(validUntil);
       }
+      // region 업데이트
+      if (region !== undefined) {
+        user.region = region;
+      }
+
       await user.save();
       return user;
     },
@@ -286,13 +263,10 @@ module.exports = {
       return newPass;
     },
 
-    // --------------------------------------------------
     // 통화내역 upsert
-    // --------------------------------------------------
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-    
-      // 나머지 로직 동일
+
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
@@ -309,10 +283,10 @@ module.exports = {
       await user.save();
       return true;
     },
-    
+
     updateSMSLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-    
+
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
@@ -330,7 +304,5 @@ module.exports = {
       await user.save();
       return true;
     },
-    
-    
   },
 };
