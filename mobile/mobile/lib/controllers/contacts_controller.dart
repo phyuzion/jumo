@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer';
 
@@ -8,74 +10,106 @@ import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/utils/constants.dart';
 
-/// 디바이스 연락처 + (로컬메모/타입) + 서버 업서트 (sync) 담당
 class ContactsController {
   final _box = GetStorage();
   static const storageKey = 'phonebook';
 
-  /// 메인: 서버&디바이스&로컬 동기화
-  /// 1) 서버에서 getMyRecords
-  /// 2) 디바이스 주소록 불러오기
-  /// 3) 3자 병합
-  /// 4) diff -> 서버 업서트
-  /// 5) 로컬 DB 저장
+  // (A) 작업 큐
+  final Queue<Function> _taskQueue = Queue();
+  // (B) 실행 중 여부
+  bool _busy = false;
   Future<void> syncContactsAll() async {
-    log('[ContactsController] syncContactsAll start...');
-    // A. 서버 목록
-    final serverList = await PhoneRecordsApi.getMyRecords();
-    // B. 디바이스 목록
-    final deviceContacts = await FlutterContacts.getContacts(
-      withProperties: true,
-      withAccounts: true,
-    );
-    final deviceList = <PhoneBookModel>[];
-    for (final c in deviceContacts) {
-      if (c.phones.isEmpty) continue;
-      final rawPhone = c.phones.first.number.trim();
-      if (rawPhone.isEmpty) continue;
+    final completer = Completer<void>();
 
-      final normPhone = normalizePhone(rawPhone);
-      // 이름: last+first
-      final rawName = '${c.name.last} ${c.name.first}'.trim();
-      final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
+    // 1) 작업(익명함수) 정의
+    _taskQueue.add(() async {
+      try {
+        log('[ContactsController] syncContactsAll start...');
+        // A. 서버 목록
+        final serverList = await PhoneRecordsApi.getMyRecords();
 
-      deviceList.add(
-        PhoneBookModel(
-          contactId: c.id,
-          name: finalName,
-          phoneNumber: normPhone,
-          memo: null,
-          type: null,
-          updatedAt: null,
-        ),
-      );
-    }
+        // B. 디바이스 목록
+        final deviceContacts = await FlutterContacts.getContacts(
+          withProperties: true,
+          withAccounts: true,
+        );
+        final deviceList = <PhoneBookModel>[];
+        for (final c in deviceContacts) {
+          if (c.phones.isEmpty) continue;
+          final rawPhone = c.phones.first.number.trim();
+          if (rawPhone.isEmpty) continue;
 
-    // C. 기존 로컬
-    final oldList = _loadLocalPhoneBook();
+          final normPhone = normalizePhone(rawPhone);
+          final rawName = '${c.name.last} ${c.name.first}'.trim();
+          final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
 
-    // D. 병합
-    final merged = _mergeAll(
-      serverList: serverList,
-      deviceList: deviceList,
-      oldList: oldList,
-    );
+          deviceList.add(
+            PhoneBookModel(
+              contactId: c.id,
+              name: finalName,
+              phoneNumber: normPhone,
+              memo: null,
+              type: null,
+              updatedAt: null,
+            ),
+          );
+        }
 
-    // E. diff => 서버 업서트
-    final diffList = _computeDiffForServer(merged, serverList);
-    if (diffList.isNotEmpty) {
-      log('[ContactsController] found ${diffList.length} diff => upsert');
-      await _uploadDiff(diffList);
-    } else {
-      log('[ContactsController] no diff => skip upsert');
-    }
+        // C. 기존 로컬
+        final oldList = _loadLocalPhoneBook();
 
-    // F. 로컬 저장
-    await _saveLocalPhoneBook(merged);
+        // D. 병합
+        final merged = _mergeAll(
+          serverList: serverList,
+          deviceList: deviceList,
+          oldList: oldList,
+        );
 
-    // G. 이벤트
-    appEventBus.fire(ContactsUpdatedEvent());
-    log('[ContactsController] syncContactsAll done');
+        // E. diff => 서버 업서트
+        final diffList = _computeDiffForServer(merged, serverList);
+        if (diffList.isNotEmpty) {
+          log('[ContactsController] found ${diffList.length} diff => upsert');
+          await _uploadDiff(diffList);
+        } else {
+          log('[ContactsController] no diff => skip upsert');
+        }
+
+        // F. 로컬 저장
+        await _saveLocalPhoneBook(merged);
+
+        // G. 이벤트
+        appEventBus.fire(ContactsUpdatedEvent());
+        log('[ContactsController] syncContactsAll done');
+
+        completer.complete();
+      } catch (e, st) {
+        log('[ContactsController] syncContactsAll error: $e\n$st');
+        completer.completeError(e, st);
+      }
+    });
+
+    // 2) 큐 처리
+    _processQueue();
+
+    return completer.future;
+  }
+
+  /// 내부: 큐 처리
+  void _processQueue() {
+    if (_busy) return;
+    if (_taskQueue.isEmpty) return;
+
+    _busy = true;
+    final task = _taskQueue.removeFirst();
+
+    Future(() async {
+      await task();
+      _busy = false;
+      // 다음 작업이 있으면 재귀 호출
+      if (_taskQueue.isNotEmpty) {
+        _processQueue();
+      }
+    });
   }
 
   /// 외부에서 "현재 로컬 저장된 연락처" 조회
@@ -86,6 +120,10 @@ class ContactsController {
   /// (새 메모/타입/이름)이 생겼을 때 로컬에 추가 or 갱신
   /// => 이후 syncContactsAll() 하면 서버도 업서트
   Future<void> addOrUpdateLocalRecord(PhoneBookModel newItem) async {
+    // 여기도 큐를 통해 실행하고 싶다면 같은 패턴 적용 가능
+    // 다만 지금은 "즉시 로컬 저장"만 해도 문제가 없으면 생략 가능
+    // (원한다면 queue로 감싸도 됨)
+
     final list = _loadLocalPhoneBook();
     final idx = list.indexWhere((e) => e.phoneNumber == newItem.phoneNumber);
     if (idx >= 0) {
@@ -245,13 +283,11 @@ class ContactsController {
 
   // ------ 로컬 DB
 
-  // 내부: 로컬 목록 저장
   Future<void> _saveLocalPhoneBook(List<PhoneBookModel> list) async {
     final raw = jsonEncode(list.map((e) => e.toJson()).toList());
     await _box.write(storageKey, raw);
   }
 
-  // 내부: 로컬 목록 읽기
   List<PhoneBookModel> _loadLocalPhoneBook() {
     final raw = _box.read<String>(storageKey);
     if (raw == null) return [];

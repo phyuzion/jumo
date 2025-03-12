@@ -85,8 +85,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// 기본 전화앱 등록
   Future<void> _onRequestDefaultDialer() async {
-    final ok = await NativeDefaultDialerMethods.requestDefaultDialerManually();
-    // ok == true 면 등록됨
+    await NativeDefaultDialerMethods.requestDefaultDialerManually();
     // 재확인
     final defDialer = await NativeDefaultDialerMethods.isDefaultDialer();
     if (!mounted) return;
