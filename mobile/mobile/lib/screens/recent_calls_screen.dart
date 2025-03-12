@@ -154,8 +154,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   Future<void> _onTapCall(String number) async {
     await NativeMethods.makeCall(number);
 
-    await NativeMethods.makeCall(number);
-
     if (context.mounted) {
       Navigator.pushNamed(context, '/onCall', arguments: number);
     }
@@ -194,7 +192,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
               initialContactId:
                   existing.contactId.isNotEmpty ? existing.contactId : null,
               initialName: existing.name.isNotEmpty ? existing.name : '',
-              initialPhone: isNew ? null : existing.phoneNumber,
+              initialPhone: isNew ? norm : existing.phoneNumber,
               initialMemo: existing.memo ?? '',
               initialType: existing.type ?? 0,
             ),

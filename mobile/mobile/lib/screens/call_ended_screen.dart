@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
 class CallEndedScreen extends StatefulWidget {
@@ -31,10 +32,12 @@ class _CallEndedScreen extends State<CallEndedScreen> {
     // 단순히 'phones' 에 widget.incomingNumber 가 포함되는지 검사 (문자열로)
     for (final c in contacts) {
       final phoneStr = c.phoneNumber as String? ?? '';
-      if (phoneStr.contains(widget.callEndedNumber)) {
+      final normPhone = normalizePhone(phoneStr);
+
+      if (normPhone == normalizePhone(widget.callEndedNumber)) {
         setState(() {
           _displayName = c.name as String?;
-          _phones = phoneStr;
+          _phones = normPhone;
         });
         break;
       }
