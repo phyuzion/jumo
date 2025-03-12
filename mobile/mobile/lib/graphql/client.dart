@@ -1,41 +1,16 @@
 import 'dart:developer';
-import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:mobile/controllers/navigation_controller.dart';
 
-// 전역 NavigatorKey (MaterialApp에서 navigatorKey: appNavKey)
-final GlobalKey<NavigatorState> appNavKey = GlobalKey<NavigatorState>();
-
-// ===============================
-// 1) 자동로그인 함수 (id/pw 재로그인)
-Future<bool> tryAutoLogin() async {
-  final box = GetStorage();
-  final savedId = box.read<String>('savedLoginId');
-  final savedPw = box.read<String>('savedPassword');
-  final myNumber = box.read<String>('myNumber');
-  if (savedId == null || savedPw == null || myNumber == null) {
-    return false;
-  }
-
-  try {
-    // 예: UserApi.userLogin(...)
-    // await UserApi.userLogin(loginId: savedId, password: savedPw, phoneNumber: myNumber);
-    log('[tryAutoLogin] re-login success with $savedId');
-    return true;
-  } catch (e) {
-    log('[tryAutoLogin] failed: $e');
-    return false;
-  }
-}
-
-// ===============================
-// 2) GraphQLClientManager
+/// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
 
+/// GraphQL 통신 공통 로직
 class GraphQLClientManager {
+  // GetStorage 인스턴스
   static final GetStorage _box = GetStorage();
 
+  /// AccessToken Getter / Setter
   static String? get accessToken => _box.read<String>('accessToken');
   static set accessToken(String? token) {
     if (token == null) {
@@ -46,20 +21,21 @@ class GraphQLClientManager {
     }
   }
 
+  /// 로그아웃 → 토큰 제거
   static void logout() {
     accessToken = null;
-    _box.erase();
-
-    NavigationController.goToDecider();
+    // refreshToken 도 관리하려면 비슷하게 제거
   }
 
+  /// 내부 GraphQLClient 생성
   static GraphQLClient get client {
     final httpLink = HttpLink(kGraphQLEndpoint);
 
     final authLink = AuthLink(
+      // 토큰 있으면 Authorization: Bearer xxx
       getToken: () {
-        final t = accessToken;
-        return t != null ? 'Bearer $t' : null;
+        if (accessToken == null) return null;
+        return 'Bearer $accessToken';
       },
     );
 
@@ -68,25 +44,20 @@ class GraphQLClientManager {
     return GraphQLClient(cache: GraphQLCache(), link: link);
   }
 
-  /// GraphQL 예외 핸들
-  /// - "로그인이 필요합니다" → 자동로그인 → 실패 시 /login
-  static Future<void> handleExceptions(QueryResult result) async {
-    if (!result.hasException) return;
-
-    if (result.exception?.graphqlErrors.isNotEmpty == true) {
-      final msg = result.exception!.graphqlErrors.first.message;
-      if (msg.contains('로그인이 필요합니다')) {
-        final ok = await tryAutoLogin();
-        if (!ok) {
-          logout();
-        }
+  /// 헬퍼: GraphQL Exception 핸들링
+  ///  - 서버 GraphQLError가 있을 경우, 메시지 추출
+  static void handleExceptions(QueryResult result) {
+    if (result.hasException) {
+      if (result.exception?.graphqlErrors.isNotEmpty == true) {
+        final msg = result.exception!.graphqlErrors.first.message;
+        throw Exception(msg);
+      } else if (result.exception?.linkException != null) {
+        // 네트워크/서버접속 에러 등
+        final linkErr = result.exception!.linkException.toString();
+        throw Exception('GraphQL LinkException: $linkErr');
+      } else {
+        throw Exception('GraphQL unknown exception');
       }
-      throw Exception(msg);
-    } else if (result.exception?.linkException != null) {
-      final linkErr = result.exception!.linkException.toString();
-      throw Exception('GraphQL LinkException: $linkErr');
-    } else {
-      throw Exception('GraphQL unknown exception');
     }
   }
 }

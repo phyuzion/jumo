@@ -9,10 +9,10 @@ class NavigationController {
     NativeMethods.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'onIncomingNumber':
-          goToIncoming(call.arguments as String);
+          _goToIncoming(call.arguments as String);
           break;
         case 'onCall':
-          goToOnCall(call.arguments as String);
+          _goToOnCall(call.arguments as String);
           break;
         case 'onCallEnded':
           final map = call.arguments as Map?; // or Map<String,dynamic>
@@ -20,14 +20,14 @@ class NavigationController {
             final endedNumber = map['number'] as String? ?? '';
             final reason = map['reason'] as String? ?? '';
             // 사용 로직
-            goToCallEnded(endedNumber, reason);
+            _goToCallEnded(endedNumber, reason);
           }
           break;
       }
     });
   }
 
-  static void goToIncoming(String number) {
+  static void _goToIncoming(String number) {
     // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;
     if (ctx == null) return;
@@ -35,15 +35,7 @@ class NavigationController {
     Navigator.of(ctx).pushNamed('/incoming', arguments: number);
   }
 
-  static void goToDecider() {
-    // 기본 전화앱 시나리오에서 수신
-    final ctx = navKey.currentContext;
-    if (ctx == null) return;
-    // "pushNamed"로 -> 뒤로가기 시 이전화면
-    Navigator.of(ctx).pushReplacementNamed('/decider');
-  }
-
-  static void goToOnCall(String number) {
+  static void _goToOnCall(String number) {
     // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;
     if (ctx == null) return;
@@ -51,7 +43,7 @@ class NavigationController {
     Navigator.of(ctx).pushReplacementNamed('/onCall', arguments: number);
   }
 
-  static void goToCallEnded(String endedNumber, String reason) {
+  static void _goToCallEnded(String endedNumber, String reason) {
     // 기본 전화앱 시나리오에서 종료
     final ctx = navKey.currentContext;
     if (ctx == null) return;

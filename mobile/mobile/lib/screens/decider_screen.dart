@@ -1,4 +1,6 @@
+// lib/screens/decider_screen.dart
 import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
@@ -13,6 +15,7 @@ class DeciderScreen extends StatefulWidget {
 
 class _DeciderScreenState extends State<DeciderScreen> {
   bool _checking = true;
+
   bool _allPermsGranted = false;
 
   final box = GetStorage();
@@ -26,18 +29,18 @@ class _DeciderScreenState extends State<DeciderScreen> {
   Future<void> _checkPermissions() async {
     final appController = context.read<AppController>();
     setState(() => _checking = true);
+    final ok = await appController.checkEssentialPermissions();
 
-    final ok = await appController.checkEssentialPermissions(); // 권한 요청
     if (ok) {
       if (!mounted) return;
-      // 권한 + 초기화 끝 -> 로그인/홈 결정
-      final loginStatus = box.read<bool>('loginStatus') ?? false;
-      if (loginStatus) {
-        // 이미 로그인된 상태
-        Navigator.pushReplacementNamed(context, '/home');
-      } else {
-        // 로그인 필요
+      // 권한 + 초기화 끝 -> 로그인 화면
+
+      final loginStatus = box.read<bool>('loginStatus');
+
+      if (loginStatus != null && loginStatus) {
         Navigator.pushReplacementNamed(context, '/login');
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
       }
     } else {
       // 권한 거부
@@ -55,6 +58,7 @@ class _DeciderScreenState extends State<DeciderScreen> {
     }
 
     if (!_allPermsGranted) {
+      // 권한 거부 상태 -> 안내 + 재요청
       return Scaffold(
         appBar: AppBar(title: const Text('권한 요청')),
         body: Center(

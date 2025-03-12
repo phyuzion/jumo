@@ -112,4 +112,7 @@ class UserApi {
     final success = data['success'] as bool? ?? false;
     return success;
   }
+
+  // (추가) 로그아웃 시
+  // => GraphQLClientManager.logout();
 }

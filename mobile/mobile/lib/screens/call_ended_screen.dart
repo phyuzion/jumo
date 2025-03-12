@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
-import 'package:mobile/models/phone_book_model.dart';
-import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
@@ -119,7 +117,9 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                   icon: Icons.edit,
                   color: Colors.blueGrey,
                   label: '편집',
-                  onTap: () => _onTapEdit(number),
+                  onTap: () {
+                    // TODO
+                  },
                 ),
                 _buildActionButton(
                   icon: Icons.report,
@@ -183,50 +183,5 @@ class _CallEndedScreen extends State<CallEndedScreen> {
         Text(label, style: const TextStyle(color: Colors.black)),
       ],
     );
-  }
-
-  /// 편집 아이콘 탭:
-  /// 1) phoneBook 에 있는지 -> 기존이면 EditContactScreen(기존 모드)
-  /// 2) 없으면 신규 모드
-  Future<void> _onTapEdit(String number) async {
-    final norm = normalizePhone(number);
-    final contactsCtrl = context.read<ContactsController>();
-    final localList = contactsCtrl.getSavedContacts();
-    final existing = localList.firstWhere(
-      (c) => c.phoneNumber == norm,
-      orElse:
-          () => PhoneBookModel(
-            contactId: '',
-            name: '',
-            phoneNumber: norm,
-            memo: null,
-            type: null,
-            updatedAt: null,
-          ),
-    );
-    final isNew = (existing.updatedAt == null);
-
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder:
-            (_) => EditContactScreen(
-              initialContactId:
-                  existing.contactId.isNotEmpty ? existing.contactId : null,
-              initialName: existing.name.isNotEmpty ? existing.name : '',
-              initialPhone: isNew ? norm : existing.phoneNumber,
-              initialMemo: existing.memo ?? '',
-              initialType: existing.type ?? 0,
-            ),
-      ),
-    );
-
-    if (result == true) {
-      // 편집 후
-      await contactsCtrl.syncContactsAll();
-      // 필요하면 call log에도 업데이트
-      // _callLogController.refreshCallLogs();
-      // await _loadCalls();
-    }
   }
 }
