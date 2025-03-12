@@ -9,7 +9,8 @@ import 'package:mobile/utils/constants.dart'; // normalizePhone (optional)
 /// 결과 UI(에러/로딩/결과없음/결과리스트) 를 보여주는 재사용 위젯
 class SearchResultWidget extends StatefulWidget {
   final String phoneNumber;
-  const SearchResultWidget({super.key, required this.phoneNumber});
+  const SearchResultWidget({Key? key, required this.phoneNumber})
+    : super(key: key);
 
   @override
   State<SearchResultWidget> createState() => _SearchResultWidgetState();
