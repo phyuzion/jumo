@@ -1,6 +1,8 @@
 import 'dart:developer';
 import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:mobile/controllers/navigation_controller.dart';
+import 'package:mobile/graphql/user_api.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -21,9 +23,38 @@ class GraphQLClientManager {
     }
   }
 
+  // ===============================
+  // 1) 자동로그인 함수 (id/pw 재로그인)
+  Future<void> tryAutoLogin() async {
+    final box = GetStorage();
+    final savedId = box.read<String>('savedLoginId');
+    final savedPw = box.read<String>('savedPassword');
+    final myNumber = box.read<String>('myNumber');
+    if ((savedId == null && savedId == '') ||
+        (savedPw == null && savedPw == '') ||
+        (myNumber == null && myNumber == '')) {
+      logout();
+    } else {
+      try {
+        // 예: UserApi.userLogin(...)
+        await UserApi.userLogin(
+          loginId: savedId!,
+          password: savedPw!,
+          phoneNumber: myNumber!,
+        );
+        log('[tryAutoLogin] re-login success with $savedId , $myNumber');
+      } catch (e) {
+        log('[tryAutoLogin] failed: $e');
+        logout();
+      }
+    }
+  }
+
   /// 로그아웃 → 토큰 제거
   static void logout() {
     accessToken = null;
+    _box.erase();
+    NavigationController.goToDecider();
     // refreshToken 도 관리하려면 비슷하게 제거
   }
 

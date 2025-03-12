@@ -4,6 +4,8 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
 class DeciderScreen extends StatefulWidget {
@@ -32,15 +34,18 @@ class _DeciderScreenState extends State<DeciderScreen> {
     final ok = await appController.checkEssentialPermissions();
 
     if (ok) {
-      if (!mounted) return;
-      // 권한 + 초기화 끝 -> 로그인 화면
-
-      final loginStatus = box.read<bool>('loginStatus');
-
-      if (loginStatus != null && loginStatus) {
-        Navigator.pushReplacementNamed(context, '/login');
-      } else {
+      if (box.read('loginStatus') != null && box.read('loginStatus') == true) {
         Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        final myNumber = await NativeMethods.getMyPhoneNumber();
+        log('myNumber=$myNumber');
+        if (myNumber == '') {
+          //kill app
+        }
+        final myRealnumber = normalizePhone(myNumber);
+        box.write('myNumber', myRealnumber);
+
+        Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
       // 권한 거부

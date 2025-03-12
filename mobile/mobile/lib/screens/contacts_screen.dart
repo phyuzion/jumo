@@ -39,6 +39,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
   Future<void> _loadContacts() async {
     final contactsCtrl = context.read<ContactsController>();
     final list = contactsCtrl.getSavedContacts();
+
+    if (!mounted) return;
     setState(() => _contacts = list);
   }
 

@@ -27,6 +27,14 @@ class NavigationController {
     });
   }
 
+  static void goToDecider() {
+    // 기본 전화앱 시나리오에서 수신
+    final ctx = navKey.currentContext;
+    if (ctx == null) return;
+    // "pushNamed"로 -> 뒤로가기 시 이전화면
+    Navigator.of(ctx).pushReplacementNamed('/decider');
+  }
+
   static void goToIncoming(String number) {
     // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;

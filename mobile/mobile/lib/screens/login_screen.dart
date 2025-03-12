@@ -26,13 +26,12 @@ class _LoginScreenState extends State<LoginScreen> {
   final box = GetStorage();
 
   @override
-  Future<void> initState() async {
+  void initState() {
     super.initState();
+    final box = GetStorage();
 
-    _myNumber = await NativeMethods.getMyPhoneNumber();
-    log('myNumber=$_myNumber');
-    final myRealnumber = normalizePhone(_myNumber);
-    box.write('myNumber', myRealnumber);
+    // 1) 내 휴대폰번호 가져오기
+    _myNumber = box.read<String>('myNumber') ?? '';
 
     // 2) 저장된 아이디/비번이 있는지 확인
     final savedId = box.read<String>('savedLoginId');
@@ -40,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (savedId != null && savedPw != null) {
       // 저장된 아이디/비번이 있다면 자동 로그인 시도
-      _autoLogin(savedId, savedPw);
+      //_autoLogin(savedId, savedPw);
     }
   }
 
@@ -58,13 +57,10 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       // 성공 -> 홈으로
       if (!mounted) return;
-      box.write('loginStatus', true);
 
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       debugPrint('자동 로그인 실패: $e');
-      // 실패 시 그냥 로그인 화면 보여줌
-      box.write('loginStatus', false);
     } finally {
       setState(() => _loading = false);
     }

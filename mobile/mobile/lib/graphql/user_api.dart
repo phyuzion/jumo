@@ -71,6 +71,7 @@ class UserApi {
     box.write('userId', userData['id']);
     box.write('userName', userData['name']);
     box.write('userType', userData['type'].toString());
+    box.write('loginStatus', true);
     box.write('userValidUntil', userData['validUntil'] ?? '');
   }
 

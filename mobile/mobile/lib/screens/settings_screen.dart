@@ -4,7 +4,6 @@ import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString
-import 'package:mobile/utils/app_event_bus.dart'; // optional if needed
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -13,7 +12,8 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen>
+    with WidgetsBindingObserver {
   /// 상태: 로딩중(체크중)
   bool _checking = false;
 
@@ -33,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
 
+    WidgetsBinding.instance.addObserver(this);
+
     final box = GetStorage();
 
     // 1) 저장된 유저정보 읽어오기
@@ -47,6 +49,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // 2) 현재 기본 전화앱인지 / 오버레이권한 인지 체크
     _checkStatus();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // 앱이 다시 전면으로 돌아왔을 때 오버레이 권한 재확인
+      _checkStatus();
+    }
   }
 
   Future<void> _checkStatus() async {
@@ -83,13 +100,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// 오버레이 권한
   Future<void> _onRequestOverlayPermission() async {
-    final granted = await FlutterOverlayWindow.isPermissionGranted();
-    if (granted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('이미 권한 허용됨')));
-      return;
-    }
     final result = await FlutterOverlayWindow.requestPermission();
     // result == true 면 성공
     if (!mounted) return;
@@ -99,6 +109,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         context,
       ).showSnackBar(const SnackBar(content: Text('오버레이 권한 허용됨')));
     } else {
+      setState(() => _overlayGranted = false);
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('오버레이 권한 거부됨')));
@@ -243,11 +254,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: Text(_overlayGranted ? '허용됨' : '미허용 (수신전화 팝업용)'),
             value: _overlayGranted,
             onChanged: (val) {
-              if (!val) {
-                // 사용자가 스위치 off => 오버레이 권한 해제? 불가능(안드로이드 설정)
-              } else {
-                _onRequestOverlayPermission();
-              }
+              _onRequestOverlayPermission();
             },
           ),
 

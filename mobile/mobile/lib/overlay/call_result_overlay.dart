@@ -5,6 +5,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/models/phone_number_model.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 
 class CallResultOverlay extends StatefulWidget {
@@ -15,19 +16,43 @@ class CallResultOverlay extends StatefulWidget {
 }
 
 class _CallResultOverlayState extends State<CallResultOverlay> {
-  String? _phoneNumber; // 전달받은 전화번호
+  PhoneNumberModel? _result; // 전달받은 전화번호
 
   @override
   void initState() {
     super.initState();
+
+    /// streams message shared between overlay and main app
+    FlutterOverlayWindow.overlayListener.listen((result) {
+      setState(() {
+        final phoneNumberData = result as Map<String, dynamic>;
+        _result = PhoneNumberModel.fromJson(phoneNumberData);
+      });
+      _showOverlay();
+    });
+  }
+
+  Future<void> _showOverlay() async {
+    log('show Overlay : $_result');
+    String title = 'Overlay call';
+    if (_result != null && _result?.phoneNumber == null) {
+      title = _result!.phoneNumber;
+    }
+    await FlutterOverlayWindow.showOverlay(
+      enableDrag: true,
+      alignment: OverlayAlignment.center,
+      height: WindowSize.matchParent,
+      width: WindowSize.matchParent,
+      overlayTitle: title,
+      overlayContent: "전화가 왔습니다", // 알림 표기용
+      flag: OverlayFlag.defaultFlag,
+      visibility: NotificationVisibility.visibilityPublic,
+      positionGravity: PositionGravity.auto,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final box = GetStorage();
-    _phoneNumber = box.read<String>('search_number');
-    log('[CallResultOverlay] stored number=$_phoneNumber');
-
     // 가로/세로에 따라 높이 지정
     final size = MediaQuery.of(context).size;
 
@@ -46,11 +71,11 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
           child: Stack(
             children: [
               // (1) 검색결과
-              if (_phoneNumber == null)
+              if (_result == null)
                 const Center(child: CircularProgressIndicator())
               else
                 Positioned.fill(
-                  child: SearchResultWidget(phoneNumber: _phoneNumber!),
+                  child: SearchResultWidget(phoneNumberModel: _result!),
                 ),
 
               // (2) 닫기 버튼
