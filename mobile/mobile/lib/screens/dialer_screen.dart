@@ -1,11 +1,7 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:get_storage/get_storage.dart';
-import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_methods.dart';
-import 'package:provider/provider.dart';
 
 class DialerScreen extends StatefulWidget {
   const DialerScreen({super.key});

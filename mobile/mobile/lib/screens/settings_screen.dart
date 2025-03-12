@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/controllers/navigation_controller.dart';
+import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString
@@ -176,16 +178,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   /// 로그아웃
   Future<void> _onLogout() async {
-    // 1) accessToken 제거
-    //    GraphQLClientManager.accessToken = null;
-    //    or more: remove saved loginId/password if desired
-    final box = GetStorage();
-    box.remove('accessToken');
-    // etc: box.remove('savedLoginId'); box.remove('savedPassword');
-
-    // 2) 화면 전환
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/login');
+    GraphQLClientManager.logout();
+    //NavigationController.goToDecider();
   }
 
   @override
