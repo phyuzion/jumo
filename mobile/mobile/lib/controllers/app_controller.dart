@@ -6,6 +6,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/permission_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
+import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/local_notification_service.dart';
 
@@ -27,10 +28,17 @@ class AppController {
   }
 
   Future<void> initializeApp() async {
+    await checkUpdate();
     await initializeData();
     await LocalNotificationService.initialize();
 
     phoneStateController.startListening();
+  }
+
+  Future<void> checkUpdate() async {
+    log('check Update');
+    final UpdateController updateController = UpdateController();
+    updateController.checkVersion(true);
   }
 
   Future<void> initializeData() async {
