@@ -18,24 +18,28 @@ class ContactsController {
   final Queue<Function> _taskQueue = Queue();
   // (B) 실행 중 여부
   bool _busy = false;
+
   Future<void> syncContactsAll() async {
     final completer = Completer<void>();
-
-    // 1) 작업(익명함수) 정의
     _taskQueue.add(() async {
       try {
         log('[ContactsController] syncContactsAll start...');
-        // A. 서버 목록
+
+        // 1) 서버 목록
         final serverList = await PhoneRecordsApi.getMyRecords();
 
-        // B. 디바이스 목록
+        // 2) 기기 연락처 목록 (withProperties, withAccounts)
         final deviceContacts = await FlutterContacts.getContacts(
           withProperties: true,
-          withAccounts: true,
+          withAccounts: true, // <--- 변경!
+          withPhoto: true,
+          withThumbnail: true,
+          withGroups: false,
         );
+
         final deviceList = <PhoneBookModel>[];
         for (final c in deviceContacts) {
-          if (c.phones.isEmpty) continue;
+          if (c.phones.isEmpty) continue; // 전화번호 없는 연락처 스킵
           final rawPhone = c.phones.first.number.trim();
           if (rawPhone.isEmpty) continue;
 
@@ -45,7 +49,7 @@ class ContactsController {
 
           deviceList.add(
             PhoneBookModel(
-              contactId: c.id,
+              contactId: c.id, // ID 저장
               name: finalName,
               phoneNumber: normPhone,
               memo: null,
@@ -55,17 +59,17 @@ class ContactsController {
           );
         }
 
-        // C. 기존 로컬
+        // 3) 기존 로컬
         final oldList = _loadLocalPhoneBook();
 
-        // D. 병합
+        // 4) 병합
         final merged = _mergeAll(
           serverList: serverList,
           deviceList: deviceList,
           oldList: oldList,
         );
 
-        // E. diff => 서버 업서트
+        // 5) diff => 서버 업서트
         final diffList = _computeDiffForServer(merged, serverList);
         if (diffList.isNotEmpty) {
           log('[ContactsController] found ${diffList.length} diff => upsert');
@@ -74,13 +78,11 @@ class ContactsController {
           log('[ContactsController] no diff => skip upsert');
         }
 
-        // F. 로컬 저장
+        // 6) 로컬 저장 + 이벤트
         await _saveLocalPhoneBook(merged);
-
-        // G. 이벤트
         appEventBus.fire(ContactsUpdatedEvent());
-        log('[ContactsController] syncContactsAll done');
 
+        log('[ContactsController] syncContactsAll done');
         completer.complete();
       } catch (e, st) {
         log('[ContactsController] syncContactsAll error: $e\n$st');
@@ -88,9 +90,7 @@ class ContactsController {
       }
     });
 
-    // 2) 큐 처리
     _processQueue();
-
     return completer.future;
   }
 
@@ -105,7 +105,6 @@ class ContactsController {
     Future(() async {
       await task();
       _busy = false;
-      // 다음 작업이 있으면 재귀 호출
       if (_taskQueue.isNotEmpty) {
         _processQueue();
       }
@@ -117,13 +116,9 @@ class ContactsController {
     return _loadLocalPhoneBook();
   }
 
-  /// (새 메모/타입/이름)이 생겼을 때 로컬에 추가 or 갱신
+  /// 로컬에 메모/타입/이름 등이 반영된 레코드 업데이트
   /// => 이후 syncContactsAll() 하면 서버도 업서트
   Future<void> addOrUpdateLocalRecord(PhoneBookModel newItem) async {
-    // 여기도 큐를 통해 실행하고 싶다면 같은 패턴 적용 가능
-    // 다만 지금은 "즉시 로컬 저장"만 해도 문제가 없으면 생략 가능
-    // (원한다면 queue로 감싸도 됨)
-
     final list = _loadLocalPhoneBook();
     final idx = list.indexWhere((e) => e.phoneNumber == newItem.phoneNumber);
     if (idx >= 0) {
@@ -173,7 +168,7 @@ class ContactsController {
       final finalMemo = sMemo.isNotEmpty ? sMemo : (oldItem?.memo ?? '');
       final finalType = sType != 0 ? sType : (oldItem?.type ?? 0);
 
-      // 이름 => 디바이스 우선 → deviceItem?.name ?? s.name
+      // 이름 => 디바이스 우선
       final sName = s['name'] as String? ?? '';
       final finalName =
           (deviceItem != null && deviceItem.name.isNotEmpty)
@@ -216,15 +211,13 @@ class ContactsController {
       }
     }
 
-    // C. oldList 중 server/device 모두 없는 => 삭제 or ignore
-    //   여기서는 ignore
-
+    // C. oldList 중 server/device 모두 없는 => 무시
     final mergedList = mergedSet.toList();
     mergedList.sort((a, b) => a.name.compareTo(b.name));
     return mergedList;
   }
 
-  /// 서버와의 diff
+  /// diff => 서버 업서트
   List<PhoneBookModel> _computeDiffForServer(
     List<PhoneBookModel> mergedList,
     List<Map<String, dynamic>> serverList,
@@ -239,7 +232,6 @@ class ContactsController {
     for (var m in mergedList) {
       final s = serverMap[m.phoneNumber];
       if (s == null) {
-        // 서버에 없는 => diff
         diff.add(
           m.copyWith(
             updatedAt: m.updatedAt ?? DateTime.now().toIso8601String(),
@@ -253,7 +245,6 @@ class ContactsController {
         final changedName = m.name != sName;
         final changedMemo = (m.memo ?? '') != sMemo;
         final changedType = (m.type ?? 0) != sType;
-
         if (changedName || changedMemo || changedType) {
           diff.add(
             m.copyWith(
@@ -280,8 +271,6 @@ class ContactsController {
 
     await PhoneRecordsApi.upsertPhoneRecords(records);
   }
-
-  // ------ 로컬 DB
 
   Future<void> _saveLocalPhoneBook(List<PhoneBookModel> list) async {
     final raw = jsonEncode(list.map((e) => e.toJson()).toList());

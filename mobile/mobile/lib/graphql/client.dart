@@ -32,16 +32,10 @@ class GraphQLClientManager {
     final savedId = box.read<String>('savedLoginId');
     final savedPw = box.read<String>('savedPassword');
 
-    final myNumber = await NativeMethods.getMyPhoneNumber();
-    log('myNumber=$myNumber');
-    if (myNumber == '') {
-      //kill app
-    }
-    final myRealnumber = normalizePhone(myNumber);
-    box.write('myNumber', myRealnumber);
+    final myNumber = box.read<String>('myNumber');
     if ((savedId == null || savedId == '') ||
         (savedPw == null || savedPw == '') ||
-        (myRealnumber == null || myRealnumber == '')) {
+        (myNumber == null || myNumber == '')) {
       logout();
     } else {
       try {
@@ -49,7 +43,7 @@ class GraphQLClientManager {
         await UserApi.userLogin(
           loginId: savedId,
           password: savedPw,
-          phoneNumber: myRealnumber,
+          phoneNumber: myNumber,
         );
         log('[tryAutoLogin] re-login success with $savedId , $myNumber');
       } catch (e) {
@@ -94,7 +88,7 @@ class GraphQLClientManager {
           log('new login start');
           tryAutoLogin();
         }
-        throw Exception(msg);
+        //throw Exception(msg);
       } else if (result.exception?.linkException != null) {
         // 네트워크/서버접속 에러 등
         final linkErr = result.exception!.linkException.toString();

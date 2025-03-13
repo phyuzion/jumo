@@ -81,7 +81,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
     if (isNew) {
       // 신규 -> insert
       final contactId = await _insertDeviceContact(name, phone);
-      // 로컬 DB에 memo/type 저장
       final newItem = PhoneBookModel(
         contactId: contactId,
         name: name,
@@ -92,9 +91,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
       );
       await contactsCtrl.addOrUpdateLocalRecord(newItem);
     } else {
-      // 기존
-      await _updateDeviceContact(widget.initialContactId ?? '', name, phone);
-      // 로컬 DB에 memo/type 갱신
+      // 기존 연락처 업데이트
+      await _updateDeviceContact(widget.initialContactId, name, phone);
       final newItem = PhoneBookModel(
         contactId: widget.initialContactId ?? '',
         name: name,
@@ -106,7 +104,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
       await contactsCtrl.addOrUpdateLocalRecord(newItem);
     }
 
-    // === 전체 동기화 -> 서버 업서트 ===
+    // === 전체 동기화 => 서버 업서트
     await contactsCtrl.syncContactsAll();
     await callLogCtrl.refreshCallLogs();
 
@@ -119,10 +117,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
     try {
       final c =
           Contact()
-            ..name.last =
-                '' // last 비우고
-            ..name.first =
-                name // first에 전체 이름
+            ..name.last = ''
+            ..name.first = name
             ..phones = [Phone(phone)];
       final inserted = await c.insert();
       return inserted.id;
@@ -136,39 +132,51 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
   /// 기존 연락처 수정
   Future<void> _updateDeviceContact(
-    String contactId,
+    String? contactId,
     String name,
     String phone,
   ) async {
     try {
       Contact? found;
-      if (contactId.isNotEmpty) {
+
+      // 1) contactId로 먼저 시도
+      if (contactId != null && contactId.isNotEmpty) {
         found = await FlutterContacts.getContact(
           contactId,
           withProperties: true,
-          withAccounts: true,
+          withAccounts: true, // <-- 수정
+          withPhoto: true,
+          withThumbnail: true,
         );
       }
+
+      // 2) fallback: phone 매칭
       if (found == null) {
-        // fallback: phone
         final all = await FlutterContacts.getContacts(
           withProperties: true,
-          withAccounts: true,
+          withAccounts: true, // <-- 수정
+          withPhoto: true,
+          withThumbnail: true,
         );
-        for (var c in all) {
-          if (normalizePhone(c.phones.first.number) == normalizePhone(phone)) {
-            found = c;
-            break;
+        for (final c in all) {
+          if (c.phones.isEmpty) continue;
+          for (final p in c.phones) {
+            if (normalizePhone(p.number) == normalizePhone(phone)) {
+              found = c;
+              break;
+            }
           }
+          if (found != null) break;
         }
       }
-      // 못 찾으면 새로 insert
+
+      // 3) 그래도 없으면 insert
       if (found == null) {
         await _insertDeviceContact(name, phone);
         return;
       }
 
-      // 기존 last 지우고 first=통합이름
+      // 4) update
       found.name.last = '';
       found.name.first = name;
       await found.update();
@@ -192,25 +200,21 @@ class _EditContactScreenState extends State<EditContactScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 이름
             TextField(
               controller: _nameCtrl,
               decoration: const InputDecoration(labelText: '이름'),
             ),
-            // 전화번호
             TextField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(labelText: '전화번호'),
               enabled: isNew, // 기존이면 수정 불가
             ),
-            // 메모
             TextField(
               controller: _memoCtrl,
               decoration: const InputDecoration(labelText: '메모'),
             ),
             const SizedBox(height: 12),
-            // 타입
             Row(
               children: [
                 const Text('타입:'),
