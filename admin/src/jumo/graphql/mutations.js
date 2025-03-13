@@ -1,7 +1,8 @@
 import { gql } from '@apollo/client';
 
-
-// (1) Admin 로그인
+/**
+ * 1) Admin 로그인
+ */
 export const ADMIN_LOGIN = gql`
   mutation adminLogin($username: String!, $password: String!) {
     adminLogin(username: $username, password: $password) {
@@ -11,10 +12,13 @@ export const ADMIN_LOGIN = gql`
   }
 `;
 
-// (1) 유저 생성
+/**
+ * 2) 유저 생성
+ *    - region 필드 추가
+ */
 export const CREATE_USER = gql`
-  mutation createUser($phoneNumber: String!, $name: String!) {
-    createUser(phoneNumber: $phoneNumber, name: $name) {
+  mutation createUser($phoneNumber: String!, $name: String!, $region: String) {
+    createUser(phoneNumber: $phoneNumber, name: $name, region: $region) {
       user {
         id
         systemId
@@ -23,13 +27,18 @@ export const CREATE_USER = gql`
         phoneNumber
         type
         validUntil
+        region
+        settings
       }
       tempPassword
     }
   }
 `;
 
-// (2) 유저 정보 업데이트
+/**
+ * 3) 유저 정보 업데이트
+ *    - region 필드 추가
+ */
 export const UPDATE_USER = gql`
   mutation updateUser(
     $userId: ID!
@@ -37,6 +46,7 @@ export const UPDATE_USER = gql`
     $phoneNumber: String
     $validUntil: String
     $type: Int
+    $region: String
   ) {
     updateUser(
       userId: $userId
@@ -44,6 +54,7 @@ export const UPDATE_USER = gql`
       phoneNumber: $phoneNumber
       validUntil: $validUntil
       type: $type
+      region: $region
     ) {
       id
       systemId
@@ -52,36 +63,53 @@ export const UPDATE_USER = gql`
       phoneNumber
       type
       validUntil
+      region
+      settings
     }
   }
 `;
 
-// (3) 유저 비밀번호 리셋
+/**
+ * 4) 유저 비밀번호 리셋
+ */
 export const RESET_USER_PASSWORD = gql`
   mutation resetUserPassword($userId: ID!) {
     resetUserPassword(userId: $userId)
   }
 `;
 
-
-// (A) 여러 Record 업서트 (하나만 보낼 수도 있음)
+/**
+ * (A) 여러 Phone Record 업서트
+ */
 export const UPSERT_PHONE_RECORDS = gql`
   mutation upsertPhoneRecords($records: [PhoneRecordInput!]!) {
     upsertPhoneRecords(records: $records)
   }
 `;
 
+/**
+ * Content 관련
+ * - createContent / updateContent / deleteContent
+ * - createReply / deleteReply
+ * 
+ * 새로운 필드 userName / userRegion, 
+ * 댓글(Comment)에도 userName / userRegion 추가
+ */
 export const CREATE_CONTENT = gql`
   mutation createContent($type: Int, $title: String, $content: JSON!) {
     createContent(type: $type, title: $title, content: $content) {
       id
       userId
+      userName
+      userRegion
       type
       title
       createdAt
       content
       comments {
         userId
+        userName
+        userRegion
         comment
         createdAt
       }
@@ -90,16 +118,30 @@ export const CREATE_CONTENT = gql`
 `;
 
 export const UPDATE_CONTENT = gql`
-  mutation updateContent($contentId: ID!, $title: String, $content: JSON, $type: Int) {
-    updateContent(contentId: $contentId, title: $title, content: $content, type: $type) {
+  mutation updateContent(
+    $contentId: ID!
+    $title: String
+    $content: JSON
+    $type: Int
+  ) {
+    updateContent(
+      contentId: $contentId
+      title: $title
+      content: $content
+      type: $type
+    ) {
       id
       userId
+      userName
+      userRegion
       type
       title
       createdAt
       content
       comments {
         userId
+        userName
+        userRegion
         comment
         createdAt
       }
@@ -119,6 +161,8 @@ export const CREATE_REPLY = gql`
       id
       comments {
         userId
+        userName
+        userRegion
         comment
         createdAt
       }
@@ -132,18 +176,20 @@ export const DELETE_REPLY = gql`
   }
 `;
 
-
+/**
+ * Notification 관련
+ */
 export const CREATE_NOTIFICATION = gql`
   mutation createNotification(
-    $title: String!,
-    $message: String!,
-    $validUntil: String,
+    $title: String!
+    $message: String!
+    $validUntil: String
     $userId: ID
   ) {
     createNotification(
-      title: $title,
-      message: $message,
-      validUntil: $validUntil,
+      title: $title
+      message: $message
+      validUntil: $validUntil
       userId: $userId
     ) {
       id
@@ -153,5 +199,14 @@ export const CREATE_NOTIFICATION = gql`
       createdAt
       targetUserId
     }
+  }
+`;
+
+/**
+ * APK 업로드 (Version API)
+ */
+export const UPLOAD_APK = gql`
+  mutation uploadAPK($version: String!, $file: Upload!) {
+    uploadAPK(version: $version, file: $file)
   }
 `;

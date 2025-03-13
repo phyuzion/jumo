@@ -12,17 +12,22 @@ import {
 
 import { Header } from '../components';
 
-
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Quill from 'quill'; // Delta -> HTML 변환용
 
-import { GET_CONTENTS, GET_SINGLE_CONTENT } from '../graphql/queries';
-import { CREATE_CONTENT,
-    UPDATE_CONTENT,
-    DELETE_CONTENT,
-    CREATE_REPLY,
-    DELETE_REPLY, } from '../graphql/mutations';
+// 바뀐 쿼리/뮤테이션 가져오기 (userName/userRegion 포함)
+import {
+  GET_CONTENTS,
+  GET_SINGLE_CONTENT
+} from '../graphql/queries';
+import {
+  CREATE_CONTENT,
+  UPDATE_CONTENT,
+  DELETE_CONTENT,
+  CREATE_REPLY,
+  DELETE_REPLY,
+} from '../graphql/mutations';
 
 // Quill 설정
 const quillModules = {
@@ -57,7 +62,14 @@ function deltaToHtml(deltaObj) {
 /** 날짜 포맷 */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const d = new Date(parseInt(dateStr));
+  // 서버가 epoch string을 줄 수도, ISO string을 줄 수도 있으므로 안전하게 처리
+  let d = null;
+  const maybeEpoch = parseInt(dateStr, 10);
+  if (!isNaN(maybeEpoch)) {
+    d = new Date(maybeEpoch);
+  } else {
+    d = new Date(dateStr);
+  }
   if (isNaN(d.getTime())) return dateStr;
   return d.toLocaleString();
 }
@@ -102,8 +114,6 @@ function Contents() {
   // 수정 시
   const [editType,   setEditType]   = useState(0);
   const [editTitle,  setEditTitle]  = useState('');
-  // 굳이 editDelta state를 관리하지 않고, 최종 저장 시점에 getContents()를 해올 수도 있음
-  // 여기서는 일단 string/any를 둠
   const editQuillRef = useRef(null);
 
   // 댓글
@@ -175,8 +185,7 @@ function Contents() {
   // ============ 상세 열기 ============
   const handleDetailOpen = async (row) => {
     try {
-      await getSingleLazy({ variables: { contentId: row.id, 
-        _ts: Date.now() } });
+      await getSingleLazy({ variables: { contentId: row.id, _ts: Date.now() } });
     } catch (err) {
       alert(err.message);
     }
@@ -211,9 +220,9 @@ function Contents() {
         variables: { contentId: detailItem.id, comment: replyText },
       });
       if (res.data.createReply) {
-        setDetailItem({ 
+        setDetailItem({
           ...detailItem,
-          comments: res.data.createReply.comments 
+          comments: res.data.createReply.comments,
         });
         setReplyText('');
       }
@@ -270,7 +279,7 @@ function Contents() {
   return (
     <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
       <Header category="Page" title="게시판" />
-      
+
       {/* Filter */}
       <div className="flex gap-2 mb-4">
         <select value={typeFilter} onChange={handleTypeChange} className="border p-1 rounded">
@@ -278,7 +287,7 @@ function Contents() {
           <option value={1}>CONTENT_1</option>
           <option value={2}>CONTENT_2</option>
         </select>
-        <button 
+        <button
           className="bg-blue-500 text-white px-3 py-1 rounded"
           onClick={handleCreateClick}
         >
@@ -299,7 +308,9 @@ function Contents() {
       >
         <ColumnsDirective>
           <ColumnDirective field="id" headerText="ID" width="80" />
-          <ColumnDirective field="userId" headerText="User" width="100" />
+          <ColumnDirective field="userId" headerText="UserId" width="100" />
+          <ColumnDirective field="userName" headerText="UserName" width="120" />
+          <ColumnDirective field="userRegion" headerText="Region" width="100" />
           <ColumnDirective field="title" headerText="Title" width="150" />
           <ColumnDirective field="type" headerText="Type" width="60" textAlign="Center" />
           <ColumnDirective
@@ -410,22 +421,28 @@ function Contents() {
                 <h2 className="text-xl font-bold mb-2">상세 보기</h2>
                 <div className="flex-none mb-2">
                   <p>ID: {detailItem.id}</p>
-                  <p>User: {detailItem.userId}</p>
+                  <p>UserId: {detailItem.userId}</p>
+                  <p>UserName: {detailItem.userName}</p>
+                  <p>UserRegion: {detailItem.userRegion}</p>
                   <p>Type: {detailItem.type}</p>
                   <p>Title: {detailItem.title}</p>
                   <p>CreatedAt: {formatDate(detailItem.createdAt)}</p>
                 </div>
 
                 <div className="flex-auto border overflow-auto mb-2 p-2">
-                  <div dangerouslySetInnerHTML={{ __html: deltaToHtml(detailItem.content) }} />
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: deltaToHtml(detailItem.content),
+                    }}
+                  />
                 </div>
 
                 {/* 댓글 */}
-                <div className="flex-none border p-2 mb-2 overflow-auto" style={{ maxHeight:'150px' }}>
+                <div className="flex-none border p-2 mb-2 overflow-auto" style={{ maxHeight: '150px' }}>
                   <h3>댓글 ({detailItem.comments.length})</h3>
                   {detailItem.comments.map((c, idx) => (
                     <div key={idx} className="border p-1 my-1">
-                      <p>작성자: {c.userId}</p>
+                      <p>작성자: {c.userName} ({c.userRegion})</p>
                       <p>{c.comment}</p>
                       <p>{formatDate(c.createdAt)}</p>
                       <button
@@ -457,7 +474,6 @@ function Contents() {
                     className="bg-orange-500 text-white px-3 py-1 rounded"
                     onClick={() => {
                       setEditMode(true);
-                      // 기존 필드들 세팅
                       setEditTitle(detailItem.title);
                       setEditType(detailItem.type);
                     }}
@@ -502,12 +518,10 @@ function Contents() {
                     modules={quillModules}
                     formats={quillFormats}
                     style={{ height: '100%' }}
-                    // 기존 Delta -> defaultValue
-                    defaultValue={detailItem.content} 
+                    defaultValue={detailItem.content}
                     onChange={(html, delta, source, editor) => {
-                      // 실시간으로 Delta 보려면
-                      const deltaObj = editor.getContents();
-                      console.log('Edit in progress:', deltaObj);
+                      // 실시간 Delta 찍어보려면
+                      // console.log('Edit in progress:', editor.getContents());
                     }}
                   />
                 </div>

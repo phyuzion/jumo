@@ -16,8 +16,8 @@ import {
 import {
   GET_ALL_USERS,
   GET_USER_RECORDS,
-  GET_USER_CALL_LOG,     // <-- 추가
-  GET_USER_SMS_LOG        // <-- 추가
+  GET_USER_CALL_LOG, // 통화로그
+  GET_USER_SMS_LOG,  // 문자로그
 } from "../graphql/queries";
 import {
   CREATE_USER,
@@ -38,9 +38,9 @@ const Users = () => {
   });
 
   // (2) create / update / reset
-  const [createUserMutation]     = useMutation(CREATE_USER);
-  const [updateUserMutation]     = useMutation(UPDATE_USER);
-  const [resetUserPasswordMutation] = useMutation(RESET_USER_PASSWORD);
+  const [createUserMutation]         = useMutation(CREATE_USER);
+  const [updateUserMutation]         = useMutation(UPDATE_USER);
+  const [resetUserPasswordMutation]  = useMutation(RESET_USER_PASSWORD);
 
   // (3-1) 전화번호부 기록 (lazy)
   const [getUserRecordsLazy, { data: recordsData }] = useLazyQuery(GET_USER_RECORDS, {
@@ -53,7 +53,7 @@ const Users = () => {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
   });
-  const [getUserSMSLogLazy,   { data: smsLogData }]   = useLazyQuery(GET_USER_SMS_LOG, {
+  const [getUserSMSLogLazy, { data: smsLogData }]   = useLazyQuery(GET_USER_SMS_LOG, {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
   });
@@ -61,7 +61,7 @@ const Users = () => {
   // ========== State ==========
   const [users, setUsers] = useState([]);
 
-  // 생성/수정 모달
+  // 생성/수정 모달 표시 여부
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal,   setShowEditModal]   = useState(false);
   const [editUser,        setEditUser]        = useState(null);
@@ -77,16 +77,19 @@ const Users = () => {
   const [smsLogs,      setSmsLogs]      = useState([]);
 
   // 생성 폼
-  const [formPhone, setFormPhone] = useState('');
-  const [formName,  setFormName ] = useState('');
+  const [formPhone,  setFormPhone]  = useState('');
+  const [formName,   setFormName]   = useState('');
+  const [formRegion, setFormRegion] = useState('');
 
   // 수정 폼
   const [editPhone,      setEditPhone]      = useState('');
   const [editName,       setEditName]       = useState('');
   const [editType,       setEditType]       = useState(0);
   const [editValidUntil, setEditValidUntil] = useState('');
+  const [editRegion,     setEditRegion]     = useState('');
 
   // ================= useEffect =================
+
   // getAllUsers -> users
   useEffect(() => {
     if (data?.getAllUsers) {
@@ -129,24 +132,40 @@ const Users = () => {
   }, [users]);
 
   // ============= COLUMN HELPER =============
+  // 유효기간
   const validUntilAccessor = (field, data) => {
     if (!data.validUntil) return '';
-    const d = new Date(parseInt(data.validUntil));
-    if (isNaN(d.getTime())) return data.validUntil;
-    return d.toISOString().slice(0,10); // "YYYY-MM-DD"
+    // validUntil이 epoch string인지, ISO string인지 상황에 따라 확인
+    let dt = null;
+    // 시도1: epoch 파싱
+    const epoch = parseInt(data.validUntil, 10);
+    if (!isNaN(epoch)) {
+      dt = new Date(epoch);
+    }
+    // 시도2: 만약 epoch 변환 실패 시 Date로 직접 파싱
+    if (!dt || isNaN(dt.getTime())) {
+      dt = new Date(data.validUntil);
+    }
+    if (isNaN(dt.getTime())) return data.validUntil; 
+    return dt.toISOString().slice(0, 10); // "YYYY-MM-DD"
   };
 
   // ============= CREATE =============
   const handleCreate = () => {
     setFormPhone('');
     setFormName('');
+    setFormRegion('');
     setShowCreateModal(true);
   };
 
   const handleCreateSubmit = async () => {
     try {
       const res = await createUserMutation({
-        variables: { phoneNumber: formPhone, name: formName },
+        variables: {
+          phoneNumber: formPhone,
+          name: formName,
+          region: formRegion,
+        },
       });
       const tempPass = res.data?.createUser?.tempPassword;
       alert(`유저 생성 완료! 임시비번: ${tempPass}`);
@@ -173,16 +192,26 @@ const Users = () => {
     setEditPhone(u.phoneNumber || '');
     setEditName(u.name || '');
     setEditType(u.type || 0);
+    setEditRegion(u.region || '');
 
     // validUntil => "YYYY-MM-DD"
     let dtStr = '';
     if (u.validUntil) {
       try {
-        const dt = new Date(parseInt(u.validUntil));
-        if (!isNaN(dt.getTime())) {
-          dtStr = dt.toISOString().slice(0,10);
+        // epoch 시도
+        const maybeEpoch = parseInt(u.validUntil, 10);
+        let dt = null;
+        if (!isNaN(maybeEpoch)) {
+          dt = new Date(maybeEpoch);
+        } else {
+          dt = new Date(u.validUntil);
         }
-      } catch (err) {/*ignore*/}
+        if (!isNaN(dt.getTime())) {
+          dtStr = dt.toISOString().slice(0, 10);
+        }
+      } catch (err) {
+        // ignore
+      }
     }
     setEditValidUntil(dtStr);
 
@@ -204,6 +233,7 @@ const Users = () => {
           name: editName,
           type: parseInt(editType, 10),
           validUntil: validStr,
+          region: editRegion,
         }
       });
       alert('수정 완료!');
@@ -227,11 +257,10 @@ const Users = () => {
   };
 
   // ============= RECORDS, CALL LOG, SMS LOG ============
-  // 1) 기존: 전화번호부 기록 버튼
+  // 1) 전화번호부 기록 버튼
   const handleRecordsClick = async (u) => {
     try {
-      await getUserRecordsLazy({ variables: { userId: u.id ,
-        _ts: Date.now() } });
+      await getUserRecordsLazy({ variables: { userId: u.id, _ts: Date.now() } });
     } catch (err) {
       alert(err.message);
     }
@@ -242,31 +271,28 @@ const Users = () => {
     setSelectedTab(tab);
     if (!recordUser) return;
     const uid = recordUser.id;
-    // 탭에 따라 필요한 쿼리
+
     if (tab === 'callLogs') {
       // 통화로그 조회
       try {
-        await getUserCallLogLazy({ variables: { userId: uid,
-          _ts: Date.now() } });
+        await getUserCallLogLazy({ variables: { userId: uid, _ts: Date.now() } });
       } catch (err) {
         alert(err.message);
       }
     } else if (tab === 'smsLogs') {
       // 문자로그 조회
       try {
-        await getUserSMSLogLazy({ variables: { userId: uid,
-          _ts: Date.now() } });
+        await getUserSMSLogLazy({ variables: { userId: uid, _ts: Date.now() } });
       } catch (err) {
         alert(err.message);
       }
     }
-    // phoneRecords 탭은 이미 getUserRecords로 가져옴
+    // phoneRecords 탭은 이미 getUserRecords로 가져왔음
   };
 
   // ============= SYNCFUSION HANDLERS (옵션) =============
   const handleActionBegin = (args) => {
-    // 한방에 getAllUsers
-    // paging, sorting 필요시 custom
+    // paging, sorting 등 확장 시 필요
   };
 
   // ============= RENDER =============
@@ -304,21 +330,22 @@ const Users = () => {
           allowSorting={true}
         >
           <ColumnsDirective>
-            <ColumnDirective field="loginId"     headerText="아이디"  width="80" />
-            <ColumnDirective field="name"        headerText="상호"    width="120" />
-            <ColumnDirective field="phoneNumber" headerText="번호"    width="100" />
-            <ColumnDirective field="type"        headerText="타입"    width="50"  textAlign="Center" />
+            <ColumnDirective field="loginId"     headerText="아이디"    width="90" />
+            <ColumnDirective field="name"        headerText="상호"      width="120" />
+            <ColumnDirective field="phoneNumber" headerText="번호"      width="110" />
+            <ColumnDirective field="type"        headerText="타입"      width="60"  textAlign="Center" />
+            <ColumnDirective field="region"      headerText="지역"      width="80"  textAlign="Center" />
             <ColumnDirective
               field="validUntil"
               headerText="유효기간"
-              width="70"
+              width="90"
               textAlign="Center"
               valueAccessor={validUntilAccessor}
             />
             {/* Edit */}
             <ColumnDirective
               headerText="Edit"
-              width="70"
+              width="80"
               textAlign="Center"
               template={(u) => (
                 <button
@@ -380,6 +407,12 @@ const Users = () => {
                 onChange={(e) => setFormName(e.target.value)}
                 className="border p-1"
               />
+              <input
+                placeholder="Region"
+                value={formRegion}
+                onChange={(e) => setFormRegion(e.target.value)}
+                className="border p-1"
+              />
             </div>
             <div className="mt-4 flex gap-2">
               <button
@@ -426,10 +459,16 @@ const Users = () => {
                 className="border p-1"
               />
               <input
-                placeholder="ValidUntil YYYY-MM-DD"
+                placeholder="YYYY-MM-DD"
                 type="date"
                 value={editValidUntil}
                 onChange={(e) => setEditValidUntil(e.target.value)}
+                className="border p-1"
+              />
+              <input
+                placeholder="Region"
+                value={editRegion}
+                onChange={(e) => setEditRegion(e.target.value)}
                 className="border p-1"
               />
             </div>
@@ -459,24 +498,32 @@ const Users = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
           <div className="bg-white p-4 w-96 rounded shadow max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-2">유저 상세</h2>
-            <p className="mb-2">{recordUser.loginId} ({recordUser.name})</p>
+            <p className="mb-2">
+              {recordUser.loginId} ({recordUser.name})
+            </p>
 
             {/* 탭 버튼 */}
             <div className="flex gap-2 mb-4">
               <button
-                className={`px-2 py-1 rounded ${selectedTab==='phoneRecords'?'bg-blue-300':''}`}
+                className={`px-2 py-1 rounded ${
+                  selectedTab === 'phoneRecords' ? 'bg-blue-300' : ''
+                }`}
                 onClick={() => handleTabSelect('phoneRecords')}
               >
                 번호부
               </button>
               <button
-                className={`px-2 py-1 rounded ${selectedTab==='callLogs'?'bg-blue-300':''}`}
+                className={`px-2 py-1 rounded ${
+                  selectedTab === 'callLogs' ? 'bg-blue-300' : ''
+                }`}
                 onClick={() => handleTabSelect('callLogs')}
               >
                 콜로그
               </button>
               <button
-                className={`px-2 py-1 rounded ${selectedTab==='smsLogs'?'bg-blue-300':''}`}
+                className={`px-2 py-1 rounded ${
+                  selectedTab === 'smsLogs' ? 'bg-blue-300' : ''
+                }`}
                 onClick={() => handleTabSelect('smsLogs')}
               >
                 문자로그
