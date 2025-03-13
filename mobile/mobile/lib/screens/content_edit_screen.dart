@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:mobile/graphql/contents_api.dart';
-import 'package:mobile/utils/constants.dart'; // if needed
 
 class ContentEditScreen extends StatefulWidget {
   final Map<String, dynamic>? item; // null => 새글
@@ -19,7 +18,9 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
   int _type = 0;
   QuillController? _quillController;
 
-  bool _initialized = false;
+  bool _initialized = false; // 한 번만 초기화하기 위한 플래그
+
+  // 작성자 정보(기존 글 편집 시)
   String _authorText = '';
 
   @override
@@ -42,8 +43,11 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
         // 작성자(userName, userRegion)
         final userName = item['userName'] ?? '(No Name)';
         final userRegion = item['userRegion'] ?? '';
-        _authorText =
-            (userRegion.isNotEmpty) ? '$userName ($userRegion)' : userName;
+        if (userRegion.isNotEmpty) {
+          _authorText = '$userName ($userRegion)';
+        } else {
+          _authorText = userName;
+        }
 
         // content Delta
         final contentMap = item['content'] as Map<String, dynamic>?;
@@ -58,12 +62,14 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
           _quillController = QuillController.basic();
         }
       }
+
       _initialized = true;
     }
   }
 
   Future<void> _onSubmit() async {
-    if (_quillController == null) return;
+    if (_quillController == null) return; // 안전 처리
+
     final title = _titleCtrl.text.trim();
     if (title.isEmpty) {
       ScaffoldMessenger.of(
@@ -72,6 +78,7 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
       return;
     }
 
+    // Delta -> { ops: [...] }
     final deltaList = _quillController!.document.toDelta().toJson();
     final contentObj = {'ops': deltaList};
 
@@ -108,17 +115,11 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
     }
   }
 
-  // 드롭다운으로 type 바꾸기 (option)
-  void _onChangeType(int? val) {
-    if (val == null) return;
-    setState(() => _type = val);
-  }
-
   @override
   Widget build(BuildContext context) {
     final appBarTitle = isNew ? '새 글 작성' : '글 수정';
 
-    // 아직 초기화 안 됐으면 로딩
+    // 아직 didChangeDependencies에서 초기화 안 됐으면 빈 화면
     if (!_initialized || _quillController == null) {
       return Scaffold(
         appBar: AppBar(title: Text(appBarTitle)),
@@ -127,182 +128,82 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
     }
 
     return Scaffold(
-      // 키보드가 올라올 때 화면이 잘 올라가도록
-      resizeToAvoidBottomInset: true,
       appBar: AppBar(
-        leadingWidth: 40,
-        titleSpacing: 0,
-        title: _buildTitleArea(appBarTitle),
+        title: Text(appBarTitle),
         actions: [
           IconButton(icon: const Icon(Icons.check), onPressed: _onSubmit),
         ],
       ),
-      backgroundColor: Colors.grey.shade100,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Quill Toolbar (간단버전)
-            _buildQuillToolbar(),
-
-            // 본문
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(12),
-                child: _buildEditorCard(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // AppBar 내 title 부분(좌측에 "새 글 작성"/"글 수정", 우측에 dropdown or etc.)
-  Widget _buildTitleArea(String appBarTitle) {
-    // 드롭다운 아이템
-    const typeItems = [
-      DropdownMenuItem(value: 0, child: Text('TYPE_0')),
-      DropdownMenuItem(value: 1, child: Text('TYPE_1')),
-      DropdownMenuItem(value: 2, child: Text('TYPE_2')),
-    ];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: Row(
+      body: Column(
         children: [
-          Text(
-            appBarTitle,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          // Title / Type / Author (기존 글 수정 시에만 표시)
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              children: [
+                if (!isNew) ...[
+                  // 작성자 표시
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '작성자: $_authorText',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    Text('Type: $_type'),
+                    const SizedBox(width: 16),
+                    const Text('Title:'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _titleCtrl,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(width: 12),
-          // 드롭다운 (type)
-          DropdownButton<int>(
-            value: _type,
-            items: typeItems,
-            onChanged: isNew ? _onChangeType : null,
-            underline: const SizedBox(),
-            style: const TextStyle(fontSize: 14, color: Colors.white),
-            dropdownColor: Colors.blueGrey[600],
-            iconEnabledColor: Colors.white,
-          ),
+
+          // 에디터 툴바(심플)
+          _buildQuillToolbar(),
+
+          // 에디터
+          Expanded(child: _buildQuillEditor()),
         ],
       ),
     );
   }
 
   Widget _buildQuillToolbar() {
-    return Container(
-      color: Colors.white,
-      child: QuillSimpleToolbar(
-        controller: _quillController!,
-        config: QuillSimpleToolbarConfig(
-          // 필요한 버튼만 true
-          multiRowsDisplay: false,
-          showDividers: false,
-          showFontFamily: false,
-          showFontSize: true,
-          showBoldButton: true,
-          showItalicButton: true,
-          showLineHeightButton: false,
-          showStrikeThrough: false,
-          showInlineCode: false,
-          showColorButton: false,
-          showBackgroundColorButton: false,
-          showClearFormat: false,
-          showAlignmentButtons: false,
-          showHeaderStyle: false,
-          showListNumbers: false,
-          showListBullets: false,
-          showListCheck: false,
-          showCodeBlock: false,
-          showQuote: false,
-          showIndent: false,
-          showLink: false,
-          showUndo: false,
-          showRedo: false,
-          showDirection: false,
-          showSearchButton: false,
-          showSubscript: false,
-          showSuperscript: false,
-          showClipboardCut: false,
-          showClipboardCopy: false,
-          showClipboardPaste: false,
-        ),
+    return QuillSimpleToolbar(
+      controller: _quillController!,
+      config: const QuillSimpleToolbarConfig(
+        embedButtons: [],
+        showClipboardPaste: false,
+        // bold/italic/underline 등 최소 버튼
       ),
     );
   }
 
-  // 에디터 카드 (제목 + 작성자 + 본문)
-  Widget _buildEditorCard() {
-    // 작성자 (수정모드일 때만)
-    final authorWidget =
-        (isNew)
-            ? const SizedBox.shrink()
-            : Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '작성자: $_authorText',
-                style: const TextStyle(fontWeight: FontWeight.bold),
-              ),
-            );
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 3,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        children: [
-          // 작성자
-          if (!isNew) ...[authorWidget, const SizedBox(height: 12)],
-          // 제목 입력
-          Row(
-            children: [
-              const Text(
-                'Title:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: _titleCtrl,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Quill Editor
-          Container(
-            height: 300, // 적당한 높이
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              border: Border.all(color: Colors.grey),
-            ),
-            child: QuillEditor(
-              controller: _quillController!,
-              focusNode: FocusNode(),
-              scrollController: ScrollController(),
-              config: const QuillEditorConfig(
-                autoFocus: true,
-                expands: false,
-                padding: EdgeInsets.all(8),
-                embedBuilders: [],
-              ),
-            ),
-          ),
-        ],
+  Widget _buildQuillEditor() {
+    return QuillEditor(
+      controller: _quillController!,
+      focusNode: FocusNode(),
+      scrollController: ScrollController(),
+      config: const QuillEditorConfig(
+        autoFocus: true,
+        expands: false,
+        padding: EdgeInsets.all(8),
+        embedBuilders: [],
       ),
     );
   }
