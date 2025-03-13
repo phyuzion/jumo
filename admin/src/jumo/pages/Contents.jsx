@@ -16,7 +16,6 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Quill from 'quill'; // Delta -> HTML 변환용
 
-// 바뀐 쿼리/뮤테이션 가져오기 (userName/userRegion 포함)
 import {
   GET_CONTENTS,
   GET_SINGLE_CONTENT
@@ -62,7 +61,6 @@ function deltaToHtml(deltaObj) {
 /** 날짜 포맷 */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  // 서버가 epoch string을 줄 수도, ISO string을 줄 수도 있으므로 안전하게 처리
   let d = null;
   const maybeEpoch = parseInt(dateStr, 10);
   if (!isNaN(maybeEpoch)) {
@@ -251,7 +249,6 @@ function Contents() {
   // ============ 수정 모드 ============
   const handleUpdateSubmit = async () => {
     if (!detailItem) return;
-    // (1) Quill에서 최종 Delta 얻기
     let finalDelta = { ops: [] };
     if (editQuillRef.current) {
       const editor = editQuillRef.current.getEditor();
@@ -430,11 +427,18 @@ function Contents() {
                 </div>
 
                 <div className="flex-auto border overflow-auto mb-2 p-2">
-                  <div
-                    dangerouslySetInnerHTML={{
-                      __html: deltaToHtml(detailItem.content),
-                    }}
-                  />
+                  {/* 
+                    변경된 부분: .ql-snow .ql-editor 로 감싸서
+                    Quill CSS 클래스들이 적용되도록 함 
+                  */}
+                  <div className="ql-snow">
+                    <div
+                      className="ql-editor"
+                      dangerouslySetInnerHTML={{
+                        __html: deltaToHtml(detailItem.content),
+                      }}
+                    />
+                  </div>
                 </div>
 
                 {/* 댓글 */}
@@ -520,8 +524,7 @@ function Contents() {
                     style={{ height: '100%' }}
                     defaultValue={detailItem.content}
                     onChange={(html, delta, source, editor) => {
-                      // 실시간 Delta 찍어보려면
-                      // console.log('Edit in progress:', editor.getContents());
+                      // console.log(editor.getContents());
                     }}
                   />
                 </div>
