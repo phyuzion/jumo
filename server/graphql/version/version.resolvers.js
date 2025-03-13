@@ -10,7 +10,7 @@ module.exports = {
       const doc = await Version.findOne({});
       if (!doc) {
         // 아직 버전 레코드가 없다면 기본값 "1.0.0"
-        return '1.0.0';
+        return '0.0.0';
       }
       return doc.version;
     },
