@@ -6,3 +6,4 @@ mobile/.DS_Store
 // with this snippet from client/.gitignore:
 node_modules
 .DS_Store
+admin/.DS_Store
