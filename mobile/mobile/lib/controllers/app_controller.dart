@@ -9,6 +9,7 @@ import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/local_notification_service.dart';
+import 'package:mobile/utils/constants.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
@@ -38,7 +39,12 @@ class AppController {
   Future<void> checkUpdate() async {
     log('check Update');
     final UpdateController updateController = UpdateController();
-    updateController.checkVersion(true);
+
+    final ver = await updateController.getServerVersion();
+
+    if (ver.isNotEmpty && ver != APP_VERSION) {
+      updateController.downloadAndInstallApk();
+    }
   }
 
   Future<void> initializeData() async {

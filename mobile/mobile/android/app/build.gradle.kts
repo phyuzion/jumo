@@ -29,10 +29,35 @@ android {
         versionName = flutter.versionName
     }
 
-    buildTypes {
-        getByName("release") {
-            // signingConfig = ...
+    // ─────────────────────────────────────────────────────────────
+    //  signingConfigs{} - Kotlin DSL
+    // ─────────────────────────────────────────────────────────────
+    signingConfigs {
+        // release( ... ) -> 일반 Groovy DSL, KTS에서는 create("release") 또는 named("release")
+        create("release") {
+            // gradle.properties 등에서 변수를 불러온다고 가정
+            // ex) MY_KEYSTORE=... , MY_KEY_ALIAS=... , etc.
+            storeFile = file(
+                project.findProperty("MY_KEYSTORE") ?: "../app/my-release-key.jks"
+            )
+            storePassword = project.findProperty("MY_KEYSTORE_PASSWORD")?.toString() ?: ""
+            keyAlias = project.findProperty("MY_KEY_ALIAS")?.toString() ?: "key"
+            keyPassword = project.findProperty("MY_KEY_ALIAS_PASSWORD")?.toString() ?: ""
         }
+    }
+
+    buildTypes {
+        
+        // getByName("release")로 가져와서 설정
+        getByName("release") {
+            // signingConfigs["release"] 가능, or signingConfigs.getByName("release")
+            signingConfig = signingConfigs.getByName("release")
+
+            // Kotlin DSL에서 속성은 isMinifyEnabled, isShrinkResources 식으로
+            isMinifyEnabled = true
+            isShrinkResources = true
+        }
+        // getByName("debug") { ... } // debug는 자동 서명
     }
 }
 

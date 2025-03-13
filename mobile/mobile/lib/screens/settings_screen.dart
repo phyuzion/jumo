@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString
@@ -30,6 +31,11 @@ class _SettingsScreenState extends State<SettingsScreen>
   late String _userRegion;
   late String _validUntil; // 만료일(문자열)
 
+  // 업데이트 관련
+  String _serverVersion = ''; // 서버에서 조회한 버전
+  bool get _updateAvailable =>
+      _serverVersion.isNotEmpty && _serverVersion != APP_VERSION;
+
   @override
   void initState() {
     super.initState();
@@ -51,6 +57,24 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     // 2) 현재 기본 전화앱인지 / 오버레이권한 인지 체크
     _checkStatus();
+
+    _checkVersionManually();
+  }
+
+  /// (A) 업데이트 체크(수동)
+  Future<void> _checkVersionManually() async {
+    final updateCtrl = UpdateController();
+    final ver = await updateCtrl.getServerVersion();
+    if (!mounted) return;
+    setState(() {
+      _serverVersion = ver;
+    });
+  }
+
+  /// (B) [업데이트] 버튼을 누를 때
+  Future<void> _onTapUpdate() async {
+    final updateCtrl = UpdateController();
+    await updateCtrl.downloadAndInstallApk();
   }
 
   @override
@@ -209,6 +233,22 @@ class _SettingsScreenState extends State<SettingsScreen>
     return Scaffold(
       body: ListView(
         children: [
+          // (1) 만약 서버 버전이 내 버전과 다르면 => "업데이트가 있습니다." 버튼
+          if (_updateAvailable)
+            ListTile(
+              title: const Text(
+                '업데이트가 있습니다!',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              subtitle: Text('서버 버전: $_serverVersion\n현재 버전: $APP_VERSION'),
+              trailing: ElevatedButton(
+                onPressed: _onTapUpdate,
+                child: const Text('업데이트'),
+              ),
+            ),
           ListTile(
             leading: const Icon(Icons.phone_android),
             title: const Text('내 휴대폰번호'),

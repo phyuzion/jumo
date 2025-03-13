@@ -23,7 +23,7 @@
 
     <application
         android:name=".JumoApp"
-        android:label="mobile"
+        android:label="KOLPON"
         android:icon="@mipmap/ic_launcher">
 
         <!-- 메인 Activity -->

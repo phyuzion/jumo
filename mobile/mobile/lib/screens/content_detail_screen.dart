@@ -348,7 +348,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             child: Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: Colors.blue,
+                color: Colors.black,
                 borderRadius: BorderRadius.circular(20),
               ),
               child: const Icon(Icons.send, color: Colors.white, size: 20),
