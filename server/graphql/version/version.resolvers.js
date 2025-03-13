@@ -36,7 +36,7 @@ module.exports = {
         throw new Error("createReadStream is missing");
       }
 
-      const dirPath = path.join(__dirname, '../../public_downloads');
+      const dirPath = path.join(__dirname, '/var/data/public_downloads');
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
       }
