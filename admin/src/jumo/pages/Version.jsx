@@ -50,7 +50,7 @@ function Version() {
   };
 
   const currentVersion = data?.checkAPKVersion || '(없음)';
-  const downloadLink = 'http://localhost:4000/download/app.apk'; 
+  const downloadLink = 'https://jumo-vs8e.onrender.com/download/app.apk'; 
   // 실제 서버 주소나 .env 파일 등을 참고하여 변경
 
   return (
