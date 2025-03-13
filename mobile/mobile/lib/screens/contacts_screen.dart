@@ -1,5 +1,3 @@
-// lib/screens/contacts_screen.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -55,8 +53,19 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
-        child: ListView.builder(
+        // ============================
+        // ListView.separated 사용
+        // ============================
+        child: ListView.separated(
           itemCount: _contacts.length,
+          separatorBuilder:
+              (ctx, i) => const Divider(
+                color: Colors.grey,
+                thickness: 0.5,
+                indent: 16.0,
+                endIndent: 16.0,
+                height: 0, // 위아래 여백 없이 표시
+              ),
           itemBuilder: (ctx, i) {
             final c = _contacts[i];
             final name = c.name;
@@ -90,7 +99,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 ],
               ),
               child: ListTile(
+                contentPadding: EdgeInsets.symmetric(horizontal: 8),
                 leading: CircleAvatar(
+                  radius: 16,
                   backgroundColor: _pickColorFromChar(firstChar),
                   child: Text(
                     firstChar,
@@ -99,7 +110,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 ),
                 title: Text(
                   name.isNotEmpty ? name : '이름 없음',
-                  style: const TextStyle(fontSize: 18),
+                  style: const TextStyle(fontSize: 16),
                 ),
                 subtitle: Text(
                   phone + (memo.isNotEmpty ? ' / $memo' : ''),

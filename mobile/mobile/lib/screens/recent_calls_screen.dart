@@ -1,5 +1,3 @@
-// lib/screens/recent_calls_screen.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -54,8 +52,19 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _refreshCalls,
-        child: ListView.builder(
+        child: ListView.separated(
           itemCount: _callLogs.length,
+          // ================
+          // 1) 구분선 (Divider) 설정
+          // ================
+          separatorBuilder:
+              (context, index) => const Divider(
+                color: Colors.grey,
+                thickness: 0.5,
+                indent: 16.0,
+                endIndent: 16.0,
+                height: 0, // 높이 기본값(16) 대신 0으로 => 위아래 여백 최소화
+              ),
           itemBuilder: (context, index) {
             final call = _callLogs[index];
             final number = call['number'] as String? ?? '';
@@ -114,6 +123,10 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 ],
               ),
               child: ListTile(
+                // ================
+                // 2) ListTile의 상하 여백 조정
+                // ================
+                // contentPadding: EdgeInsets.zero,   // => 수평/수직 여백을 직접 없애고 싶다면 사용
                 leading: Icon(iconData, color: iconColor, size: 28),
                 title:
                     name.isNotEmpty
@@ -159,9 +172,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     Navigator.pushNamed(context, '/search', arguments: number);
   }
 
-  /// 편집 아이콘 탭:
-  /// 1) phoneBook 에 있는지 -> 기존이면 EditContactScreen(기존 모드)
-  /// 2) 없으면 신규 모드
   Future<void> _onTapEdit(String number) async {
     final norm = normalizePhone(number);
     final contactsCtrl = context.read<ContactsController>();

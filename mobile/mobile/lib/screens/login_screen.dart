@@ -1,5 +1,4 @@
 import 'dart:developer';
-
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/user_api.dart';
@@ -21,12 +20,14 @@ class _LoginScreenState extends State<LoginScreen> {
   // "아이디/비번 기억하기" 체크 여부
   bool _rememberMe = true;
 
+  // 비밀번호 보이기/숨기기
+  bool _showPassword = false;
+
   final box = GetStorage();
 
   @override
   void initState() {
     super.initState();
-    final box = GetStorage();
 
     // 1) 내 휴대폰번호 가져오기
     _myNumber = box.read<String>('myNumber') ?? '';
@@ -36,26 +37,24 @@ class _LoginScreenState extends State<LoginScreen> {
     final savedPw = box.read<String>('savedPassword');
 
     if (savedId != null && savedPw != null) {
-      // 저장된 아이디/비번이 있다면 자동 로그인 시도
-      //_autoLogin(savedId, savedPw);
+      // 자동 로그인 로직이 필요하다면 주석 해제
+      // _autoLogin(savedId, savedPw);
     }
   }
 
-  /// 자동 로그인 시도
+  /// 자동 로그인 시도 (옵션)
   Future<void> _autoLogin(String savedId, String savedPw) async {
     setState(() => _loading = true);
     try {
       if (_myNumber.isEmpty) {
-        throw Exception('내 휴대폰번호(myNumber)가 없습니다. 자동로그인 불가');
+        throw Exception('전화번호를 인식할수 없습니다.');
       }
       await UserApi.userLogin(
         loginId: savedId,
         password: savedPw,
         phoneNumber: _myNumber,
       );
-      // 성공 -> 홈으로
       if (!mounted) return;
-
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       debugPrint('자동 로그인 실패: $e');
@@ -64,35 +63,36 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// 로그인 버튼
+  /// 로그인 버튼 or Enter key
   Future<void> _onLoginPressed() async {
     setState(() => _loading = true);
     try {
       final loginId = _loginIdCtrl.text.trim();
       final password = _passwordCtrl.text.trim();
+
+      // 아이디/비번 체크
       if (loginId.isEmpty || password.isEmpty) {
-        throw Exception('아이디/비번을 입력하세요');
-      }
-      if (_myNumber.isEmpty) {
-        throw Exception('내 휴대폰번호(myNumber)가 없습니다.');
+        throw Exception('아이디와 비번을 모두 입력해주세요.');
       }
 
-      // userLogin 호출
+      // 전화번호 체크
+      if (_myNumber.isEmpty) {
+        throw Exception('전화번호를 인식할수 없습니다.');
+      }
+
+      // 로그인 호출
       await UserApi.userLogin(
         loginId: loginId,
         password: password,
         phoneNumber: _myNumber,
       );
-      // 토큰이 GetStorage('accessToken') 에 저장됨
 
-      // "아이디/비번 기억하기" 체크 시 => 저장
+      // 아이디/비번 기억하기
       if (_rememberMe) {
-        final box = GetStorage();
         box.write('savedLoginId', loginId);
         box.write('savedPassword', password);
       }
 
-      // /home 이동
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
@@ -113,14 +113,33 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
                   children: [
+                    // 아이디
                     TextField(
                       controller: _loginIdCtrl,
                       decoration: const InputDecoration(labelText: '아이디'),
+                      textInputAction: TextInputAction.next,
                     ),
+                    // 비밀번호
                     TextField(
                       controller: _passwordCtrl,
-                      decoration: const InputDecoration(labelText: '비밀번호'),
-                      obscureText: true,
+                      decoration: InputDecoration(
+                        labelText: '비밀번호',
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _showPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _showPassword = !_showPassword;
+                            });
+                          },
+                        ),
+                      ),
+                      obscureText: !_showPassword,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _onLoginPressed(),
                     ),
                     const SizedBox(height: 20),
                     Row(
