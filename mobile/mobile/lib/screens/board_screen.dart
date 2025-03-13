@@ -12,12 +12,18 @@ class _BoardScreenState extends State<BoardScreen> {
   // 0,1,2 중 하나. 기본 0
   int _selectedType = 0;
 
+  // GlobalKey 로 BoardListViewState 조작
+  final GlobalKey<BoardListViewState> _boardListKey = GlobalKey();
+
   // 글쓰기 FAB 클릭
   void _onTapCreate() {
     final type = _selectedType;
+    // => '/contentCreate' 에 type 전달
     Navigator.pushNamed(context, '/contentCreate', arguments: type).then((res) {
-      // 작성 후 돌아오면 refresh
-      setState(() {});
+      // 작성 후 돌아옴 -> res == true 이면 재조회
+      if (res == true) {
+        _boardListKey.currentState?.refresh();
+      }
     });
   }
 
@@ -38,7 +44,6 @@ class _BoardScreenState extends State<BoardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // 예: SearchScreen 색깔 원한다면:
         backgroundColor: Colors.grey[100],
         toolbarHeight: 40, // 세로 높이 줄이기
         titleSpacing: 0, // 좌우 여백 제거
@@ -51,27 +56,21 @@ class _BoardScreenState extends State<BoardScreen> {
             items: dropdownItems,
             onChanged: _onTypeChanged,
 
-            // 밑줄 제거
-            underline: const SizedBox(),
-            // 가로 전체 사용
-            isExpanded: true,
-
-            // 폰트 스타일
+            underline: const SizedBox(), // 밑줄 제거
+            isExpanded: true, // 가로로 꽉 차게
             style: const TextStyle(fontSize: 20, color: Colors.black),
-
-            // 드롭다운 아이콘(아래 화살표)
             icon: const Icon(
               Icons.arrow_drop_down,
               color: Colors.black,
               size: 40,
             ),
-            // 펼쳤을 때의 배경색
             dropdownColor: Colors.white,
           ),
         ),
       ),
 
-      body: BoardListView(type: _selectedType),
+      // (1) BoardListView에 GlobalKey 전달
+      body: BoardListView(key: _boardListKey, type: _selectedType),
 
       floatingActionButton: FloatingActionButton(
         onPressed: _onTapCreate,

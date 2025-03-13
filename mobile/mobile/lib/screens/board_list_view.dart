@@ -7,17 +7,31 @@ class BoardListView extends StatefulWidget {
   const BoardListView({Key? key, required this.type}) : super(key: key);
 
   @override
-  State<BoardListView> createState() => _BoardListViewState();
+  State<BoardListView> createState() => BoardListViewState();
 }
 
-class _BoardListViewState extends State<BoardListView> {
+class BoardListViewState extends State<BoardListView> {
   bool _loading = false;
   List<Map<String, dynamic>> _list = [];
+
+  // 외부에서 강제로 재조회하려고 호출할 메서드
+  Future<void> refresh() async {
+    await _fetchList();
+  }
 
   @override
   void initState() {
     super.initState();
     _fetchList();
+  }
+
+  @override
+  void didUpdateWidget(covariant BoardListView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // type 바뀌면 재조회
+    if (widget.type != oldWidget.type) {
+      _fetchList();
+    }
   }
 
   Future<void> _fetchList() async {
@@ -41,7 +55,7 @@ class _BoardListViewState extends State<BoardListView> {
       context,
       '/contentDetail',
       arguments: row['id'],
-    ).then((_) => _fetchList());
+    ).then((_) => _fetchList()); // 돌아오면 재조회
   }
 
   @override
@@ -72,7 +86,7 @@ class _BoardListViewState extends State<BoardListView> {
 
           // 제목 길이에 따라 폰트 크기 동적 적용
           const int titleLengthThreshold = 40;
-          double titleFontSize =
+          final double titleFontSize =
               (title.length > titleLengthThreshold) ? 13 : 16;
 
           return InkWell(
@@ -98,7 +112,7 @@ class _BoardListViewState extends State<BoardListView> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // 작성자 (최대 2줄)
+                        // 작성자
                         Text(
                           userName,
                           maxLines: 2,
@@ -106,11 +120,11 @@ class _BoardListViewState extends State<BoardListView> {
                           textAlign: TextAlign.right,
                           style: const TextStyle(
                             fontSize: 13,
-                            color: Colors.black, // 요청대로 -> 검정
+                            color: Colors.black,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        // 날짜(일시)
+                        // 날짜
                         Text(
                           dateStr,
                           maxLines: 2,
