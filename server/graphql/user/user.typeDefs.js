@@ -10,6 +10,8 @@ module.exports = gql`
     type: Int
     createdAt: String
     validUntil: String
+
+    # 새 필드
     region: String
   }
 
@@ -70,7 +72,7 @@ module.exports = gql`
   }
 
   extend type Mutation {
-    createUser(phoneNumber: String!, name: String! region: String): CreateUserPayload
+    createUser(phoneNumber: String!, name: String!): CreateUserPayload
     userLogin(loginId: String!, password: String!, phoneNumber: String!): AuthPayload
     userChangePassword(oldPassword: String!, newPassword: String!): ChangePasswordPayload
 
@@ -80,7 +82,6 @@ module.exports = gql`
       phoneNumber: String
       validUntil: String
       type: Int
-      region: String
     ): User
 
     resetUserPassword(userId: ID!): String
