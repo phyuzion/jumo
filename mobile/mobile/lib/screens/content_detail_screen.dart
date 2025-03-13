@@ -1,8 +1,11 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
+import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/contents_api.dart';
-import 'package:mobile/utils/constants.dart'; // formatDateString
+import 'package:mobile/utils/constants.dart'; // formatDateString()
 
 class ContentDetailScreen extends StatefulWidget {
   final String contentId;
@@ -18,8 +21,14 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   Map<String, dynamic>? _item;
   QuillController? _quillController;
 
-  // 1) 댓글 입력 컨트롤러
+  final box = GetStorage();
+
   final _replyCtrl = TextEditingController();
+
+  // 실제 로그인 정보(내 글인지 판단용) => 예: userId, admin 여부
+  // 이건 예시로만
+  String currentUserId = '';
+  final bool isAdmin = false; // 임의로 false, 실제 로직에서 로그인정보 넣으세요
 
   @override
   void initState() {
@@ -27,7 +36,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     _fetchDetail();
   }
 
-  /// 게시글 + 댓글 목록 불러오기
   Future<void> _fetchDetail() async {
     setState(() => _loading = true);
     try {
@@ -35,24 +43,21 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       if (data != null) {
         _item = data;
 
-        // content = { "ops": [...] }
+        // Quill 본문
         final contentMap = data['content'];
-        if (contentMap != null && contentMap is Map) {
-          final opsList = contentMap['ops'];
-          if (opsList != null && opsList is List) {
-            final doc = Document.fromJson(opsList);
-            _quillController = QuillController(
-              document: doc,
-              selection: const TextSelection.collapsed(offset: 0),
-              readOnly: true,
-            );
-          } else {
-            _quillController = QuillController.basic();
-          }
+        if (contentMap is Map && contentMap['ops'] is List) {
+          final doc = Document.fromJson(contentMap['ops']);
+          _quillController = QuillController(
+            document: doc,
+            selection: const TextSelection.collapsed(offset: 0),
+            readOnly: true,
+          );
         } else {
           _quillController = QuillController.basic();
         }
       }
+
+      currentUserId = box.read<String>('userId')!;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
@@ -60,7 +65,13 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
   }
 
-  /// 수정 화면
+  bool get _canEdit {
+    if (_item == null) return false;
+    final itemUserId = _item!['userId'] as String? ?? '';
+
+    return (itemUserId == currentUserId) || isAdmin;
+  }
+
   void _onTapEdit() {
     if (_item == null) return;
     Navigator.pushNamed(context, '/contentEdit', arguments: _item).then((res) {
@@ -80,9 +91,11 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('게시글 상세'),
+        leadingWidth: 30,
+        titleSpacing: 0, // 타이틀 왼쪽 간격을 0으로
+        title: _buildHeader(),
         actions: [
-          if (_item != null)
+          if (_item != null && _canEdit)
             IconButton(icon: const Icon(Icons.edit), onPressed: _onTapEdit),
         ],
       ),
@@ -95,154 +108,260 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       return const Center(child: Text('데이터 없음'));
     }
 
-    return Column(
-      children: [
-        // 상단부 (게시글 정보 + QuillViewer)
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Title: ${_item!['title'] ?? ''}'),
-
-                // userName / userRegion
-                _buildAuthorInfo(),
-
-                Text('Type: ${_item!['type']}'),
-                Text('Created: ${formatDateString(_item!['createdAt'])}'),
-                const SizedBox(height: 16),
-
-                if (_quillController != null)
-                  QuillEditor(
-                    controller: _quillController!,
-                    focusNode: FocusNode(),
-                    scrollController: ScrollController(),
-                    config: QuillEditorConfig(
-                      autoFocus: false,
-                      expands: false,
-                      padding: EdgeInsets.zero,
-                      embedBuilders: [...FlutterQuillEmbeds.editorBuilders()],
-                    ),
-                  ),
-                const Divider(),
-                // 댓글 목록
-                _buildCommentList(),
-              ],
+    return Container(
+      color: Colors.grey.shade100, // 전체 배경 그레이
+      child: Column(
+        children: [
+          // (2) 본문 + 댓글
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildContentCard(),
+                  const SizedBox(height: 12),
+                  _buildCommentSection(),
+                ],
+              ),
             ),
           ),
-        ),
-        // 하단 댓글 추가 UI
-        _buildReplyInput(),
-      ],
+
+          // (3) 댓글 입력창
+          _buildReplyInput(),
+        ],
+      ),
     );
   }
 
-  // 게시글 작성자 정보
-  Widget _buildAuthorInfo() {
-    final userName = _item!['userName'] ?? '(no name)';
-    final userRegion = _item!['userRegion'] ?? '';
-    String authorText = userName;
-    if (userRegion.isNotEmpty) {
-      authorText = '$userName ($userRegion)';
-    }
+  // =========================
+  // 1) 헤더: 제목/작성자/일시
+  // =========================
+  Widget _buildHeader() {
+    final title = _item!['title'] ?? '(제목없음)';
+    final userName = _item!['userName'] ?? '(unknown)';
+    final createdAtStr = shortDateTime(
+      formatDateString((_item!['createdAt'] ?? '')),
+    );
 
-    return Text('Author: $authorText');
+    // 제목은 왼쪽, 작성자/시간은 오른쪽
+    // BoardListView와 유사 스타일
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      child: Row(
+        children: [
+          // 제목
+          Expanded(
+            flex: 3,
+            child: Text(
+              title,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 작성자 + 시간 (오른쪽)
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // 작성자
+                Text(
+                  userName,
+                  style: const TextStyle(fontSize: 14, color: Colors.black),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                ),
+                const SizedBox(height: 4),
+                // 날짜
+                Text(
+                  createdAtStr,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.right,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
-  /// 댓글 목록
-  Widget _buildCommentList() {
+  // =========================
+  // 2) 본문(Quill) + 댓글
+  // =========================
+  Widget _buildContentCard() {
+    return Container(
+      // 카드 느낌
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 3,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Quill 본문
+          if (_quillController != null)
+            QuillEditor(
+              controller: _quillController!,
+              focusNode: FocusNode(),
+              scrollController: ScrollController(),
+              config: QuillEditorConfig(
+                autoFocus: false,
+                expands: false,
+                padding: EdgeInsets.zero,
+                embedBuilders: [...FlutterQuillEmbeds.editorBuilders()],
+              ),
+            )
+          else
+            const Text('(내용 없음)'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCommentSection() {
     final comments = _item!['comments'] as List? ?? [];
     if (comments.isEmpty) {
-      return const Text('댓글 없음');
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        child: const Text('댓글 없음', style: TextStyle(color: Colors.grey)),
+      );
     }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '댓글 (${comments.length})',
-          style: const TextStyle(fontWeight: FontWeight.bold),
+        // 댓글 헤딩
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Text(
+            '댓글 (${comments.length})',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 4),
+        // 댓글 목록
         for (int i = 0; i < comments.length; i++)
           _buildCommentItem(i, comments[i] as Map<String, dynamic>),
       ],
     );
   }
 
-  /// 개별 댓글 아이템
+  // 개별 댓글
   Widget _buildCommentItem(int index, Map<String, dynamic> c) {
     final userName = c['userName'] ?? '(unknown)';
     final userRegion = c['userRegion'] ?? '';
     final comment = c['comment'] ?? '';
-    final createdAt = formatDateString(c['createdAt'] ?? '');
+    final createdAtStr = formatDateString(c['createdAt'] ?? '');
 
-    // 작성자 표시
+    // 본인 댓글 or admin이면 삭제 가능(예시)
+    final commentUserId = c['userId'] ?? '';
+    final canDelete = (commentUserId == currentUserId) || isAdmin;
+
+    // 작성자
     String authorText = userName;
-    if (userRegion.isNotEmpty) {
-      authorText = '$userName ($userRegion)';
-    }
+    if (userRegion.isNotEmpty) authorText = '$userName ($userRegion)';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
+        color: Colors.white,
         border: Border.all(color: Colors.grey.shade300),
         borderRadius: BorderRadius.circular(4),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  authorText,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 4),
-                Text(comment),
-                const SizedBox(height: 4),
-                Text(
-                  createdAt,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Row(
+          children: [
+            // 댓글 텍스트
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    authorText,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(comment),
+                  const SizedBox(height: 4),
+                  Text(
+                    createdAtStr,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete, color: Colors.red),
-            onPressed: () => _onDeleteReply(index),
-          ),
-        ],
+            // 삭제 버튼
+            if (canDelete)
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _onDeleteReply(index),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  /// 댓글 입력 + 등록 버튼
+  // =========================
+  // 3) 댓글 입력 부분
+  // =========================
   Widget _buildReplyInput() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.grey.shade100,
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
         children: [
+          // 둥근 모서리 TextField
           Expanded(
-            child: TextField(
-              controller: _replyCtrl,
-              decoration: const InputDecoration(
-                labelText: '댓글 입력',
-                border: OutlineInputBorder(),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(20),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: TextField(
+                controller: _replyCtrl,
+                decoration: const InputDecoration(
+                  hintText: '댓글 입력',
+                  border: InputBorder.none,
+                ),
               ),
             ),
           ),
           const SizedBox(width: 8),
-          ElevatedButton(onPressed: _onTapAddReply, child: const Text('등록')),
+          // 등록 버튼 => 아이콘
+          InkWell(
+            onTap: _onTapAddReply,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.blue,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.send, color: Colors.white, size: 20),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// 댓글 등록 로직
   Future<void> _onTapAddReply() async {
     if (_item == null) return;
     final comment = _replyCtrl.text.trim();
@@ -254,15 +373,12 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
 
     try {
-      // createReply -> 전체 Content 반환 or comments 반환 (우리 ContentsApi는 전체 Content 반환)
       final updatedContent = await ContentsApi.createReply(
         contentId: _item!['id'],
         comment: comment,
       );
       if (updatedContent != null) {
-        setState(() {
-          _item = updatedContent;
-        });
+        setState(() => _item = updatedContent);
       }
       _replyCtrl.clear();
     } catch (e) {
@@ -270,7 +386,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
   }
 
-  /// 댓글 삭제
   Future<void> _onDeleteReply(int index) async {
     if (_item == null) return;
     final yes = await showDialog<bool>(
@@ -301,9 +416,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       if (success) {
         final arr = List<Map<String, dynamic>>.from(_item!['comments'] as List);
         arr.removeAt(index);
-        setState(() {
-          _item!['comments'] = arr;
-        });
+        setState(() => _item!['comments'] = arr);
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));

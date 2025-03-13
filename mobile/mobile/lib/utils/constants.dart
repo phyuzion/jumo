@@ -13,6 +13,17 @@ String normalizePhone(String raw) {
   return replaced;
 }
 
+// 이건 상단에 만들거나 utils에 둔 후 import
+String shortDateTime(String input) {
+  DateTime? dt = DateTime.tryParse(input);
+  if (dt == null) return input;
+  final mmdd =
+      '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  final hhmm =
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  return '$mmdd $hhmm'; // 2줄
+}
+
 /// 서버에서 받은 dateStr(=epoch string or ISO string)을
 /// "yyyy-MM-dd HH:mm" 형태로 변환
 String formatDateString(String? dateStr) {
