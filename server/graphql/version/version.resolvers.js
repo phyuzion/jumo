@@ -36,7 +36,6 @@ module.exports = {
         throw new Error("createReadStream is missing");
       }
 
-      // 준비: public_downloads 폴더가 없으면 생성
       const dirPath = path.join(__dirname, '../../public_downloads');
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
