@@ -25,10 +25,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
 
   final _replyCtrl = TextEditingController();
 
-  // 실제 로그인 정보(내 글인지 판단용) => 예: userId, admin 여부
-  // 이건 예시로만
   String currentUserId = '';
-  final bool isAdmin = false; // 임의로 false, 실제 로직에서 로그인정보 넣으세요
 
   @override
   void initState() {
@@ -69,7 +66,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     if (_item == null) return false;
     final itemUserId = _item!['userId'] as String? ?? '';
 
-    return (itemUserId == currentUserId) || isAdmin;
+    return (itemUserId == currentUserId);
   }
 
   void _onTapEdit() {
@@ -270,7 +267,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
 
     // 본인 댓글 or admin이면 삭제 가능(예시)
     final commentUserId = c['userId'] ?? '';
-    final canDelete = (commentUserId == currentUserId) || isAdmin;
+    final canDelete = (commentUserId == currentUserId);
 
     // 작성자
     String authorText = userName;
