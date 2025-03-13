@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { ApolloServer } = require('apollo-server-express');
+const { graphqlUploadExpress } = require('graphql-upload');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
 
@@ -40,6 +41,9 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  app.use(graphqlUploadExpress());
+
+  app.use('/download', express.static('public_downloads'));
 
   // 초당 1회 요청 제한 (windowMs: 1000ms, max:1)
   const limiter = rateLimit({
@@ -79,6 +83,7 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
+    console.log(`APK download link: http://localhost:${PORT}/download/app.apk`);
   });
 }
 

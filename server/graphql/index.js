@@ -16,6 +16,9 @@ const notificationTypeDefs = require('./notification/notification.typeDefs');
 const notificationResolvers = require('./notification/notification.resolvers');
 const authTypeDefs = require('./auth/auth.typeDefs');
 const authResolvers = require('./auth/auth.resolvers');
+const versionTypeDefs = require('./version/version.typeDefs');
+const versionResolvers = require('./version/version.resolvers');
+
 
 /*
   루트 스키마에 최소 1개씩 Query, Mutation 이 필요.
@@ -47,6 +50,7 @@ const typeDefs = mergeTypeDefs([
   contentTypeDefs,
   notificationTypeDefs,
   authTypeDefs,
+  versionTypeDefs,
 ]);
 
 // 모든 resolvers 합치기
@@ -60,6 +64,7 @@ const resolvers = mergeResolvers([
   contentResolvers,
   notificationResolvers,
   authResolvers,
+  versionResolvers,
 ]);
 
 module.exports = {
