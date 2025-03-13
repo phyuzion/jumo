@@ -27,6 +27,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late String _phoneNumber; // 내 휴대폰번호
   late String _loginId; // 아이디
   late String _userName; // 이름
+  late String _userRegion;
   late String _validUntil; // 만료일(문자열)
 
   @override
@@ -41,6 +42,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _phoneNumber = box.read<String>('myNumber') ?? '(unknown)';
     _loginId = box.read<String>('savedLoginId') ?? '(no id)';
     _userName = box.read<String>('userName') ?? '(no name)';
+    _userRegion = box.read<String>('userRegion') ?? '(no region)';
 
     final rawValidUntil = box.read<String>(
       'userValidUntil',
@@ -221,6 +223,11 @@ class _SettingsScreenState extends State<SettingsScreen>
             leading: const Icon(Icons.person),
             title: const Text('내 이름'),
             subtitle: Text(_userName),
+          ),
+          ListTile(
+            leading: const Icon(Icons.map),
+            title: const Text('내 지역'),
+            subtitle: Text(_userRegion),
           ),
           ListTile(
             leading: const Icon(Icons.timer),

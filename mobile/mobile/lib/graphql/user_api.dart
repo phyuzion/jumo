@@ -22,6 +22,7 @@ class UserApi {
           type
           createdAt
           validUntil
+          region
         }
       }
     }
@@ -73,6 +74,7 @@ class UserApi {
     box.write('userType', userData['type'].toString());
     box.write('loginStatus', true);
     box.write('userValidUntil', userData['validUntil'] ?? '');
+    box.write('userRegion', userData['region'] ?? '');
   }
 
   // ==================== 2) userChangePassword ====================

@@ -1,5 +1,3 @@
-// lib/screens/content_edit_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:mobile/graphql/contents_api.dart';
@@ -22,29 +20,43 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
 
   bool _initialized = false; // 한 번만 초기화하기 위한 플래그
 
+  // 작성자 정보(기존 글 편집 시)
+  String _authorText = '';
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
 
     if (!_initialized) {
-      // 여기서 ModalRoute.of(context) 접근 가능
       if (isNew) {
-        // type 인덱스 받기
+        // 새 글 작성
         final typeArg = ModalRoute.of(context)?.settings.arguments as int? ?? 0;
         _type = typeArg;
         _titleCtrl.text = '';
         _quillController = QuillController.basic();
       } else {
-        // 수정 모드
-        _titleCtrl.text = widget.item!['title'] ?? '';
-        _type = widget.item!['type'] ?? 0;
-        final content = widget.item!['content'] as Map<String, dynamic>?;
-        if (content != null && content['ops'] is List) {
-          final doc = Document.fromJson(content['ops']);
+        // 기존 글 수정
+        final item = widget.item!;
+        _titleCtrl.text = item['title'] ?? '';
+        _type = item['type'] ?? 0;
+
+        // 작성자(userName, userRegion)
+        final userName = item['userName'] ?? '(No Name)';
+        final userRegion = item['userRegion'] ?? '';
+        if (userRegion.isNotEmpty) {
+          _authorText = '$userName ($userRegion)';
+        } else {
+          _authorText = userName;
+        }
+
+        // content Delta
+        final contentMap = item['content'] as Map<String, dynamic>?;
+        if (contentMap != null && contentMap['ops'] is List) {
+          final doc = Document.fromJson(contentMap['ops']);
           _quillController = QuillController(
-            readOnly: false,
             document: doc,
             selection: const TextSelection.collapsed(offset: 0),
+            readOnly: false,
           );
         } else {
           _quillController = QuillController.basic();
@@ -124,52 +136,74 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
       ),
       body: Column(
         children: [
-          // Title / Type 표시
+          // Title / Type / Author (기존 글 수정 시에만 표시)
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: Row(
+            child: Column(
               children: [
-                Text('Type: $_type'),
-                const SizedBox(width: 16),
-                const Text('Title:'),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: TextField(
-                    controller: _titleCtrl,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      border: OutlineInputBorder(),
+                if (!isNew) ...[
+                  // 작성자 표시
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '작성자: $_authorText',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                   ),
+                  const SizedBox(height: 8),
+                ],
+                Row(
+                  children: [
+                    Text('Type: $_type'),
+                    const SizedBox(width: 16),
+                    const Text('Title:'),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: _titleCtrl,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          // 툴바(심플)
-          QuillSimpleToolbar(
-            controller: _quillController!,
-            config: const QuillSimpleToolbarConfig(
-              embedButtons: [],
-              showClipboardPaste: false,
 
-              // bold/italic/underline 등 최소 버튼
-            ),
-          ),
+          // 에디터 툴바(심플)
+          _buildQuillToolbar(),
+
           // 에디터
-          Expanded(
-            child: QuillEditor(
-              controller: _quillController!,
-              focusNode: FocusNode(),
-              scrollController: ScrollController(),
-              config: const QuillEditorConfig(
-                autoFocus: true,
-                expands: false,
-                padding: EdgeInsets.all(8),
-                embedBuilders: [],
-              ),
-            ),
-          ),
+          Expanded(child: _buildQuillEditor()),
         ],
+      ),
+    );
+  }
+
+  Widget _buildQuillToolbar() {
+    return QuillSimpleToolbar(
+      controller: _quillController!,
+      config: const QuillSimpleToolbarConfig(
+        embedButtons: [],
+        showClipboardPaste: false,
+        // bold/italic/underline 등 최소 버튼
+      ),
+    );
+  }
+
+  Widget _buildQuillEditor() {
+    return QuillEditor(
+      controller: _quillController!,
+      focusNode: FocusNode(),
+      scrollController: ScrollController(),
+      config: const QuillEditorConfig(
+        autoFocus: true,
+        expands: false,
+        padding: EdgeInsets.all(8),
+        embedBuilders: [],
       ),
     );
   }

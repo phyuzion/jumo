@@ -1,4 +1,3 @@
-// lib/screens/board_tab_view.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/graphql/contents_api.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString
@@ -26,12 +25,11 @@ class _BoardTabViewState extends State<BoardTabView> {
     try {
       final data = await ContentsApi.getContents(widget.type);
 
-      // --- 여기서 위젯이 dispose 된 상태일 수 있음
+      // 만약 상태가 dispose 된 뒤라면 중단
       if (!mounted) return;
 
       setState(() => _list = data);
     } catch (e) {
-      // --- 여기서도
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
@@ -95,11 +93,19 @@ class _BoardTabViewState extends State<BoardTabView> {
         itemBuilder: (ctx, i) {
           final row = _list[i];
           final title = row['title'] ?? '';
-          final userId = row['userId'] ?? '';
+          final userName = row['userName'] ?? '(no name)';
+          final userRegion = row['userRegion'] ?? '';
           final createdAt = formatDateString(row['createdAt'] ?? '');
+
+          // 작성자 표시: userName + (userRegion)
+          final authorText =
+              userRegion.isNotEmpty
+                  ? '$userName ($userRegion)'
+                  : userName; // region이 비어있으면 userName만
+
           return ListTile(
             title: Text(title),
-            subtitle: Text('User: $userId\nCreated: $createdAt'),
+            subtitle: Text('Author: $authorText\nCreated: $createdAt'),
             isThreeLine: true,
             onTap: () => _onTapItem(row),
             trailing: IconButton(

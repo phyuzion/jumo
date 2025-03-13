@@ -86,8 +86,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             IconButton(icon: const Icon(Icons.edit), onPressed: _onTapEdit),
         ],
       ),
-      // 댓글 입력 시 스크롤을 위해 Column -> SingleChildScrollView or nested approach
-      // 여기는 간단히 -> Column + Expanded
       body: _buildBody(),
     );
   }
@@ -106,11 +104,15 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Title: ${_item!['title']}'),
-                Text('User: ${_item!['userId']}'),
+                Text('Title: ${_item!['title'] ?? ''}'),
+
+                // userName / userRegion
+                _buildAuthorInfo(),
+
                 Text('Type: ${_item!['type']}'),
                 Text('Created: ${formatDateString(_item!['createdAt'])}'),
                 const SizedBox(height: 16),
+
                 if (_quillController != null)
                   QuillEditor(
                     controller: _quillController!,
@@ -136,6 +138,18 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     );
   }
 
+  // 게시글 작성자 정보
+  Widget _buildAuthorInfo() {
+    final userName = _item!['userName'] ?? '(no name)';
+    final userRegion = _item!['userRegion'] ?? '';
+    String authorText = userName;
+    if (userRegion.isNotEmpty) {
+      authorText = '$userName ($userRegion)';
+    }
+
+    return Text('Author: $authorText');
+  }
+
   /// 댓글 목록
   Widget _buildCommentList() {
     final comments = _item!['comments'] as List? ?? [];
@@ -158,9 +172,16 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
 
   /// 개별 댓글 아이템
   Widget _buildCommentItem(int index, Map<String, dynamic> c) {
-    final userId = c['userId'] ?? '';
+    final userName = c['userName'] ?? '(unknown)';
+    final userRegion = c['userRegion'] ?? '';
     final comment = c['comment'] ?? '';
     final createdAt = formatDateString(c['createdAt'] ?? '');
+
+    // 작성자 표시
+    String authorText = userName;
+    if (userRegion.isNotEmpty) {
+      authorText = '$userName ($userRegion)';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -176,7 +197,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  userId,
+                  authorText,
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 4),
@@ -233,16 +254,16 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
 
     try {
-      // createReply => List<Map<String,dynamic>>
-      final newComments = await ContentsApi.createReply(
+      // createReply -> 전체 Content 반환 or comments 반환 (우리 ContentsApi는 전체 Content 반환)
+      final updatedContent = await ContentsApi.createReply(
         contentId: _item!['id'],
         comment: comment,
       );
-      // 로컬 state 에 반영
-      setState(() {
-        _item!['comments'] = newComments;
-      });
-      // 입력창 비우기
+      if (updatedContent != null) {
+        setState(() {
+          _item = updatedContent;
+        });
+      }
       _replyCtrl.clear();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));

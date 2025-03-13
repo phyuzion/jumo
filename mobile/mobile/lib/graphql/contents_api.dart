@@ -1,19 +1,20 @@
-// lib/graphql/contents_api.dart
-
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:mobile/graphql/client.dart'; // GraphQLClientManager
 
 class ContentsApi {
-  // 쿼리
+  // =================== QUERIES ===================
+
   static const _queryGetContents = r'''
     query getContents($type: Int) {
       getContents(type: $type) {
         id
         userId
+        userName
+        userRegion
         type
         title
         createdAt
-        # content, comments 제외 (리스팅시 안 불러옴)
+        # content, comments 제외 (목록 시에는 필요없어서 빼는 경우)
       }
     }
   ''';
@@ -23,12 +24,16 @@ class ContentsApi {
       getSingleContent(contentId: $contentId) {
         id
         userId
+        userName
+        userRegion
         type
         title
         createdAt
         content
         comments {
           userId
+          userName
+          userRegion
           comment
           createdAt
         }
@@ -36,12 +41,15 @@ class ContentsApi {
     }
   ''';
 
-  // 뮤테이션
+  // =================== MUTATIONS ===================
+
   static const _mutationCreateContent = r'''
     mutation createContent($type: Int, $title: String, $content: JSON!) {
       createContent(type: $type, title: $title, content: $content) {
         id
         userId
+        userName
+        userRegion
         type
         title
         createdAt
@@ -54,12 +62,16 @@ class ContentsApi {
       updateContent(contentId: $contentId, type: $type, title: $title, content: $content) {
         id
         userId
+        userName
+        userRegion
         type
         title
         createdAt
         content
         comments {
           userId
+          userName
+          userRegion
           comment
           createdAt
         }
@@ -77,8 +89,17 @@ class ContentsApi {
     mutation createReply($contentId: ID!, $comment: String!) {
       createReply(contentId: $contentId, comment: $comment) {
         id
+        userId
+        userName
+        userRegion
+        type
+        title
+        createdAt
+        content
         comments {
           userId
+          userName
+          userRegion
           comment
           createdAt
         }
@@ -92,8 +113,9 @@ class ContentsApi {
     }
   ''';
 
-  /// ============ METHODS ============
+  // =================== METHODS ===================
 
+  /// 글 목록 조회
   static Future<List<Map<String, dynamic>>> getContents(int type) async {
     final client = GraphQLClientManager.client;
     final opts = QueryOptions(
@@ -103,12 +125,14 @@ class ContentsApi {
     );
     final result = await client.query(opts);
     GraphQLClientManager.handleExceptions(result);
+
     final data = result.data?['getContents'] as List?;
     if (data == null) return [];
     // List of Map
     return data.map((e) => e as Map<String, dynamic>).toList();
   }
 
+  /// 단일 글 + 댓글 상세 조회
   static Future<Map<String, dynamic>?> getSingleContent(
     String contentId,
   ) async {
@@ -120,10 +144,12 @@ class ContentsApi {
     );
     final result = await client.query(opts);
     GraphQLClientManager.handleExceptions(result);
+
     final data = result.data?['getSingleContent'] as Map<String, dynamic>?;
     return data;
   }
 
+  /// 글 생성 (Quill Delta 형태 content)
   static Future<Map<String, dynamic>?> createContent({
     required int type,
     required String title,
@@ -136,10 +162,12 @@ class ContentsApi {
     );
     final result = await client.mutate(opts);
     GraphQLClientManager.handleExceptions(result);
+
     final data = result.data?['createContent'] as Map<String, dynamic>?;
     return data;
   }
 
+  /// 글 수정
   static Future<Map<String, dynamic>?> updateContent({
     required String contentId,
     int? type,
@@ -158,10 +186,12 @@ class ContentsApi {
     );
     final result = await client.mutate(opts);
     GraphQLClientManager.handleExceptions(result);
+
     final data = result.data?['updateContent'] as Map<String, dynamic>?;
     return data;
   }
 
+  /// 글 삭제
   static Future<bool> deleteContent(String contentId) async {
     final client = GraphQLClientManager.client;
     final opts = MutationOptions(
@@ -174,7 +204,8 @@ class ContentsApi {
     return success;
   }
 
-  static Future<List<Map<String, dynamic>>> createReply({
+  /// 댓글 생성
+  static Future<Map<String, dynamic>?> createReply({
     required String contentId,
     required String comment,
   }) async {
@@ -187,11 +218,10 @@ class ContentsApi {
     GraphQLClientManager.handleExceptions(result);
 
     final data = result.data?['createReply'] as Map<String, dynamic>?;
-    if (data == null) return [];
-    final comments = data['comments'] as List?;
-    return comments?.map((e) => e as Map<String, dynamic>).toList() ?? [];
+    return data;
   }
 
+  /// 댓글 삭제
   static Future<bool> deleteReply({
     required String contentId,
     required int index,
