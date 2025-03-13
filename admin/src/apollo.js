@@ -4,10 +4,7 @@ import { setContext } from '@apollo/client/link/context';
 import { TokenRefreshLink } from 'apollo-link-token-refresh';
 import { jwtDecode } from 'jwt-decode';
 import { onError } from '@apollo/client/link/error';
-
-const httpLink = createHttpLink({
-  uri: 'https://jumo-vs8e.onrender.com/graphql',
-});
+import { createUploadLink } from 'apollo-upload-client';
 
 // TokenRefreshLink
 const tokenRefreshLink = new TokenRefreshLink({
@@ -92,12 +89,23 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
   }
 });
 
+
+// ==============================
+// 4) Upload Link (replaces createHttpLink)
+// ==============================
+const uploadLink = createUploadLink({
+  uri: 'https://jumo-vs8e.onrender.com/graphql',
+  // fetchOptions or credentials if needed
+});
+
+
+
 const client = new ApolloClient({
   link: from([
     tokenRefreshLink,
     errorLink,
     authLink,
-    httpLink,
+    uploadLink,
   ]),
   cache: new InMemoryCache(),
 });
