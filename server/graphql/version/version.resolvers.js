@@ -17,15 +17,14 @@ module.exports = {
   },
 
   Mutation: {
-    // version.resolvers.js (uploadAPK)
     uploadAPK: async (_, { version, file }) => {
       console.log("==== [uploadAPK] START ====");
       console.log("version =", version);
       console.log("file argument =", file);
 
-      // 1) 우선 file을 await
-      const upload = await file;  
-      // 2) upload.file 내부에서 실제 filename, createReadStream 등 추출
+      // 1) await file
+      const upload = await file;
+      // 2) destruct from upload.file
       const { filename, mimetype, encoding, createReadStream } = upload.file;
 
       console.log("filename =", filename);
@@ -37,7 +36,14 @@ module.exports = {
         throw new Error("createReadStream is missing");
       }
 
-      const savePath = path.join(__dirname, '../../public_downloads', 'app.apk');
+      // 준비: public_downloads 폴더가 없으면 생성
+      const dirPath = path.join(__dirname, '../../public_downloads');
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+
+      // 최종 파일 경로
+      const savePath = path.join(dirPath, 'app.apk');
 
       return new Promise((resolve, reject) => {
         const readStream = createReadStream();
@@ -46,6 +52,7 @@ module.exports = {
         readStream
           .pipe(writeStream)
           .on('finish', async () => {
+            // DB에 version 기록
             let doc = await Version.findOne({});
             if (!doc) {
               doc = new Version({ version });
@@ -54,7 +61,7 @@ module.exports = {
             }
             await doc.save();
 
-            console.log(`APK file saved: ${savePath}`);
+            console.log(`✅ APK file saved at: ${savePath}`);
             resolve(true);
           })
           .on('error', (err) => {
@@ -63,6 +70,5 @@ module.exports = {
           });
       });
     }
-
-  },
+  }
 };
