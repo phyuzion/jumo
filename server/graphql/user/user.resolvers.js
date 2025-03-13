@@ -15,7 +15,7 @@ const User = require('../../models/User');
 const PhoneNumber = require('../../models/PhoneNumber'); // userRecords 조회용
 
 function generateAccessToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: '1h' });
+  return jwt.sign(payload, SECRET_KEY, { expiresIn: '3m' });
 }
 function generateRefreshToken(payload) {
   return jwt.sign(payload, SECRET_KEY, { expiresIn: '7d' });
