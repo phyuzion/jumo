@@ -12,7 +12,6 @@ const userSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   validUntil: { type: Date },                  // 유효 기간
   refreshToken: { type: String, default: '' }, // 리프레시 토큰
-  region: { type: String, default: '' },
 
 
   // 통화내역 (최신이 위, 최대 200)
@@ -32,5 +31,4 @@ const userSchema = new mongoose.Schema({
   
 });
 
-userSchema.index({ region: 1 });
 module.exports = mongoose.model('User', userSchema);

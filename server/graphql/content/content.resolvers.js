@@ -1,8 +1,10 @@
+// graphql/content/content.resolvers.js
 const { UserInputError, AuthenticationError, ForbiddenError } = require('apollo-server-errors');
-const { GraphQLJSON } = require('graphql-type-json');
+const { GraphQLJSON } = require('graphql-type-json'); // 추가
 const Content = require('../../models/Content');
 const User = require('../../models/User');
 
+// 체크 함수들
 async function checkUserValid(tokenData) {
   if (!tokenData?.userId) {
     throw new AuthenticationError('로그인이 필요합니다.');
@@ -19,14 +21,16 @@ async function checkUserValid(tokenData) {
 
 // 작성자 or 관리자
 async function checkAuthorOrAdmin(tokenData, content) {
+  // 관리자면 바로 ok
   if (tokenData?.adminId) {
-    return;
+    return; 
   }
+  // 일반유저
   if (!tokenData?.userId) {
     throw new ForbiddenError('권한이 없습니다.(로그인 필요)');
   }
-  // content.user 는 ObjectId
-  if (String(content.user) !== String(tokenData.userId)) {
+  // content.userId: 글 작성자
+  if (content.userId.toString() !== tokenData.userId.toString()) {
     throw new ForbiddenError('수정/삭제 권한이 없습니다.');
   }
 }
@@ -35,98 +39,69 @@ module.exports = {
   JSON: GraphQLJSON,
 
   Query: {
-    getContents: async (_, { type }, { tokenData }) => {
+    getContents: async (_, { type }) => {
+      // 부분 필드만 가져오기
       const filter = {};
       if (type !== undefined) filter.type = type;
-
-      // admin이면 user: 'name phoneNumber region'
-      // 아니면 'name region' 정도만
-      // (region 굳이 빼도 됩니다.)
-      let userSelect = 'name region';
-      if (tokenData?.adminId) {
-        userSelect = 'name region phoneNumber'; 
-      }
-
       const docs = await Content.find(filter)
-        .populate('user', userSelect)
-        .select('_id user type title createdAt')
+        .select('_id userId type title createdAt')
         .sort({ createdAt: -1 });
 
-      // content, comments 생략
-      return docs.map(doc => {
-        // doc.user는 { _id, name, region, phoneNumber? }
-        return {
-          id: doc._id,
-          user: doc.user,
-          type: doc.type,
-          title: doc.title,
-          createdAt: doc.createdAt,
-          content: {},
-          comments: [],
-        };
-      });
+      // content, comments 생략 => 빈 값
+      return docs.map(doc => ({
+        id: doc._id,
+        userId: doc.userId, // string
+        type: doc.type,
+        title: doc.title,
+        createdAt: doc.createdAt,
+        content: {}, // empty object
+        comments: [],
+      }));
     },
-
-    getSingleContent: async (_, { contentId }, { tokenData }) => {
-      let userSelect = 'name region';
-      if (tokenData?.adminId) {
-        userSelect = 'name region phoneNumber';
-      }
-
-      // 댓글 작성자도 같은 select
-      const doc = await Content.findById(contentId)
-        .populate('user', userSelect)
-        .populate('comments.user', userSelect);
-
+    getSingleContent: async (_, { contentId }) => {
+      const doc = await Content.findById(contentId);
       if (!doc) throw new UserInputError('해당 글 없음');
-      return doc; 
+      return doc; // doc.content는 Mixed(JSON)
     },
   },
 
   Mutation: {
     createContent: async (_, { type, title, content }, { tokenData }) => {
-      let userId;
+      // content는 이미 JSON 형태로 GraphQL이 파싱해 줌!
+      // 관리자 or 유저
+      let userIdStr = '';
       if (tokenData?.adminId) {
-        // 관리자도 User 컬렉션 문서가 있다면
-        userId = tokenData.adminId;
+        userIdStr = 'admin';
       } else {
         const user = await checkUserValid(tokenData);
-        userId = user._id;
+        userIdStr = user._id.toString();
       }
 
       const newDoc = new Content({
-        user: userId,
+        userId: userIdStr,
         type: type || 0,
         title: title || '',
-        content: content,
+        content: content, // 그대로 JSON 객체
         createdAt: new Date(),
         comments: [],
       });
       await newDoc.save();
-
-      // populate 해서 반환
-      return newDoc
-        .populate('user', 'name region phoneNumber')
-        .execPopulate();
+      return newDoc;
     },
 
     updateContent: async (_, { contentId, title, content, type }, { tokenData }) => {
       const doc = await Content.findById(contentId);
       if (!doc) throw new UserInputError('글 없음');
-
       await checkAuthorOrAdmin(tokenData, doc);
 
       if (title !== undefined) doc.title = title;
       if (type !== undefined) doc.type = type;
-      if (content !== undefined) doc.content = content;
-
+      if (content !== undefined) {
+        // content는 이미 JSON 객체
+        doc.content = content;
+      }
       await doc.save();
-
-      // populate
-      return doc
-        .populate('user', 'name region phoneNumber')
-        .populate('comments.user', 'name region phoneNumber')
-        .execPopulate();
+      return doc;
     },
 
     // 글 삭제
@@ -143,53 +118,51 @@ module.exports = {
 
     // 댓글 생성
     createReply: async (_, { contentId, comment }, { tokenData }) => {
-      let userDoc;
+
+      // 관리자 or 유저
+      let userIdStr = '';
       if (tokenData?.adminId) {
-        userDoc = await User.findById(tokenData.adminId);
-        if (!userDoc) {
-          throw new UserInputError('admin user not found');
-        }
+        userIdStr = 'admin';
       } else {
-        userDoc = await checkUserValid(tokenData);
+        const user = await checkUserValid(tokenData);
+        userIdStr = user._id.toString();
       }
 
       const found = await Content.findById(contentId);
-      if (!found) throw new UserInputError('글이 존재하지 않습니다.');
+      if (!found) {
+        throw new UserInputError('글이 존재하지 않습니다.');
+      }
 
+      // 댓글 작성
       found.comments.push({
-        user: userDoc._id,
+        userId: userIdStr, 
         comment,
         createdAt: new Date(),
       });
 
       await found.save();
-
-      return found
-        .populate('user', 'name region phoneNumber')
-        .populate('comments.user', 'name region phoneNumber')
-        .execPopulate();
+      return found;
     },
 
-    // 댓글 삭제
+    // 댓글 삭제(index)
     deleteReply: async (_, { contentId, index }, { tokenData }) => {
       const doc = await Content.findById(contentId);
       if (!doc) throw new UserInputError('글 없음');
-
       if (index < 0 || index >= doc.comments.length) {
         throw new UserInputError('해당 댓글 없음');
       }
       const cObj = doc.comments[index];
-
       // admin or same user
-      if (!tokenData?.adminId) {
+      if (tokenData?.adminId) {
+        // pass
+      } else {
         const user = await checkUserValid(tokenData);
-        if (String(cObj.user) !== String(user._id)) {
+        if (cObj.userId !== user._id.toString()) {
           throw new ForbiddenError('댓글 삭제 권한 없음');
         }
       }
       doc.comments.splice(index, 1);
       await doc.save();
-
       return true;
     },
   },
