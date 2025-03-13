@@ -24,8 +24,10 @@ module.exports = {
         console.log("==== [uploadAPK] START ====");
         console.log("version =", version);
         console.log("file argument =", file);
-        
-        const { createReadStream } = await file;
+          
+      // file은 Promise.resolve된 객체 or { file } 이런 식일 수도 있으니, 구조분해 할당
+      const { createReadStream, filename, mimetype, encoding } = await file;
+
 
 
         console.log("filename =", filename);
