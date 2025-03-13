@@ -5,14 +5,14 @@ module.exports = gql`
 
   # 댓글: user -> User
   type Comment {
-    userName: String
+    user: User
     comment: String
     createdAt: String
   }
 
   type Content {
     id: ID!
-    userName: String
+    user: User
     type: Int
     title: String
     createdAt: String
