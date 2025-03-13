@@ -17,61 +17,52 @@ module.exports = {
   },
 
   Mutation: {
+    // version.resolvers.js (uploadAPK)
     uploadAPK: async (_, { version, file }) => {
-      try{
+      console.log("==== [uploadAPK] START ====");
+      console.log("version =", version);
+      console.log("file argument =", file);
 
+      // 1) 우선 file을 await
+      const upload = await file;  
+      // 2) upload.file 내부에서 실제 filename, createReadStream 등 추출
+      const { filename, mimetype, encoding, createReadStream } = upload.file;
 
-        console.log("==== [uploadAPK] START ====");
-        console.log("version =", version);
-        console.log("file argument =", file);
-          
-      // file은 Promise.resolve된 객체 or { file } 이런 식일 수도 있으니, 구조분해 할당
-      const { createReadStream, filename, mimetype, encoding } = await file;
+      console.log("filename =", filename);
+      console.log("mimetype =", mimetype);
+      console.log("encoding =", encoding);
+      console.log("createReadStream =", createReadStream);
 
-
-
-        console.log("filename =", filename);
-        console.log("mimetype =", mimetype);
-        console.log("encoding =", encoding);
-        console.log("createReadStream =", createReadStream);
-        
-        const savePath = path.join(__dirname, '../../public_downloads', 'app.apk');
-
-        return new Promise((resolve, reject) => {
-
-          if (!createReadStream) {
-            console.error("❌ createReadStream is null/undefined!");
-            reject(new Error("createReadStream is missing"));
-            return;
-          }
-
-          const readStream = createReadStream();
-          const writeStream = fs.createWriteStream(savePath);
-
-          readStream
-            .pipe(writeStream)
-            .on('finish', async () => {
-              // 파일 저장이 끝나면 DB에 버전 기록
-              let doc = await Version.findOne({});
-              if (!doc) {
-                doc = new Version({ version });
-              } else {
-                doc.version = version;
-              }
-              await doc.save();
-
-              console.log(`APK file saved: ${savePath}`);
-              resolve(true);
-            })
-            .on('error', (err) => {
-              console.error('File upload error:', err);
-              reject(err);
-            });
-        });
-      } catch (error) {
-        console.error("❌ [uploadAPK] error:", error);
-        throw error;
+      if (!createReadStream) {
+        throw new Error("createReadStream is missing");
       }
+
+      const savePath = path.join(__dirname, '../../public_downloads', 'app.apk');
+
+      return new Promise((resolve, reject) => {
+        const readStream = createReadStream();
+        const writeStream = fs.createWriteStream(savePath);
+
+        readStream
+          .pipe(writeStream)
+          .on('finish', async () => {
+            let doc = await Version.findOne({});
+            if (!doc) {
+              doc = new Version({ version });
+            } else {
+              doc.version = version;
+            }
+            await doc.save();
+
+            console.log(`APK file saved: ${savePath}`);
+            resolve(true);
+          })
+          .on('error', (err) => {
+            console.error('File upload error:', err);
+            reject(err);
+          });
+      });
     }
+
   },
 };
