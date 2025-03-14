@@ -1,14 +1,16 @@
+// recent_calls_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
-import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/controllers/contacts_controller.dart'; // ContactsController for name lookup
+import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/utils/app_event_bus.dart';
+import 'package:mobile/utils/constants.dart'; // normalizePhone, etc.
+import 'package:provider/provider.dart'; // context.read()
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
-import 'package:mobile/utils/app_event_bus.dart';
-import 'package:provider/provider.dart';
-import 'package:mobile/utils/constants.dart';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -19,6 +21,7 @@ class RecentCallsScreen extends StatefulWidget {
 
 class _RecentCallsScreenState extends State<RecentCallsScreen> {
   final _callLogController = CallLogController();
+
   List<Map<String, dynamic>> _callLogs = [];
   StreamSubscription? _eventSub;
 
@@ -26,6 +29,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   void initState() {
     super.initState();
     _loadCalls();
+    // callLog이 변경될 때마다(예: refreshCallLogs) => _loadCalls
     _eventSub = appEventBus.on<CallLogUpdatedEvent>().listen((event) {
       _loadCalls();
     });
@@ -44,6 +48,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
 
   Future<void> _refreshCalls() async {
     await _callLogController.refreshCallLogs();
+    // 로컬DB 반영 뒤 _loadCalls() 재호출
     await _loadCalls();
   }
 
@@ -54,32 +59,30 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
         onRefresh: _refreshCalls,
         child: ListView.separated(
           itemCount: _callLogs.length,
-          // ================
-          // 1) 구분선 (Divider) 설정
-          // ================
           separatorBuilder:
               (context, index) => const Divider(
                 color: Colors.grey,
                 thickness: 0.5,
                 indent: 16.0,
                 endIndent: 16.0,
-                height: 0, // 높이 기본값(16) 대신 0으로 => 위아래 여백 최소화
+                height: 0,
               ),
           itemBuilder: (context, index) {
             final call = _callLogs[index];
             final number = call['number'] as String? ?? '';
-            final name = call['name'] as String? ?? '';
             final callType = call['callType'] as String? ?? '';
             final ts = call['timestamp'] as int? ?? 0;
 
+            // === 날짜/시간 표시
             final date = DateTime.fromMillisecondsSinceEpoch(ts);
             final dateStr = '${date.month}월 ${date.day}일';
             final timeStr =
                 '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
 
+            // === 아이콘
             IconData iconData;
             Color iconColor;
-            switch (callType) {
+            switch (callType.toLowerCase()) {
               case 'incoming':
                 iconData = Icons.call_received;
                 iconColor = Colors.green;
@@ -96,6 +99,23 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 iconData = Icons.phone;
                 iconColor = Colors.grey;
             }
+
+            // === 이름 lookup
+            final contactsCtrl = context.read<ContactsController>();
+            final phoneNormalized = normalizePhone(number);
+            final contact = contactsCtrl.getSavedContacts().firstWhere(
+              (c) => c.phoneNumber == phoneNormalized,
+              orElse:
+                  () => PhoneBookModel(
+                    contactId: '',
+                    name: '',
+                    phoneNumber: phoneNormalized,
+                    memo: null,
+                    type: null,
+                    updatedAt: null,
+                  ),
+            );
+            final name = contact.name; // 없으면 ''
 
             return Slidable(
               key: ValueKey(index),
@@ -123,15 +143,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
                 ],
               ),
               child: ListTile(
-                // ================
-                // 2) ListTile의 상하 여백 조정
-                // ================
-                // contentPadding: EdgeInsets.zero,   // => 수평/수직 여백을 직접 없애고 싶다면 사용
                 leading: Icon(iconData, color: iconColor, size: 28),
-                title:
-                    name.isNotEmpty
-                        ? Text(name, style: const TextStyle(fontSize: 18))
-                        : Text(number, style: const TextStyle(fontSize: 18)),
+                // 만약 이름이 있으면 title=이름, subtitle=번호 / 없으면 title=번호
+                title: Text(
+                  name.isNotEmpty ? name : number,
+                  style: const TextStyle(fontSize: 16),
+                ),
                 subtitle:
                     name.isNotEmpty
                         ? Text(
@@ -166,6 +183,10 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
 
   Future<void> _onTapCall(String number) async {
     await NativeMethods.makeCall(number);
+
+    // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
+    //   Navigator.of(context).pushNamed('/onCall', arguments: number);
+    // }
   }
 
   void _onTapSearch(String number) {
@@ -173,16 +194,17 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   }
 
   Future<void> _onTapEdit(String number) async {
-    final norm = normalizePhone(number);
+    final phoneNormalized = normalizePhone(number);
+    // ContactsController에서 해당 번호를 찾아서 편집화면으로
     final contactsCtrl = context.read<ContactsController>();
-    final localList = contactsCtrl.getSavedContacts();
-    final existing = localList.firstWhere(
-      (c) => c.phoneNumber == norm,
+    final list = contactsCtrl.getSavedContacts();
+    final existing = list.firstWhere(
+      (c) => c.phoneNumber == phoneNormalized,
       orElse:
           () => PhoneBookModel(
             contactId: '',
             name: '',
-            phoneNumber: norm,
+            phoneNumber: phoneNormalized,
             memo: null,
             type: null,
             updatedAt: null,
@@ -198,7 +220,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
               initialContactId:
                   existing.contactId.isNotEmpty ? existing.contactId : null,
               initialName: existing.name.isNotEmpty ? existing.name : '',
-              initialPhone: isNew ? norm : existing.phoneNumber,
+              initialPhone: isNew ? phoneNormalized : existing.phoneNumber,
               initialMemo: existing.memo ?? '',
               initialType: existing.type ?? 0,
             ),

@@ -12,7 +12,13 @@ class NavigationController {
           goToIncoming(call.arguments as String);
           break;
         case 'onCall':
-          goToOnCall(call.arguments as String);
+          final map = call.arguments as Map?; // or Map<String,dynamic>
+          if (map != null) {
+            final number = map['number'] as String? ?? '';
+            final connected = map['connected'] as bool? ?? false;
+            // 사용 로직
+            goToOnCall(number, connected);
+          }
           break;
         case 'onCallEnded':
           final map = call.arguments as Map?; // or Map<String,dynamic>
@@ -43,12 +49,15 @@ class NavigationController {
     Navigator.of(ctx).pushNamed('/incoming', arguments: number);
   }
 
-  static void goToOnCall(String number) {
+  static void goToOnCall(String number, bool connected) {
     // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;
     if (ctx == null) return;
     // "pushNamed"로 -> 뒤로가기 시 이전화면
-    Navigator.of(ctx).pushReplacementNamed('/onCall', arguments: number);
+    Navigator.of(ctx).pushReplacementNamed(
+      '/onCall',
+      arguments: {'number': number, 'connected': connected},
+    );
   }
 
   static void goToCallEnded(String endedNumber, String reason) {

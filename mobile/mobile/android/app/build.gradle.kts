@@ -53,9 +53,6 @@ android {
             // signingConfigs["release"] 가능, or signingConfigs.getByName("release")
             signingConfig = signingConfigs.getByName("release")
 
-            // Kotlin DSL에서 속성은 isMinifyEnabled, isShrinkResources 식으로
-            isMinifyEnabled = true
-            isShrinkResources = true
         }
         // getByName("debug") { ... } // debug는 자동 서명
     }

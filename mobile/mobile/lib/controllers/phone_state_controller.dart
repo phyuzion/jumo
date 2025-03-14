@@ -50,10 +50,14 @@ class PhoneStateController {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
 
     if (!isDef && await FlutterOverlayWindow.isPermissionGranted()) {
+      log('showOverlay');
       final data = await SearchRecordsController.searchPhone(number!);
       if (data != null) {
         final dataMap = data.toJson();
         FlutterOverlayWindow.shareData(dataMap);
+        log('showOverlay done');
+      } else {
+        log('showOverlay false');
       }
     }
     log('[PhoneState] not default => overlay shown for $number');

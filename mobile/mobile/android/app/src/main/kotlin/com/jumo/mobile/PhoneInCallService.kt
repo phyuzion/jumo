@@ -84,12 +84,13 @@ class PhoneInCallService : InCallService() {
                 // 발신
                 val number = call.details.handle?.schemeSpecificPart ?: ""
                 Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing...  => $number")
+                showOnCall(number, false);
             }
             Call.STATE_ACTIVE -> {
                 // 통화 연결됨
                 val number = call.details.handle?.schemeSpecificPart ?: ""
                 Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE  => $number ")
-                showOnCall(number);
+                showOnCall(number, true);
             }
             Call.STATE_DISCONNECTED -> {
                 // 통화 종료
@@ -196,7 +197,7 @@ class PhoneInCallService : InCallService() {
     }
 
 
-    private fun showOnCall(number: String) {
+    private fun showOnCall(number: String, connected: Boolean) {
         val context = JumoApp.context
         val intent = Intent(context, MainActivity::class.java).apply {
             addFlags(
@@ -206,6 +207,7 @@ class PhoneInCallService : InCallService() {
             )
             putExtra("on_call", true)
             putExtra("on_call_number", number)
+            putExtra("on_call_connected", connected)
         }
         context.startActivity(intent)
     }

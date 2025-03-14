@@ -200,6 +200,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
     // 4) update
     found.name.last = '';
     found.name.first = name;
+    found.displayName = name;
     await found.update();
   }
 

@@ -42,27 +42,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// 자동 로그인 시도 (옵션)
-  Future<void> _autoLogin(String savedId, String savedPw) async {
-    setState(() => _loading = true);
-    try {
-      if (_myNumber.isEmpty) {
-        throw Exception('전화번호를 인식할수 없습니다.');
-      }
-      await UserApi.userLogin(
-        loginId: savedId,
-        password: savedPw,
-        phoneNumber: _myNumber,
-      );
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
-    } catch (e) {
-      debugPrint('자동 로그인 실패: $e');
-    } finally {
-      setState(() => _loading = false);
-    }
-  }
-
   /// 로그인 버튼 or Enter key
   Future<void> _onLoginPressed() async {
     setState(() => _loading = true);

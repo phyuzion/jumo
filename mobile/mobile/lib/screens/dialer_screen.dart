@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/native_methods.dart';
 
 class DialerScreen extends StatefulWidget {
@@ -30,6 +31,10 @@ class _DialerScreenState extends State<DialerScreen> {
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
       await NativeMethods.makeCall(_number);
+
+      // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
+      //   Navigator.of(context).pushNamed('/onCall', arguments: _number);
+      // }
     }
   }
 

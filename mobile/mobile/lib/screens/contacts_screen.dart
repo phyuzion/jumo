@@ -4,6 +4,7 @@ import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:provider/provider.dart';
@@ -130,6 +131,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Future<void> _onTapCall(String phoneNumber) async {
     await NativeMethods.makeCall(phoneNumber);
+
+    // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
+    //   Navigator.of(context).pushNamed('/onCall', arguments: phoneNumber);
+    // }
   }
 
   void _onTapSearch(String phone) {
