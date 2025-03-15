@@ -14,90 +14,73 @@ class SearchResultWidget extends StatelessWidget {
     // 타입 컬러
     final typeColor = _pickColorForType(phoneNumberModel.type);
 
-    return Container(
-      // 화면과 살짝 떨어뜨려 카드 느낌
-      margin: const EdgeInsets.all(16.0),
-      // 모서리에 살짝 둥글림을 주거나, 박스쉐도우를 줄 수도 있음
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 4.0,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      // 전체 컬럼
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // -----------------------------
-          // (1) 상단 헤더부: phoneNumber + type
-          // -----------------------------
-          Container(
-            padding: const EdgeInsets.all(16),
-            color: Colors.grey.shade200,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                // Type 서클
-                CircleAvatar(
-                  backgroundColor: typeColor,
-                  radius: 20, // 스타일 통일
-                  child: Text(
-                    '${phoneNumberModel.type}',
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // -----------------------------
+        // (1) 상단 헤더부: phoneNumber + type
+        // -----------------------------
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: Colors.grey.shade200,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Type 서클
+              CircleAvatar(
+                backgroundColor: typeColor,
+                radius: 20, // 스타일 통일
+                child: Text(
+                  '${phoneNumberModel.type}',
+                  style: const TextStyle(color: Colors.white, fontSize: 18),
+                ),
+              ),
+              const SizedBox(width: 20),
+              // 전화번호 (굵게)
+              Expanded(
+                child: Text(
+                  phoneNumberModel.phoneNumber,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 20),
-                // 전화번호 (굵게)
-                Expanded(
-                  child: Text(
-                    phoneNumberModel.phoneNumber,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
+        ),
 
-          // -----------------------------
-          // (2) 레코드 목록
-          // -----------------------------
-          // 높이 확장을 위해 Expanded
-          // 이 위젯이 들어가는 곳(부모)이 Column이면 Expanded가 잘 동작
-          Expanded(
-            child:
-                records.isEmpty
-                    ? const Center(
-                      child: Text(
-                        '레코드가 없습니다.',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                    : ListView.separated(
-                      itemCount: records.length,
-                      separatorBuilder:
-                          (context, index) => const Divider(
-                            color: Colors.grey,
-                            thickness: 0.5,
-                            indent: 16.0,
-                            endIndent: 16.0,
-                            height: 0,
-                          ),
-                      itemBuilder: (context, index) {
-                        final r = records[index];
-                        return _buildRecordItem(r);
-                      },
+        // -----------------------------
+        // (2) 레코드 목록
+        // -----------------------------
+        // 높이 확장을 위해 Expanded
+        // 이 위젯이 들어가는 곳(부모)이 Column이면 Expanded가 잘 동작
+        Expanded(
+          child:
+              records.isEmpty
+                  ? const Center(
+                    child: Text(
+                      '레코드가 없습니다.',
+                      style: TextStyle(color: Colors.grey),
                     ),
-          ),
-        ],
-      ),
+                  )
+                  : ListView.separated(
+                    itemCount: records.length,
+                    separatorBuilder:
+                        (context, index) => const Divider(
+                          color: Colors.grey,
+                          thickness: 0.5,
+                          indent: 16.0,
+                          endIndent: 16.0,
+                          height: 0,
+                        ),
+                    itemBuilder: (context, index) {
+                      final r = records[index];
+                      return _buildRecordItem(r);
+                    },
+                  ),
+        ),
+      ],
     );
   }
 

@@ -65,8 +65,8 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
           height: size.height * 0.4,
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.black26),
-            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.transparent),
+            borderRadius: BorderRadius.circular(5),
           ),
           child: Stack(
             children: [
