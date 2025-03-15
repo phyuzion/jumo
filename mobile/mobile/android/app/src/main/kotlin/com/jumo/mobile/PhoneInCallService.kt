@@ -2,14 +2,13 @@ package com.jumo.mobile
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
 import android.telecom.Call
 import android.telecom.CallAudioState
+import android.telecom.DisconnectCause
 import android.telecom.InCallService
 import android.telecom.VideoProfile
-import android.telecom.DisconnectCause
 import android.util.Log
 
 class PhoneInCallService : InCallService() {
@@ -26,6 +25,9 @@ class PhoneInCallService : InCallService() {
         fun toggleHold(hold: Boolean) { instance?.toggleHoldTopCall(hold) }
         fun toggleSpeaker(speaker: Boolean) { instance?.toggleSpeakerCall(speaker) }
     }
+
+    // 스피커가 아닌 라우트를 저장하기 위한 변수 (초기값은 earpiece)
+    private var lastNonSpeakerRoute: Int = CallAudioState.ROUTE_EARPIECE
 
     override fun onCreate() {
         super.onCreate()
@@ -64,36 +66,30 @@ class PhoneInCallService : InCallService() {
 
         when (newState) {
             Call.STATE_RINGING -> {
-                // 수신
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     if (call.details.callDirection == Call.Details.DIRECTION_INCOMING) {
                         val number = call.details.handle?.schemeSpecificPart ?: ""
                         showIncomingCall(number)
-                        
-                        Log.d("PhoneInCallService", "[handleCallState] incoming Dialing...  => $number")
+                        Log.d("PhoneInCallService", "[handleCallState] incoming Dialing... => $number")
                     }
                 } else {
                     val number = call.details.handle?.schemeSpecificPart ?: ""
                     showIncomingCall(number)
-
-                    Log.d("PhoneInCallService", "[handleCallState] incoming Dialing...  => $number")
+                    Log.d("PhoneInCallService", "[handleCallState] incoming Dialing... => $number")
                 }
 
             }
             Call.STATE_DIALING -> {
-                // 발신
                 val number = call.details.handle?.schemeSpecificPart ?: ""
-                Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing...  => $number")
-                showOnCall(number, false);
+                Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing... => $number")
+                showOnCall(number, false)
             }
             Call.STATE_ACTIVE -> {
-                // 통화 연결됨
                 val number = call.details.handle?.schemeSpecificPart ?: ""
-                Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE  => $number ")
-                showOnCall(number, true);
+                Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE => $number")
+                showOnCall(number, true)
             }
             Call.STATE_DISCONNECTED -> {
-                // 통화 종료
                 val number = call.details.handle?.schemeSpecificPart ?: ""
                 var reason = "ended"
 
@@ -106,7 +102,7 @@ class PhoneInCallService : InCallService() {
                         reason = "missed"
                     }
                 }
-                
+
                 showCallEnded(number, reason)
             }
         }
@@ -138,57 +134,66 @@ class PhoneInCallService : InCallService() {
      * ========================== */
     private fun toggleSpeakerCall(enable: Boolean) {
         val call = activeCalls.lastOrNull() ?: return
+        val audioState = this.callAudioState
 
-        when {
-            // A) Android 13 (API 33 이상)
-            
-            // B) Android 12 (API 31~32)
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-                // setAudioRoute(CallAudioState.ROUTE_SPEAKER or ...)
-                setAudioRoute(
-                    if (enable) CallAudioState.ROUTE_SPEAKER
-                    else CallAudioState.ROUTE_EARPIECE
-                )
+        if (enable) {
+            // 스피커 켜기 전, 현재 라우트가 스피커가 아니면 저장
+            if (audioState.route != CallAudioState.ROUTE_SPEAKER) {
+                lastNonSpeakerRoute = audioState.route
             }
-            // C) 하위 버전
-            else -> {
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setAudioRoute(CallAudioState.ROUTE_SPEAKER)
+            } else {
                 val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 audioManager.mode = AudioManager.MODE_IN_CALL
-                audioManager.isSpeakerphoneOn = enable
+                audioManager.isSpeakerphoneOn = true
+            }
+        } else {
+            // 스피커 끌기 -> lastNonSpeakerRoute 로 복귀
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                setAudioRoute(lastNonSpeakerRoute)
+            } else {
+                val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                audioManager.mode = AudioManager.MODE_IN_CALL
+
+                // 하위 버전에서는 세분화가 힘들고,
+                // 기본적으로 "스피커 off => earpiece" 되지만
+                // lastNonSpeakerRoute가 earpiece가 아닐 수도 있으니
+                // 실제로는 블루투스/유선 이어폰 등을 직접 켜줘야 함.
+                // (외부 고려 안 한다고 했으니 여기선 단순화)
+                audioManager.isSpeakerphoneOn = false
             }
         }
     }
-        /** ===========================
+
+    /** ===========================
      *  (2) 뮤트 On/Off
      * ========================== */
     private fun toggleMuteCall(muteOn: Boolean) {
         val call = activeCalls.lastOrNull() ?: return
 
-        // Android 12 (API 31) 이상
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            audioManager.isMicrophoneMute = muteOn  // 마이크 뮤트 설정
+            audioManager.isMicrophoneMute = muteOn
             Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn (API >= 31)")
-        } 
-        // Android 11 이하 (API 30 이하)
-        else {
+        } else {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioManager.isMicrophoneMute = muteOn
             Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn (API < 31)")
         }
     }
 
-
     /** ===========================
-     *  showIncomingCall & show Oncall & showCallEnded
+     *  showIncomingCall & showOnCall & showCallEnded
      * ========================== */
     private fun showIncomingCall(number: String) {
         val context = JumoApp.context
         val intent = Intent(context, MainActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             )
             putExtra("incoming_call", true)
             putExtra("incoming_number", number)
@@ -196,14 +201,13 @@ class PhoneInCallService : InCallService() {
         context.startActivity(intent)
     }
 
-
     private fun showOnCall(number: String, connected: Boolean) {
         val context = JumoApp.context
         val intent = Intent(context, MainActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             )
             putExtra("on_call", true)
             putExtra("on_call_number", number)
@@ -217,8 +221,8 @@ class PhoneInCallService : InCallService() {
         val intent = Intent(context, MainActivity::class.java).apply {
             addFlags(
                 Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
             )
             putExtra("call_ended", true)
             putExtra("call_ended_number", number)
