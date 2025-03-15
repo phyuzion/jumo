@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/graphql/client.dart';
 
 class DropdownMenusWidget extends StatelessWidget {
-  const DropdownMenusWidget({Key? key}) : super(key: key);
+  const DropdownMenusWidget({super.key});
 
   @override
   Widget build(BuildContext context) {

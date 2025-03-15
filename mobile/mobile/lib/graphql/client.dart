@@ -71,8 +71,6 @@ class GraphQLClientManager {
           ..connectionTimeout = const Duration(seconds: 30)
           ..idleTimeout = const Duration(seconds: 30);
 
-    log('** My HttpClient created with 30s timeout! **'); // 디버그 메시지
-
     // 2) IOClient 생성 -> HttpLink 에 주입
     final ioClient = IOClient(httpClient);
 
