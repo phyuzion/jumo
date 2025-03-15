@@ -1,6 +1,9 @@
+// lib/graphql/client.dart
 import 'dart:developer';
+import 'dart:io'; // <-- HttpClient
 import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:http/io_client.dart'; // <-- IOClient
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/services/native_methods.dart';
@@ -31,15 +34,14 @@ class GraphQLClientManager {
     final box = GetStorage();
     final savedId = box.read<String>('savedLoginId');
     final savedPw = box.read<String>('savedPassword');
-
     final myNumber = box.read<String>('myNumber');
-    if ((savedId == null || savedId == '') ||
-        (savedPw == null || savedPw == '') ||
-        (myNumber == null || myNumber == '')) {
+
+    if ((savedId == null || savedId.isEmpty) ||
+        (savedPw == null || savedPw.isEmpty) ||
+        (myNumber == null || myNumber.isEmpty)) {
       logout();
     } else {
       try {
-        // 예: UserApi.userLogin(...)
         await UserApi.userLogin(
           loginId: savedId,
           password: savedPw,
@@ -53,23 +55,38 @@ class GraphQLClientManager {
     }
   }
 
-  /// 로그아웃 → 토큰 제거
+  /// 로그아웃 → 토큰 제거 후 DeciderScreen 으로 이동
   static void logout() {
     accessToken = null;
-    _box.erase();
+    _box.erase(); // 모든 저장 데이터 초기화
     NavigationController.goToDecider();
-    // refreshToken 도 관리하려면 비슷하게 제거
   }
 
   /// 내부 GraphQLClient 생성
+  /// - 여기에서 HttpClient + IOClient로 타임아웃을 늘려서 TimeoutException을 완화
   static GraphQLClient get client {
-    final httpLink = HttpLink(kGraphQLEndpoint);
+    // 1) HttpClient 구성: 연결/유휴 타임아웃을 원하는 만큼 늘린다 (예: 30초)
+    final httpClient =
+        HttpClient()
+          ..connectionTimeout = const Duration(seconds: 30)
+          ..idleTimeout = const Duration(seconds: 30);
+
+    log('** My HttpClient created with 30s timeout! **'); // 디버그 메시지
+
+    // 2) IOClient 생성 -> HttpLink 에 주입
+    final ioClient = IOClient(httpClient);
+
+    final httpLink = HttpLink(
+      kGraphQLEndpoint,
+      httpClient: ioClient, // 중요!
+    );
 
     final authLink = AuthLink(
       // 토큰 있으면 Authorization: Bearer xxx
       getToken: () {
-        if (accessToken == null) return null;
-        return 'Bearer $accessToken';
+        final token = accessToken;
+        if (token == null) return null;
+        return 'Bearer $token';
       },
     );
 
@@ -88,9 +105,9 @@ class GraphQLClientManager {
           log('new login start');
           tryAutoLogin();
         }
-        //throw Exception(msg);
+        throw Exception(msg);
       } else if (result.exception?.linkException != null) {
-        // 네트워크/서버접속 에러 등
+        // 네트워크/서버접속 에러, Timeout 등
         final linkErr = result.exception!.linkException.toString();
         throw Exception('GraphQL LinkException: $linkErr');
       } else {

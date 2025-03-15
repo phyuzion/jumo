@@ -52,6 +52,7 @@ android {
         getByName("release") {
             // signingConfigs["release"] 가능, or signingConfigs.getByName("release")
             signingConfig = signingConfigs.getByName("release")
+            isShrinkResources = false
 
         }
         // getByName("debug") { ... } // debug는 자동 서명
