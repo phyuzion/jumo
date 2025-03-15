@@ -24,7 +24,7 @@
     <application
         android:name=".JumoApp"
         android:label="KOLPON"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/app_icon">
 
         <!-- 메인 Activity -->
         <activity

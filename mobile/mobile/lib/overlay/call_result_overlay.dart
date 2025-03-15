@@ -32,6 +32,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
         _phoneNumber = phoneNumberData['phoneNumber'] as String?;
         if (!_isNew) {
           _result = PhoneNumberModel.fromJson(phoneNumberData);
+          _phoneNumber = _result?.phoneNumber;
         }
       });
       _showOverlay();
@@ -40,10 +41,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
 
   Future<void> _showOverlay() async {
     log('show Overlay : $_result');
-    String title = '전화번호 검색결과';
-    if (_result != null && _result?.phoneNumber == null) {
-      title = _result!.phoneNumber;
-    }
+    String title = _phoneNumber!;
     await FlutterOverlayWindow.showOverlay(
       enableDrag: true,
       alignment: OverlayAlignment.center,
@@ -51,6 +49,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
       width: WindowSize.matchParent,
       overlayTitle: title,
       overlayContent: "전화가 왔습니다", // 알림 표기용
+
       flag: OverlayFlag.defaultFlag,
       visibility: NotificationVisibility.visibilityPublic,
       positionGravity: PositionGravity.auto,
