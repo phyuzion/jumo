@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/update_controller.dart';
+import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
-import 'package:mobile/utils/constants.dart'; // formatDateString
+import 'package:mobile/utils/constants.dart';
+import 'package:mobile/widgets/dropdown_menus_widet.dart'; // formatDateString
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -210,20 +212,6 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
-  /// 로그아웃
-  Future<void> _onLogout() async {
-    // 1) accessToken 제거
-    //    GraphQLClientManager.accessToken = null;
-    //    or more: remove saved loginId/password if desired
-    final box = GetStorage();
-    box.remove('accessToken');
-    // etc: box.remove('savedLoginId'); box.remove('savedPassword');
-
-    // 2) 화면 전환
-    if (!mounted) return;
-    Navigator.pushReplacementNamed(context, '/login');
-  }
-
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -231,6 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     return Scaffold(
+      appBar: AppBar(title: Text('설정'), actions: [const DropdownMenusWidget()]),
       body: ListView(
         children: [
           // (1) 만약 서버 버전이 내 버전과 다르면 => "업데이트가 있습니다." 버튼
@@ -316,7 +305,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('로그아웃'),
-            onTap: _onLogout,
+            onTap: GraphQLClientManager.logout,
           ),
         ],
       ),

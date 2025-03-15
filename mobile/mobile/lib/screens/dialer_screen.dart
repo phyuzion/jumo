@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/widgets/dropdown_menus_widet.dart';
 
 class DialerScreen extends StatefulWidget {
   const DialerScreen({super.key});
@@ -47,31 +48,45 @@ class _DialerScreenState extends State<DialerScreen> {
       ['*', '0', '#'],
     ];
 
-    return SafeArea(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final screenW = constraints.maxWidth;
-          //final screenH = constraints.maxHeight;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('다이얼러'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              Navigator.pushNamed(context, '/search', arguments: _number);
+            },
+          ),
+          const DropdownMenusWidget(),
+        ],
+      ),
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final screenW = constraints.maxWidth;
+            //final screenH = constraints.maxHeight;
 
-          return Column(
-            // 아래부터 쌓아 올림
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // 1) 번호 표시
-              Text(_number, style: const TextStyle(fontSize: 35)),
+            return Column(
+              // 아래부터 쌓아 올림
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // 1) 번호 표시
+                Text(_number, style: const TextStyle(fontSize: 35)),
 
-              const SizedBox(height: 30),
+                const SizedBox(height: 30),
 
-              // 2) 키패드
-              _buildDialPad(digits, screenW),
+                // 2) 키패드
+                _buildDialPad(digits, screenW),
 
-              // 3) 통화 + 백스페이스
-              const SizedBox(height: 20),
-              _buildCallRow(screenW),
-              const SizedBox(height: 20),
-            ],
-          );
-        },
+                // 3) 통화 + 백스페이스
+                const SizedBox(height: 20),
+                _buildCallRow(screenW),
+                const SizedBox(height: 20),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

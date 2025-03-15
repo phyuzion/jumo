@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/screens/board_list_view.dart';
+import 'package:mobile/widgets/dropdown_menus_widet.dart';
 
 class BoardScreen extends StatefulWidget {
   const BoardScreen({Key? key}) : super(key: key);
@@ -44,29 +45,23 @@ class _BoardScreenState extends State<BoardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.grey[100],
-        toolbarHeight: 40, // 세로 높이 줄이기
-        titleSpacing: 0, // 좌우 여백 제거
-        centerTitle: false,
+        title: DropdownButton<int>(
+          value: _selectedType,
+          items: dropdownItems,
+          onChanged: _onTypeChanged,
 
-        title: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16), // 좌우 패딩
-          child: DropdownButton<int>(
-            value: _selectedType,
-            items: dropdownItems,
-            onChanged: _onTypeChanged,
-
-            underline: const SizedBox(), // 밑줄 제거
-            isExpanded: true, // 가로로 꽉 차게
-            style: const TextStyle(fontSize: 20, color: Colors.black),
-            icon: const Icon(
-              Icons.arrow_drop_down,
-              color: Colors.black,
-              size: 40,
-            ),
-            dropdownColor: Colors.white,
+          underline: const SizedBox(), // 밑줄 제거
+          isExpanded: true, // 가로로 꽉 차게
+          style: const TextStyle(fontSize: 20, color: Colors.black),
+          icon: const Icon(
+            Icons.arrow_drop_down,
+            color: Colors.black,
+            size: 40,
           ),
+          dropdownColor: Colors.white,
         ),
+
+        actions: [const DropdownMenusWidget()],
       ),
 
       // (1) BoardListView에 GlobalKey 전달

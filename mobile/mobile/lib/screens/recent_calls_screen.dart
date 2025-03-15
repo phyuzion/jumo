@@ -7,6 +7,7 @@ import 'package:mobile/controllers/contacts_controller.dart'; // ContactsControl
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/utils/constants.dart'; // normalizePhone, etc.
+import 'package:mobile/widgets/dropdown_menus_widet.dart';
 import 'package:provider/provider.dart'; // context.read()
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
@@ -55,6 +56,10 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: Text('최근기록'),
+        actions: [const DropdownMenusWidget()],
+      ),
       body: RefreshIndicator(
         onRefresh: _refreshCalls,
         child: ListView.separated(
@@ -183,10 +188,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
 
   Future<void> _onTapCall(String number) async {
     await NativeMethods.makeCall(number);
-
-    // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
-    //   Navigator.of(context).pushNamed('/onCall', arguments: number);
-    // }
   }
 
   void _onTapSearch(String number) {

@@ -150,18 +150,12 @@ class PhoneInCallService : InCallService() {
                 audioManager.isSpeakerphoneOn = true
             }
         } else {
-            // 스피커 끌기 -> lastNonSpeakerRoute 로 복귀
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 setAudioRoute(lastNonSpeakerRoute)
             } else {
                 val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 audioManager.mode = AudioManager.MODE_IN_CALL
 
-                // 하위 버전에서는 세분화가 힘들고,
-                // 기본적으로 "스피커 off => earpiece" 되지만
-                // lastNonSpeakerRoute가 earpiece가 아닐 수도 있으니
-                // 실제로는 블루투스/유선 이어폰 등을 직접 켜줘야 함.
-                // (외부 고려 안 한다고 했으니 여기선 단순화)
                 audioManager.isSpeakerphoneOn = false
             }
         }
