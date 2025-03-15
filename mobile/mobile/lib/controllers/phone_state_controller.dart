@@ -46,6 +46,7 @@ class PhoneStateController {
     log('[PhoneState] NOTHING');
   }
 
+  // PhoneStateController._onIncoming
   Future<void> _onIncoming(String? number) async {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
 
@@ -53,12 +54,15 @@ class PhoneStateController {
       log('showOverlay');
       final data = await SearchRecordsController.searchPhone(number!);
       if (data != null) {
+        // 정상 결과
         final dataMap = data.toJson();
+        dataMap['isNew'] = false;
         FlutterOverlayWindow.shareData(dataMap);
-        log('showOverlay done');
       } else {
-        log('showOverlay false');
+        final fakeMap = {'isNew': true, 'phoneNumber': number};
+        FlutterOverlayWindow.shareData(fakeMap);
       }
+      log('showOverlay done');
     }
     log('[PhoneState] not default => overlay shown for $number');
   }
