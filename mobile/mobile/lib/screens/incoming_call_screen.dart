@@ -1,3 +1,4 @@
+// lib/screens/incoming_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:mobile/models/phone_number_model.dart';
@@ -5,6 +6,8 @@ import 'package:mobile/widgets/search_result_widget.dart';
 import 'package:provider/provider.dart';
 import '../services/native_methods.dart';
 import '../controllers/contacts_controller.dart';
+import 'package:mobile/services/local_notification_service.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class IncomingCallScreen extends StatefulWidget {
   final String incomingNumber;
@@ -20,25 +23,28 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   String? _error;
   bool _loading = false;
-  PhoneNumberModel? _result; // 검색 결과
-
-  // or additional contact info
-  // We'll search from contactsController
+  PhoneNumberModel? _result;
 
   @override
   void initState() {
     super.initState();
     _loadContactName();
-
     _loadSearchData();
+
+    // (선택) 수신 알림 띄우기
+    LocalNotificationService.showIncomingCallNotification(
+      id: 1234,
+      callerName: '', // or _displayName
+      phoneNumber: widget.incomingNumber,
+    );
   }
 
   Future<void> _loadSearchData() async {
+    setState(() => _loading = true);
     try {
       final searchResult = await SearchRecordsController.searchPhone(
         widget.incomingNumber,
       );
-
       setState(() => _result = searchResult);
     } catch (e) {
       setState(() => _error = '$e');
@@ -47,18 +53,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
   }
 
-  /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
   Future<void> _loadContactName() async {
     final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
-    // e.g. each: {'name':'홍길동','phones':'010-1234-5678,...'}
 
-    // 단순히 'phones' 에 widget.incomingNumber 가 포함되는지 검사 (문자열로)
     for (final c in contacts) {
-      final phoneStr = c.phoneNumber as String? ?? '';
+      final phoneStr = c.phoneNumber ?? '';
       if (phoneStr.contains(widget.incomingNumber)) {
         setState(() {
-          _displayName = c.name as String?;
+          _displayName = c.name;
           _phones = phoneStr;
         });
         break;
@@ -68,13 +71,15 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   Future<void> _acceptCall() async {
     await NativeMethods.acceptCall();
-    // 수락 -> 전화가 STATE_ACTIVE -> onCall
-    if (!mounted) return;
+    // 알림 닫기 (수신 알림)
+    await LocalNotificationService.cancelNotification(1234);
   }
 
   Future<void> _rejectCall() async {
     await NativeMethods.rejectCall();
-    // 거절 -> DISCONNECTED -> callEnded
+    // 수신 알림 닫기
+    await LocalNotificationService.cancelNotification(1234);
+
     if (!mounted) return;
     //Navigator.pop(context);
   }
@@ -82,13 +87,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   @override
   Widget build(BuildContext context) {
     final number = widget.incomingNumber;
-    final contactName = _displayName ?? number; // fallback to number
-    final contactPhones = _phones ?? number; // fallback
+    final contactName = _displayName ?? number;
+    final contactPhones = _phones ?? number;
 
     return Scaffold(
       body: Stack(
         children: [
-          // 2) 상단 정보
           SafeArea(
             child: Column(
               children: [
@@ -107,10 +111,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                   style: const TextStyle(color: Colors.black, fontSize: 16),
                 ),
                 const SizedBox(height: 20),
-
                 Expanded(child: _buildBody()),
-
-                // 4) 하단 전화 버튼(수락/거절)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -137,20 +138,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     );
   }
 
-  /*
-  Widget _buildBackground() {
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [Color(0xFF1E1E2C), Color(0xFF2A2B5F)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
-      ),
-    );
-  }
-*/
-
   Widget _buildBody() {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
@@ -165,8 +152,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
       );
     }
-
-    // 결과가 있다면 -> SearchResultWidget(전화번호 모델)
     return SearchResultWidget(phoneNumberModel: _result!);
   }
 

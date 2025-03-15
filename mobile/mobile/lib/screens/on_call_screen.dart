@@ -1,11 +1,13 @@
+// lib/screens/on_call_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:provider/provider.dart';
-
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
-import 'package:mobile/utils/constants.dart';
+import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/utils/constants.dart';
 
 class OnCallScreen extends StatefulWidget {
   final String phoneNumber;
@@ -29,23 +31,35 @@ class _OnCallScreenState extends State<OnCallScreen> {
   bool isHold = false;
   bool isSpeakerOn = false;
 
-  Timer? _timer; // 매 초마다 동작할 타이머
-  int _callDuration = 0; // 통화 지속 시간 (초)
+  // 여기서는 더이상 Timer 없음. => 백그라운드 서비스가 타이머 관리
+  int _callDuration = 0;
+  StreamSubscription? _sub;
 
   @override
   void initState() {
     super.initState();
-
-    // 1) 통화 연결 상태면 타이머 시작
-    if (widget.connected) {
-      _startTimer();
-    }
-
-    // 2) 주소록에서 번호 매칭 후 이름/번호 가져오기
     _loadContactName();
+
+    final caller = _displayName ?? '';
+
+    if (widget.connected) {
+      // (1) 백그라운드 서비스로부터 타이머 업데이트 수신
+      final service = FlutterBackgroundService();
+
+      service.invoke('startCallTimer', {
+        'phoneNumber': widget.phoneNumber,
+        'callerName': caller,
+      });
+      _sub = service.on('updateCallUI').listen((event) {
+        // event = { 'elapsed':..., 'phoneNumber':...}
+        final elapsed = event?['elapsed'] as int? ?? 0;
+        if (mounted) {
+          setState(() => _callDuration = elapsed);
+        }
+      });
+    }
   }
 
-  /// 주소록(이미 저장)에서 widget.phoneNumber 와 일치하는 contact 찾기
   Future<void> _loadContactName() async {
     final contactsController = context.read<ContactsController>();
     final contacts = contactsController.getSavedContacts();
@@ -53,7 +67,6 @@ class _OnCallScreenState extends State<OnCallScreen> {
     for (final c in contacts) {
       final phoneStr = c.phoneNumber ?? '';
       final normPhone = normalizePhone(phoneStr);
-
       if (normPhone == normalizePhone(widget.phoneNumber)) {
         setState(() {
           _displayName = c.name;
@@ -64,32 +77,17 @@ class _OnCallScreenState extends State<OnCallScreen> {
     }
   }
 
-  /// 통화 타이머 시작
-  void _startTimer() {
-    _timer?.cancel(); // 혹시 몰라 기존 타이머 있으면 취소
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _callDuration++;
-      });
-    });
-  }
-
-  /// 통화 타이머 중지
-  void _stopTimer() {
-    _timer?.cancel();
-  }
-
   /// 통화 종료
   Future<void> _hangUp() async {
     await NativeMethods.hangUpCall();
-    _stopTimer();
-    if (!mounted) return;
 
-    // 여기서 팝 or 다른 화면으로 이동 처리 가능
-    // Navigator.pop(context);
+    // 백그라운드 서비스 타이머 중지
+    final service = FlutterBackgroundService();
+    service.invoke('stopCallTimer');
+
+    if (!mounted) return;
   }
 
-  /// 통화시간 (초)을 MM:SS 포맷으로 반환
   String _formatDuration(int seconds) {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
     final secs = (seconds % 60).toString().padLeft(2, '0');
@@ -119,19 +117,14 @@ class _OnCallScreenState extends State<OnCallScreen> {
 
   @override
   void dispose() {
-    // 화면 해제될 때 타이머 중지
-    _stopTimer();
+    _sub?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 표시할 이름이 있으면 이름, 아니면 원본 전화번호
-
     final displayNumber = widget.phoneNumber;
     final displayName = _displayName ?? widget.phoneNumber;
-
-    // connected=false면 "통화 연결중...", true면 "00:02" 같은 타이머
     final callStateText =
         widget.connected ? _formatDuration(_callDuration) : '통화 연결중...';
 
@@ -141,14 +134,11 @@ class _OnCallScreenState extends State<OnCallScreen> {
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // 통화 상태 (연결중 or 타이머)
             Text(
               callStateText,
               style: const TextStyle(fontSize: 16, color: Colors.grey),
             ),
             const SizedBox(height: 10),
-
-            // 상대방 이름/번호
             Text(
               displayName,
               style: const TextStyle(
@@ -158,12 +148,8 @@ class _OnCallScreenState extends State<OnCallScreen> {
               ),
             ),
             const SizedBox(height: 5),
-            Text(
-              displayNumber,
-              style: const TextStyle(color: Colors.black, fontSize: 16),
-            ),
+            Text(displayNumber, style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 20),
-            // 중앙 Card (뮤트, 홀드, 스피커)
             Card(
               elevation: 4,
               shape: RoundedRectangleBorder(
@@ -198,8 +184,6 @@ class _OnCallScreenState extends State<OnCallScreen> {
               ),
             ),
             const Spacer(),
-
-            // 하단 '통화 종료' 버튼
             Padding(
               padding: const EdgeInsets.only(bottom: 40),
               child: ElevatedButton(
@@ -222,7 +206,6 @@ class _OnCallScreenState extends State<OnCallScreen> {
     );
   }
 
-  /// 아이콘 버튼 공통 위젯
   Widget _buildIconButton({
     required IconData icon,
     required String label,

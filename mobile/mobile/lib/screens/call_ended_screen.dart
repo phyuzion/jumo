@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 
@@ -30,6 +32,31 @@ class _CallEndedScreen extends State<CallEndedScreen> {
     super.initState();
     _loadContactName();
     _updateCallLog();
+
+    _stopOnCallNoti();
+    // (옵션) reason=='missed' -> showMissedCallNotification
+    if (widget.callEndedReason == 'missed') {
+      _showMissedCallNotification();
+    }
+  }
+
+  Future<void> _stopOnCallNoti() async {
+    //이건 혹시 모르니까 넣어둠.
+    final service = FlutterBackgroundService();
+    service.invoke('stopCallTimer');
+
+    await LocalNotificationService.cancelNotification(9999);
+  }
+
+  void _showMissedCallNotification() {
+    // e.g. id=3000
+    // 'callerName' = _displayName ?? widget.callEndedNumber
+    final callerName = _displayName ?? '';
+    LocalNotificationService.showMissedCallNotification(
+      id: 3000,
+      callerName: callerName,
+      phoneNumber: widget.callEndedNumber,
+    );
   }
 
   void _updateCallLog() {
