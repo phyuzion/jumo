@@ -1,6 +1,7 @@
 // lib/screens/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:provider/provider.dart';
 import 'dialer_screen.dart';
 import 'recent_calls_screen.dart';
@@ -16,16 +17,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  @override
-  void initState() {
-    super.initState();
-
-    final appController = context.read<AppController>();
-    appController.initializeApp();
-    appController.configureBackgroundService();
-    appController.startBackgroundService();
-  }
-
   int _currentIndex = 0;
 
   final _screens = [
@@ -35,6 +26,23 @@ class _HomeScreenState extends State<HomeScreen> {
     const BoardScreen(),
     const SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    final appController = context.read<AppController>();
+    appController.initializeApp();
+    appController.configureBackgroundService();
+    appController.startBackgroundService();
+
+    NativeDefaultDialerMethods.notifyNativeAppInitialized();
+  }
+
+  @override
+  void dispose() {
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,21 +71,5 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
-  }
-
-  String _titleForIndex(int idx) {
-    switch (idx) {
-      case 0:
-        return '다이얼러';
-      case 1:
-        return '최근기록';
-      case 2:
-        return '연락처';
-      case 3:
-        return '게시판';
-      case 4:
-        return '설정';
-    }
-    return '';
   }
 }

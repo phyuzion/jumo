@@ -18,10 +18,13 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterFragmentActivity() {
 
-    private val TAG = "MainActivity"
+    private val TAG = "Jumo Activity"
 
     private val ACTIVITY_CHANNEL_NAME = "com.jumo.mobile/nativeDefaultDialer"
     private var methodResultForDialer: MethodChannel.Result? = null
+
+    private var flutterAppInitialized = false
+    private var pendingIncomingNumber: String? = null
 
     private val callPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -50,19 +53,34 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        handleDialIntent(intent)
+
+        checkIntentForCall(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        Log.d(TAG, "onNewIntent: $intent")
+        checkIntentForCall(intent)
+    }
+
+    private fun checkIntentForCall(intent: Intent?){
+
+        if (intent == null) return
 
         if (intent.getBooleanExtra("incoming_call", false)) {
-            // 수신 전화
             Log.d(TAG, "Incoming call intent received")
+            
             enableLockScreenFlags()
+            
             val number = intent.getStringExtra("incoming_number") ?: ""
-            NativeBridge.notifyIncomingNumber(number)
+            
+            if (!flutterAppInitialized) {
+                Log.d(TAG, "Flutter not init => pendingIncomingNumber=$number")
+                pendingIncomingNumber = number
+            } else {
+                Log.d(TAG, "Flutter init => notifyIncomingNumber($number)")
+                NativeBridge.notifyIncomingNumber(number)
+            }
+
 
         } else if (intent.getBooleanExtra("on_call", false)) {
             // 통화시작
@@ -124,7 +142,6 @@ class MainActivity : FlutterFragmentActivity() {
             if (data != null && data.scheme == "tel") {
                 val phoneNumber = data.schemeSpecificPart
                 Log.d(TAG, "Dial intent with number: $phoneNumber")
-                // e.g. NativeBridge.notifyDialNumber(phoneNumber) or ignore
             }
         }
     }
@@ -147,6 +164,19 @@ class MainActivity : FlutterFragmentActivity() {
                 "isDefaultDialer" -> {
                     val isDef = isDefaultDialer()
                     result.success(isDef)
+                }
+
+                "setAppInitialized" -> {
+                    // Flutter에서 "앱 준비 끝"이라고 알려옴
+                    flutterAppInitialized = true
+
+                    // 만약 pendingIncomingNumber가 있으면 지금 처리
+                    pendingIncomingNumber?.let { number ->
+                        Log.d(TAG, "Jumo Flush pending incoming => $number")
+                        NativeBridge.notifyIncomingNumber(number)
+                        pendingIncomingNumber = null
+                    }
+                    result.success(true)
                 }
 
                 else -> result.notImplemented()

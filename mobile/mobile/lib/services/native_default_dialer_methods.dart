@@ -1,4 +1,6 @@
 // lib/services/native_default_dialer_methods.dart
+import 'dart:developer';
+
 import 'package:flutter/services.dart';
 
 class NativeDefaultDialerMethods {
@@ -16,5 +18,15 @@ class NativeDefaultDialerMethods {
       'requestDefaultDialerManually',
     );
     return ok ?? false;
+  }
+
+  static Future<void> notifyNativeAppInitialized() async {
+    const channel = MethodChannel('com.jumo.mobile/nativeDefaultDialer');
+    try {
+      await channel.invokeMethod('setAppInitialized');
+      log("setAppInitialized() done!");
+    } catch (e) {
+      log("setAppInitialized() error: $e");
+    }
   }
 }
