@@ -30,6 +30,7 @@ class LocalNotificationService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
+      icon: 'app_icon',
     );
     const details = NotificationDetails(android: androidDetails);
     await _flutterLocalNotificationsPlugin.show(id, title, body, details);
@@ -48,6 +49,7 @@ class LocalNotificationService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
+      icon: 'app_icon',
     );
     final details = NotificationDetails(android: androidDetails);
 
@@ -80,6 +82,7 @@ class LocalNotificationService {
       autoCancel: false, // 탭해도 자동으로 사라지지 않음
       playSound: false,
       enableVibration: false,
+      icon: 'app_icon',
     );
 
     final details = NotificationDetails(android: androidDetails);
@@ -109,6 +112,7 @@ class LocalNotificationService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
+      icon: 'app_icon',
     );
     final details = NotificationDetails(android: androidDetails);
 

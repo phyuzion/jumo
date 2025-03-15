@@ -45,6 +45,7 @@ class _CallEndedScreen extends State<CallEndedScreen> {
     final service = FlutterBackgroundService();
     service.invoke('stopCallTimer');
 
+    await LocalNotificationService.cancelNotification(1234);
     await LocalNotificationService.cancelNotification(9999);
   }
 
