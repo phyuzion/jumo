@@ -14,19 +14,27 @@ module.exports = gql`
 
   type Content {
     id: ID!
-    userId: String
-    userName: String
-    userRegion: String
-    type: Int
-    title: String
-    createdAt: String
-    content: JSON
+    userId: String!
+    userName: String!
+    userRegion: String!
+    type: Int!
+    title: String!
+    content: JSON!
+    createdAt: String!
     comments: [Comment!]!
   }
 
   extend type Query {
+    """
+    게시판 목록 조회 (type으로 필터링 가능)
+    content, comments 필드는 제외
+    """
     getContents(type: Int): [Content!]!
-    getSingleContent(contentId: ID!): Content
+
+    """
+    게시글 상세 조회
+    """
+    getSingleContent(contentId: ID!): Content!
   }
 
   extend type Mutation {

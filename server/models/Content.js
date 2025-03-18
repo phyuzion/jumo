@@ -20,4 +20,7 @@ const contentSchema = new mongoose.Schema({
   comments: [commentSchema],
 });
 
+// type과 createdAt에 대한 복합 인덱스 추가
+contentSchema.index({ type: 1, createdAt: -1 });
+
 module.exports = mongoose.model('Content', contentSchema);

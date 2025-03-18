@@ -57,7 +57,6 @@ module.exports = {
         .select('_id userId userName userRegion type title createdAt')
         .sort({ createdAt: -1 });
 
-      // content, comments는 미리 제외
       return docs.map((doc) => ({
         id: doc._id,
         userId: doc.userId,
@@ -66,8 +65,6 @@ module.exports = {
         type: doc.type,
         title: doc.title,
         createdAt: doc.createdAt,
-        content: {},
-        comments: [],
       }));
     },
 
