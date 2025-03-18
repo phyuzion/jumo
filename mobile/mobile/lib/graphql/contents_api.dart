@@ -14,7 +14,6 @@ class ContentsApi {
         type
         title
         createdAt
-        # content, comments 제외 (목록 시에는 필요없어서 빼는 경우)
       }
     }
   ''';
