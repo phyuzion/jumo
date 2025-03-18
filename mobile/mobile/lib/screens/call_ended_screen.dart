@@ -5,6 +5,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/services/blocked_numbers_service.dart';
 
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
@@ -149,6 +150,23 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                   color: Colors.blueGrey,
                   label: '편집',
                   onTap: () => _onTapEdit(number),
+                ),
+                _buildActionButton(
+                  icon: Icons.block,
+                  color: Colors.red,
+                  label: '차단',
+                  onTap: () async {
+                    final blockedNumbersService = BlockedNumbersService();
+                    await blockedNumbersService.addBlockedNumber(number);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('전화번호가 차단되었습니다.'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ],
             ),

@@ -5,6 +5,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/services/blocked_numbers_service.dart';
 
 /// 신규: initialPhone==null => 전화번호 입력 가능
 /// 기존: 전화번호 수정불가, contactId, memo, type 편집
@@ -33,6 +34,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
   final _phoneCtrl = TextEditingController();
   final _memoCtrl = TextEditingController();
   int _type = 0;
+  bool _isBlocked = false;
 
   bool get isNew => widget.initialPhone == null; // null이면 신규
 
@@ -43,6 +45,55 @@ class _EditContactScreenState extends State<EditContactScreen> {
     _phoneCtrl.text = widget.initialPhone ?? '';
     _memoCtrl.text = widget.initialMemo ?? '';
     _type = widget.initialType ?? 0;
+    _checkBlockedStatus();
+  }
+
+  void _checkBlockedStatus() {
+    if (widget.initialPhone != null) {
+      final blockedNumbersService = BlockedNumbersService();
+      _isBlocked = blockedNumbersService.isNumberBlocked(widget.initialPhone!);
+    }
+  }
+
+  Future<void> _toggleBlockStatus() async {
+    if (widget.initialPhone == null) return;
+
+    final blockedNumbersService = BlockedNumbersService();
+    final isCurrentlyBlocked = blockedNumbersService.isNumberBlocked(
+      widget.initialPhone!,
+    );
+
+    final confirmMessage = isCurrentlyBlocked ? '차단해제 하시겠습니까?' : '차단 하시겠습니까?';
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('확인'),
+            content: Text(confirmMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('아니오'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('네'),
+              ),
+            ],
+          ),
+    );
+
+    if (result == true) {
+      if (isCurrentlyBlocked) {
+        await blockedNumbersService.removeBlockedNumber(widget.initialPhone!);
+      } else {
+        await blockedNumbersService.addBlockedNumber(widget.initialPhone!);
+      }
+      setState(() {
+        _isBlocked = !isCurrentlyBlocked;
+      });
+    }
   }
 
   @override
@@ -247,6 +298,30 @@ class _EditContactScreenState extends State<EditContactScreen> {
                 ),
               ],
             ),
+            if (!isNew) ...[
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _toggleBlockStatus,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  decoration: BoxDecoration(
+                    color: _isBlocked ? Colors.red : Colors.black,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Center(
+                    child: Text(
+                      _isBlocked ? '차단 상태입니다.' : '정상 상태입니다.',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),
