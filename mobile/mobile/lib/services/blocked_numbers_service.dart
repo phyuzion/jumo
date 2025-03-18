@@ -1,5 +1,6 @@
 import 'package:get_storage/get_storage.dart';
 import '../models/blocked_number.dart';
+import '../graphql/log_api.dart';
 
 class BlockedNumbersService {
   static const String _storageKey = 'blocked_numbers';
@@ -11,17 +12,49 @@ class BlockedNumbersService {
   }
 
   Future<void> addBlockedNumber(String number) async {
-    final blockedNumbers = getBlockedNumbers();
-    blockedNumbers.add(
-      BlockedNumber(number: number, blockedAt: DateTime.now()),
-    );
-    await _saveBlockedNumbers(blockedNumbers);
+    try {
+      final blockedNumbers = getBlockedNumbers();
+      blockedNumbers.add(BlockedNumber(number: number));
+
+      // 서버에 전체 목록 업데이트
+      final serverNumbers = await LogApi.updateBlockedNumbers(
+        blockedNumbers.map((bn) => bn.number).toList(),
+      );
+
+      // 로컬 저장소 업데이트
+      await _saveBlockedNumbers(
+        serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
+      );
+    } catch (e) {
+      // 서버 오류 시 로컬에만 저장
+      final blockedNumbers = getBlockedNumbers();
+      blockedNumbers.add(BlockedNumber(number: number));
+      await _saveBlockedNumbers(blockedNumbers);
+      rethrow;
+    }
   }
 
   Future<void> removeBlockedNumber(String number) async {
-    final blockedNumbers = getBlockedNumbers();
-    blockedNumbers.removeWhere((blocked) => blocked.number == number);
-    await _saveBlockedNumbers(blockedNumbers);
+    try {
+      final blockedNumbers = getBlockedNumbers();
+      blockedNumbers.removeWhere((blocked) => blocked.number == number);
+
+      // 서버에 전체 목록 업데이트
+      final serverNumbers = await LogApi.updateBlockedNumbers(
+        blockedNumbers.map((bn) => bn.number).toList(),
+      );
+
+      // 로컬 저장소 업데이트
+      await _saveBlockedNumbers(
+        serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
+      );
+    } catch (e) {
+      // 서버 오류 시 로컬에서만 제거
+      final blockedNumbers = getBlockedNumbers();
+      blockedNumbers.removeWhere((blocked) => blocked.number == number);
+      await _saveBlockedNumbers(blockedNumbers);
+      rethrow;
+    }
   }
 
   Future<void> _saveBlockedNumbers(List<BlockedNumber> numbers) async {

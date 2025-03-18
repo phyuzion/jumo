@@ -23,6 +23,7 @@ class UserApi {
           createdAt
           validUntil
           region
+          blockList
         }
       }
     }
@@ -75,6 +76,13 @@ class UserApi {
     box.write('loginStatus', true);
     box.write('userValidUntil', userData['validUntil'] ?? '');
     box.write('userRegion', userData['region'] ?? '');
+
+    // 차단 목록 저장
+    final blockList = userData['blockList'] ?? [];
+    box.write(
+      'blocked_numbers',
+      blockList.map((number) => {'number': number}).toList(),
+    );
   }
 
   // ==================== 2) userChangePassword ====================
