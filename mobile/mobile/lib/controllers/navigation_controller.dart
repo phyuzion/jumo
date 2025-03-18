@@ -1,8 +1,10 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/services/blocked_numbers_service.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
 
 class NavigationController {
   static final navKey = GlobalKey<NavigatorState>();
@@ -17,7 +19,6 @@ class NavigationController {
           // 차단된 번호인지 확인
           if (_blockedNumbersService.isNumberBlocked(number)) {
             // 차단된 번호면 전화 거절
-            log('차단된 번호: $number');
             await NativeMethods.rejectCall();
             return;
           }
@@ -37,6 +38,17 @@ class NavigationController {
           if (map != null) {
             final endedNumber = map['number'] as String? ?? '';
             final reason = map['reason'] as String? ?? '';
+
+            // 차단된 번호인 경우 call_ended_screen으로 이동하지 않고 콜로그만 업데이트
+            if (_blockedNumbersService.isNumberBlocked(endedNumber)) {
+              final ctx = navKey.currentContext;
+              if (ctx != null) {
+                final callLogController = ctx.read<CallLogController>();
+                callLogController.refreshCallLogs();
+              }
+              return;
+            }
+
             // 사용 로직
             goToCallEnded(endedNumber, reason);
           }
