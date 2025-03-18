@@ -14,6 +14,7 @@ module.exports = gql`
     validUntil: String
     region: String           # 새로 추가
     settings: String         # 새로 추가
+    blockList: [String!]     # 차단된 전화번호 목록
   }
 
   type CreateUserPayload {
@@ -93,6 +94,11 @@ module.exports = gql`
     (새로 추가) 현재 로그인된 유저의 settings 조회
     """
     getUserSetting: String
+
+    """
+    (Admin 전용) 특정 유저의 차단된 전화번호 목록
+    """
+    getUserBlockNumbers(userId: ID!): [String!]!
   }
 
   extend type Mutation {
@@ -144,5 +150,10 @@ module.exports = gql`
     (새로 추가) 현재 로그인된 유저의 settings 저장
     """
     setUserSetting(settings: String!): Boolean
+
+    """
+    차단된 전화번호 목록 업데이트
+    """
+    updateBlockedNumbers(numbers: [String!]!): [String!]!
   }
 `;

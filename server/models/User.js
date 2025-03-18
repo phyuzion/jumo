@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema({
   // 새 필드 추가
   region: { type: String, default: '' },    // 지역
   settings: { type: String, default: '' },  // 설정(문자열로 저장)
+  blockList: [String],      // 차단된 전화번호 목록
 
   // 통화내역 (최신이 위, 최대 200)
   callLogs: [
