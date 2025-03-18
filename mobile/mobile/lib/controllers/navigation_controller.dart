@@ -1,15 +1,27 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/services/blocked_numbers_service.dart';
 
 class NavigationController {
   static final navKey = GlobalKey<NavigatorState>();
+  static final _blockedNumbersService = BlockedNumbersService();
 
   static Future<void> init() async {
     // 네이티브 -> Flutter 이벤트 핸들러
     NativeMethods.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'onIncomingNumber':
-          goToIncoming(call.arguments as String);
+          final number = call.arguments as String;
+          // 차단된 번호인지 확인
+          if (_blockedNumbersService.isNumberBlocked(number)) {
+            // 차단된 번호면 전화 거절
+            log('차단된 번호: $number');
+            await NativeMethods.rejectCall();
+            return;
+          }
+          goToIncoming(number);
           break;
         case 'onCall':
           final map = call.arguments as Map?; // or Map<String,dynamic>

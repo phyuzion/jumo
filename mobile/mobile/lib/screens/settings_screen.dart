@@ -7,6 +7,7 @@ import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/dropdown_menus_widet.dart'; // formatDateString
+import 'package:mobile/widgets/blocked_numbers_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -306,6 +307,17 @@ class _SettingsScreenState extends State<SettingsScreen>
             leading: const Icon(Icons.logout),
             title: const Text('로그아웃'),
             onTap: GraphQLClientManager.logout,
+          ),
+
+          ListTile(
+            leading: const Icon(Icons.block),
+            title: const Text('차단된 전화번호 관리'),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (context) => const BlockedNumbersDialog(),
+              );
+            },
           ),
         ],
       ),

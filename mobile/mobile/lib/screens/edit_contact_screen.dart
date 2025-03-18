@@ -144,6 +144,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
           Contact()
             ..name.last = ''
             ..name.first = name
+            ..displayName = name
             ..phones = [Phone(phone)];
       final inserted = await c.insert();
       return inserted.id;
