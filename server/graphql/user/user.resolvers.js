@@ -299,51 +299,7 @@ module.exports = {
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
-      // TodayRecord 생성
-      const todayRecords = logs.map(log => {
-        let dt = new Date(log.time);
-        if (isNaN(dt.getTime())) {
-          const epoch = parseFloat(log.time);
-          if (!isNaN(epoch)) dt = new Date(epoch);
-        }
-        return {
-          phoneNumber: log.phoneNumber,
-          userName: user.name,
-          userType: user.type,
-          createdAt: dt.toISOString(),
-        };
-      });
-
-      // 24시간 이내의 레코드만 필터링
-      const oneDayAgo = new Date();
-      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-      const recentRecords = todayRecords.filter(record => {
-        const recordDate = new Date(record.createdAt);
-        return recordDate >= oneDayAgo;
-      });
-
-      // TodayRecord 저장 (중복 체크)
-      if (recentRecords.length > 0) {
-        // 기존 TodayRecord 조회
-        const existingRecords = await TodayRecord.find({
-          phoneNumber: { $in: recentRecords.map(r => r.phoneNumber) },
-          createdAt: { $gte: oneDayAgo.toISOString() }
-        });
-
-        // 중복되지 않은 레코드만 필터링
-        const newRecords = recentRecords.filter(newRecord => 
-          !existingRecords.some(existingRecord => 
-            existingRecord.phoneNumber === newRecord.phoneNumber &&
-            existingRecord.createdAt === newRecord.createdAt
-          )
-        );
-
-        if (newRecords.length > 0) {
-          await TodayRecord.insertMany(newRecords);
-        }
-      }
-
-      // 기존 callLog 업데이트
+      // 1. User의 callLogs 업데이트 (기존 로직 유지)
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
@@ -358,6 +314,54 @@ module.exports = {
         pushNewLog(user.callLogs, newLog, 200);
       }
       await user.save();
+
+      // 2. TodayRecord 업데이트
+      try {
+        // 24시간 이내의 새로운 로그들만 필터링
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        
+        const recentLogs = logs.filter(log => {
+          let dt = new Date(log.time);
+          if (isNaN(dt.getTime())) {
+            const epoch = parseFloat(log.time);
+            if (!isNaN(epoch)) dt = new Date(epoch);
+          }
+          return dt >= oneDayAgo;
+        });
+
+        // TodayRecord 업데이트
+        for (const log of recentLogs) {
+          let dt = new Date(log.time);
+          if (isNaN(dt.getTime())) {
+            const epoch = parseFloat(log.time);
+            if (!isNaN(epoch)) dt = new Date(epoch);
+          }
+
+          const existingRecord = await TodayRecord.findOne({
+            phoneNumber: log.phoneNumber,
+            userName: user.name,
+          });
+
+          if (existingRecord) {
+            existingRecord.userType = log.callType;
+            existingRecord.createdAt = dt;
+            await existingRecord.save();
+          } else {
+            const record = new TodayRecord({
+              phoneNumber: log.phoneNumber,
+              userName: user.name,
+              userType: log.callType,
+              createdAt: dt,
+            });
+            await record.save();
+          }
+        }
+      } catch (error) {
+        console.error('TodayRecord 업데이트 실패:', error);
+        // TodayRecord 업데이트 실패는 전체 mutation을 실패시키지 않음
+      }
+
       return true;
     },
 
