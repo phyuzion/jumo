@@ -18,6 +18,8 @@ const authTypeDefs = require('./auth/auth.typeDefs');
 const authResolvers = require('./auth/auth.resolvers');
 const versionTypeDefs = require('./version/version.typeDefs');
 const versionResolvers = require('./version/version.resolvers');
+const todayRecordTypeDefs = require('./todayRecord/todayRecord.typeDefs');
+const todayRecordResolvers = require('./todayRecord/todayRecord.resolvers');
 
 
 /*
@@ -51,6 +53,7 @@ const typeDefs = mergeTypeDefs([
   notificationTypeDefs,
   authTypeDefs,
   versionTypeDefs,
+  todayRecordTypeDefs,
 ]);
 
 // 모든 resolvers 합치기
@@ -65,6 +68,7 @@ const resolvers = mergeResolvers([
   notificationResolvers,
   authResolvers,
   versionResolvers,
+  todayRecordResolvers,
 ]);
 
 module.exports = {

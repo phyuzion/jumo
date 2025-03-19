@@ -6,6 +6,7 @@ const {
   AuthenticationError,
   ForbiddenError,
 } = require('apollo-server-errors');
+const { GraphQLJSON } = require('graphql-type-json');
 
 const jwt = require('jsonwebtoken');
 const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
@@ -13,6 +14,7 @@ const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
 const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 const PhoneNumber = require('../../models/PhoneNumber'); // userRecords 조회용
+const TodayRecord = require('../../models/TodayRecord');
 
 function generateAccessToken(payload) {
   return jwt.sign(payload, SECRET_KEY, { expiresIn: '1d' });
@@ -297,6 +299,51 @@ module.exports = {
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
+      // TodayRecord 생성
+      const todayRecords = logs.map(log => {
+        let dt = new Date(log.time);
+        if (isNaN(dt.getTime())) {
+          const epoch = parseFloat(log.time);
+          if (!isNaN(epoch)) dt = new Date(epoch);
+        }
+        return {
+          phoneNumber: log.phoneNumber,
+          userName: user.name,
+          userType: user.type,
+          createdAt: dt.toISOString(),
+        };
+      });
+
+      // 24시간 이내의 레코드만 필터링
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      const recentRecords = todayRecords.filter(record => {
+        const recordDate = new Date(record.createdAt);
+        return recordDate >= oneDayAgo;
+      });
+
+      // TodayRecord 저장 (중복 체크)
+      if (recentRecords.length > 0) {
+        // 기존 TodayRecord 조회
+        const existingRecords = await TodayRecord.find({
+          phoneNumber: { $in: recentRecords.map(r => r.phoneNumber) },
+          createdAt: { $gte: oneDayAgo.toISOString() }
+        });
+
+        // 중복되지 않은 레코드만 필터링
+        const newRecords = recentRecords.filter(newRecord => 
+          !existingRecords.some(existingRecord => 
+            existingRecord.phoneNumber === newRecord.phoneNumber &&
+            existingRecord.createdAt === newRecord.createdAt
+          )
+        );
+
+        if (newRecords.length > 0) {
+          await TodayRecord.insertMany(newRecords);
+        }
+      }
+
+      // 기존 callLog 업데이트
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
