@@ -344,14 +344,16 @@ module.exports = {
           });
 
           if (existingRecord) {
-            existingRecord.userType = log.callType;
+            existingRecord.userType = user.type;  // User의 type을 저장
+            existingRecord.callType = log.callType;  // callType은 문자열 그대로 저장
             existingRecord.createdAt = dt;
             await existingRecord.save();
           } else {
             const record = new TodayRecord({
               phoneNumber: log.phoneNumber,
               userName: user.name,
-              userType: log.callType,
+              userType: user.type,  // User의 type을 저장
+              callType: log.callType,  // callType은 문자열 그대로 저장
               createdAt: dt,
             });
             await record.save();
