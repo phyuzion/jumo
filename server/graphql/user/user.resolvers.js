@@ -338,22 +338,29 @@ module.exports = {
             if (!isNaN(epoch)) dt = new Date(epoch);
           }
 
+          // phoneNumber와 userName으로 레코드 찾기
           const existingRecord = await TodayRecord.findOne({
             phoneNumber: log.phoneNumber,
             userName: user.name,
           });
 
           if (existingRecord) {
-            existingRecord.userType = user.type;  // User의 type을 저장
-            existingRecord.callType = log.callType;  // callType은 문자열 그대로 저장
-            existingRecord.createdAt = dt;
-            await existingRecord.save();
+            // 기존 레코드의 시간과 비교
+            const existingTime = new Date(existingRecord.createdAt);
+            if (dt > existingTime) {
+              // 새로운 통화가 더 최신이면 업데이트
+              existingRecord.userType = user.type;
+              existingRecord.callType = log.callType;
+              existingRecord.createdAt = dt;
+              await existingRecord.save();
+            }
           } else {
+            // 새 레코드 생성
             const record = new TodayRecord({
               phoneNumber: log.phoneNumber,
               userName: user.name,
-              userType: user.type,  // User의 type을 저장
-              callType: log.callType,  // callType은 문자열 그대로 저장
+              userType: user.type,
+              callType: log.callType,
               createdAt: dt,
             });
             await record.save();
