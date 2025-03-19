@@ -112,7 +112,7 @@ class LocalNotificationService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
-      icon: 'app_icon',
+      icon: 'missed_icon',
     );
     final details = NotificationDetails(android: androidDetails);
 
