@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:mobile/models/phone_number_model.dart';
+import 'package:mobile/models/search_result_model.dart';
+import 'package:mobile/models/today_record.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 
@@ -15,7 +17,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final _textCtrl = TextEditingController();
   bool _loading = false;
   String? _error;
-  PhoneNumberModel? _result; // 검색 결과
+  SearchResultModel? _result; // 검색 결과
 
   final _focusNode = FocusNode();
 
@@ -48,8 +50,21 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final data = await SearchRecordsController.searchPhone(numResult);
-      setState(() => _result = data);
+      // 전화번호 검색
+      final phoneData = await SearchRecordsController.searchPhone(numResult);
+
+      // 오늘의 레코드 검색
+      final todayRecords = await SearchRecordsController.searchTodayRecord(
+        numResult,
+      );
+
+      setState(() {
+        _result = SearchResultModel(
+          phoneNumberModel: phoneData,
+          todayRecords: todayRecords,
+          isNew: phoneData == null,
+        );
+      });
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
@@ -98,7 +113,7 @@ class _SearchScreenState extends State<SearchScreen> {
       );
     }
 
-    // 결과가 있다면 -> SearchResultWidget(전화번호 모델)
-    return SearchResultWidget(phoneNumberModel: _result!);
+    // 결과가 있다면 -> SearchResultWidget(SearchResultModel)
+    return SearchResultWidget(searchResult: _result!);
   }
 }

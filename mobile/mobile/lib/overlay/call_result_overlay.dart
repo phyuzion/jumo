@@ -4,7 +4,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:mobile/models/phone_number_model.dart';
+import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 
 class CallResultOverlay extends StatefulWidget {
@@ -15,8 +15,7 @@ class CallResultOverlay extends StatefulWidget {
 }
 
 class _CallResultOverlayState extends State<CallResultOverlay> {
-  PhoneNumberModel? _result;
-  bool _isNew = false;
+  SearchResultModel? _result;
   String? _phoneNumber;
 
   @override
@@ -26,14 +25,10 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
     /// streams message shared between overlay and main app
     FlutterOverlayWindow.overlayListener.listen((result) {
       setState(() {
-        final phoneNumberData = result as Map<String, dynamic>;
-        // 일단 isNew 여부를 먼저 확인
-        _isNew = phoneNumberData['isNew'] == true;
-        _phoneNumber = phoneNumberData['phoneNumber'] as String?;
-        if (!_isNew) {
-          _result = PhoneNumberModel.fromJson(phoneNumberData);
-          _phoneNumber = _result?.phoneNumber;
-        }
+        final data = result as Map<String, dynamic>;
+        _result = SearchResultModel.fromJson(data);
+        _phoneNumber =
+            _result?.phoneNumberModel?.phoneNumber ?? data['phoneNumber'];
       });
       _showOverlay();
     });
@@ -75,34 +70,12 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
           ),
           child: Stack(
             children: [
-              if (_isNew)
-                // 신규
-                Column(
-                  children: [
-                    const SizedBox(height: 100),
-                    Text(
-                      _phoneNumber!,
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      '신규입니다.',
-                      style: const TextStyle(color: Colors.black, fontSize: 16),
-                    ),
-                  ],
-                )
-              else ...[
-                if (_result == null)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  Positioned.fill(
-                    child: SearchResultWidget(phoneNumberModel: _result!),
-                  ),
-              ],
+              if (_result == null)
+                const Center(child: CircularProgressIndicator())
+              else
+                Positioned.fill(
+                  child: SearchResultWidget(searchResult: _result!),
+                ),
               // (2) 닫기 버튼
               Positioned(
                 top: 0,

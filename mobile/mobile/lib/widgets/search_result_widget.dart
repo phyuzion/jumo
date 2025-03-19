@@ -1,18 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/models/phone_number_model.dart';
+import 'package:mobile/models/today_record.dart';
+import 'package:mobile/utils/constants.dart';
 
 class SearchResultWidget extends StatelessWidget {
-  final PhoneNumberModel phoneNumberModel;
-  const SearchResultWidget({Key? key, required this.phoneNumberModel})
+  final SearchResultModel searchResult;
+  const SearchResultWidget({Key? key, required this.searchResult})
     : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // 레코드 리스트
-    final records = phoneNumberModel.records;
+    if (searchResult.isNew) {
+      return const Center(
+        child: Text('신규 번호입니다.', style: TextStyle(color: Colors.grey)),
+      );
+    }
 
     // 타입 컬러
-    final typeColor = _pickColorForType(phoneNumberModel.type);
+    final typeColor = _pickColorForType(
+      searchResult.phoneNumberModel?.type ?? 0,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -29,9 +37,9 @@ class SearchResultWidget extends StatelessWidget {
               // Type 서클
               CircleAvatar(
                 backgroundColor: typeColor,
-                radius: 20, // 스타일 통일
+                radius: 20,
                 child: Text(
-                  '${phoneNumberModel.type}',
+                  '${searchResult.phoneNumberModel?.type ?? 0}',
                   style: const TextStyle(color: Colors.white, fontSize: 18),
                 ),
               ),
@@ -39,7 +47,7 @@ class SearchResultWidget extends StatelessWidget {
               // 전화번호 (굵게)
               Expanded(
                 child: Text(
-                  phoneNumberModel.phoneNumber,
+                  searchResult.phoneNumberModel?.phoneNumber ?? '',
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
@@ -53,39 +61,44 @@ class SearchResultWidget extends StatelessWidget {
         // -----------------------------
         // (2) 레코드 목록
         // -----------------------------
-        // 높이 확장을 위해 Expanded
-        // 이 위젯이 들어가는 곳(부모)이 Column이면 Expanded가 잘 동작
-        Expanded(
-          child:
-              records.isEmpty
-                  ? const Center(
-                    child: Text(
-                      '레코드가 없습니다.',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  )
-                  : ListView.separated(
-                    itemCount: records.length,
-                    separatorBuilder:
-                        (context, index) => const Divider(
-                          color: Colors.grey,
-                          thickness: 0.5,
-                          indent: 16.0,
-                          endIndent: 16.0,
-                          height: 0,
-                        ),
-                    itemBuilder: (context, index) {
-                      final r = records[index];
-                      return _buildRecordItem(r);
-                    },
-                  ),
-        ),
+        Expanded(child: _buildRecordsList()),
       ],
     );
   }
 
-  /// 레코드 하나의 Row
-  Widget _buildRecordItem(PhoneRecordModel r) {
+  Widget _buildRecordsList() {
+    final phoneRecords = searchResult.phoneNumberModel?.records ?? [];
+    final todayRecords = searchResult.todayRecords ?? [];
+
+    if (phoneRecords.isEmpty && todayRecords.isEmpty) {
+      return const Center(
+        child: Text('레코드가 없습니다.', style: TextStyle(color: Colors.grey)),
+      );
+    }
+
+    return ListView.separated(
+      itemCount: phoneRecords.length + todayRecords.length,
+      separatorBuilder:
+          (context, index) => const Divider(
+            color: Colors.grey,
+            thickness: 0.5,
+            indent: 16.0,
+            endIndent: 16.0,
+            height: 0,
+          ),
+      itemBuilder: (context, index) {
+        if (index < phoneRecords.length) {
+          return _buildPhoneRecordItem(phoneRecords[index]);
+        } else {
+          return _buildTodayRecordItem(
+            todayRecords[index - phoneRecords.length],
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildPhoneRecordItem(PhoneRecordModel r) {
     // createdAt이 epoch라 가정
     final epoch = int.tryParse(r.createdAt);
     DateTime? dt;
@@ -110,7 +123,7 @@ class SearchResultWidget extends StatelessWidget {
           // 왼쪽 userType 서클
           CircleAvatar(
             backgroundColor: userTypeColor,
-            radius: 16, // 스타일 통일
+            radius: 16,
             child: Text(
               '${r.userType}',
               style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -172,7 +185,7 @@ class SearchResultWidget extends StatelessWidget {
             children: [
               CircleAvatar(
                 backgroundColor: recordTypeColor,
-                radius: 16, // 동일 스타일
+                radius: 16,
                 child: Text(
                   '${r.type}',
                   style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -191,6 +204,65 @@ class SearchResultWidget extends StatelessWidget {
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTodayRecordItem(TodayRecord r) {
+    final dateStr = formatDateString(r.createdAt);
+
+    // userType 컬러
+    final userTypeColor = _pickColorForUserType(r.userType);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 왼쪽 userType 서클
+          CircleAvatar(
+            backgroundColor: userTypeColor,
+            radius: 16,
+            child: Text(
+              '${r.userType}',
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
+          ),
+          const SizedBox(width: 12),
+
+          // 가운데(이름 + callType)
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  r.userName,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                Text(
+                  r.callType,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 12),
+
+          // 오른쪽: 날짜/시간
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                dateStr,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             ],
           ),

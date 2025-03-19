@@ -25,6 +25,7 @@ class CallLogController {
 
         final newList = <Map<String, dynamic>>[];
         for (final e in take200) {
+          log('e: ${e.number} time : ${e.timestamp}');
           final map = {
             'number': e.number ?? '',
             'callType':

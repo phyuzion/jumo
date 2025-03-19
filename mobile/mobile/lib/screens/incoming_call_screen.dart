@@ -1,7 +1,8 @@
 // lib/screens/incoming_call_screen.dart
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
-import 'package:mobile/models/phone_number_model.dart';
+import 'package:mobile/models/search_result_model.dart';
+import 'package:mobile/models/today_record.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 import 'package:provider/provider.dart';
 import '../services/native_methods.dart';
@@ -20,10 +21,9 @@ class IncomingCallScreen extends StatefulWidget {
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   String? _displayName;
   String? _phones;
-
   String? _error;
   bool _loading = false;
-  PhoneNumberModel? _result;
+  SearchResultModel? _result;
 
   @override
   void initState() {
@@ -31,10 +31,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     _loadContactName();
     _loadSearchData();
 
-    // (선택) 수신 알림 띄우기
+    // 수신 알림 띄우기
     LocalNotificationService.showIncomingCallNotification(
       id: 1234,
-      callerName: '', // or _displayName
+      callerName: _displayName ?? '',
       phoneNumber: widget.incomingNumber,
     );
   }
@@ -42,10 +42,23 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   Future<void> _loadSearchData() async {
     setState(() => _loading = true);
     try {
-      final searchResult = await SearchRecordsController.searchPhone(
+      // 전화번호 검색
+      final phoneData = await SearchRecordsController.searchPhone(
         widget.incomingNumber,
       );
-      setState(() => _result = searchResult);
+
+      // 오늘의 레코드 검색
+      final todayRecords = await SearchRecordsController.searchTodayRecord(
+        widget.incomingNumber,
+      );
+
+      setState(() {
+        _result = SearchResultModel(
+          phoneNumberModel: phoneData,
+          todayRecords: todayRecords,
+          isNew: phoneData == null,
+        );
+      });
     } catch (e) {
       setState(() => _error = '$e');
     } finally {
@@ -152,7 +165,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
       );
     }
-    return SearchResultWidget(phoneNumberModel: _result!);
+    return SearchResultWidget(searchResult: _result!);
   }
 
   Widget _buildCallButton({
