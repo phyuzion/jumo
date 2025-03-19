@@ -11,6 +11,7 @@ const resolvers = {
         phoneNumber: record.phoneNumber,
         userName: record.userName,
         userType: record.userType,
+        callType: record.callType,
         createdAt: record.createdAt,
       }));
     },
