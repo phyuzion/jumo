@@ -152,12 +152,12 @@ class _SettingsScreenState extends State<SettingsScreen>
       setState(() => _overlayGranted = true);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('오버레이 권한 허용됨')));
+      ).showSnackBar(const SnackBar(content: Text('팝업 권한 허용됨')));
     } else {
       setState(() => _overlayGranted = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('오버레이 권한 거부됨')));
+      ).showSnackBar(const SnackBar(content: Text('팝업 권한 거부됨')));
     }
   }
 
@@ -237,20 +237,85 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  Widget _buildBlockSettingsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          '차단 설정',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Column(
-          children: [
+  @override
+  Widget build(BuildContext context) {
+    if (_checking) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: Text('설정'), actions: [const DropdownMenusWidget()]),
+      body: ListView(
+        children: [
+          // (1) 만약 서버 버전이 내 버전과 다르면 => "업데이트가 있습니다." 버튼
+          if (_updateAvailable)
+            ListTile(
+              title: const Text(
+                '업데이트가 있습니다!',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.red,
+                ),
+              ),
+              subtitle: Text('서버 버전: $_serverVersion\n현재 버전: $APP_VERSION'),
+              trailing: ElevatedButton(
+                onPressed: _onTapUpdate,
+                child: const Text('업데이트'),
+              ),
+            ),
+          ListTile(
+            leading: const Icon(Icons.phone_android),
+            title: const Text('내 휴대폰번호'),
+            subtitle: Text(_phoneNumber),
+          ),
+          ListTile(
+            leading: const Icon(Icons.account_circle),
+            title: const Text('내 아이디'),
+            subtitle: Text(_loginId),
+          ),
+          ListTile(
+            leading: const Icon(Icons.person),
+            title: const Text('내 이름'),
+            subtitle: Text(_userName),
+          ),
+          ListTile(
+            leading: const Icon(Icons.map),
+            title: const Text('내 지역'),
+            subtitle: Text(_userRegion),
+          ),
+          ListTile(
+            leading: const Icon(Icons.timer),
+            title: const Text('만료일'),
+            subtitle: Text(_validUntil),
+          ),
+          const Divider(),
+
+          // 기본 전화앱 등록
+          SwitchListTile(
+            secondary: const Icon(Icons.phone),
+            title: const Text('기본 전화앱 등록'),
+            subtitle: Text(_isDefaultDialer ? '이미 등록됨' : '아직 미등록'),
+            value: _isDefaultDialer,
+            onChanged: (val) {
+              if (!val) {
+                // 기본 전화앱 해지? 아무것도 안 함
+              } else {
+                _onRequestDefaultDialer();
+              }
+            },
+          ),
+
+          if (_isDefaultDialer) ...[
+            const Divider(),
+
+            ListTile(
+              leading: const Icon(Icons.block),
+              title: const Text('차단 설정'),
+              subtitle: Text('차단 설정을 변경할 수 있습니다.'),
+            ),
+
             SwitchListTile(
               title: const Text('오늘 상담 차단'),
-              subtitle: const Text('오늘 하루 동안 모든 전화를 차단합니다'),
               value: _blockedNumbersController.isTodayBlocked,
               onChanged: (value) async {
                 await _blockedNumbersController.setTodayBlocked(value);
@@ -259,7 +324,6 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             SwitchListTile(
               title: const Text('모르는번호 차단'),
-              subtitle: const Text('전화번호부에 없는 번호를 차단합니다'),
               value: _blockedNumbersController.isUnknownBlocked,
               onChanged: (value) async {
                 await _blockedNumbersController.setUnknownBlocked(value);
@@ -268,14 +332,11 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
             SwitchListTile(
               title: const Text('위험번호 자동 차단'),
-              subtitle: const Text('위험번호로 등록된 번호 자동 차단'),
               value: _blockedNumbersController.isAutoBlockDanger,
               onChanged: (value) {
-                // 즉시 UI 업데이트
                 setState(() {
                   _blockedNumbersController.setAutoBlockDanger(value);
                 });
-                // 백그라운드에서 서버 업데이트
                 _blockedNumbersController.setAutoBlockDanger(value).then((_) {
                   if (mounted) {
                     setState(() {});
@@ -364,11 +425,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ),
                       );
                       if (count != null) {
-                        // 즉시 UI 업데이트
                         setState(() {
                           _blockedNumbersController.setBombCallsCount(count);
                         });
-                        // 백그라운드에서 서버 업데이트
                         _blockedNumbersController.setBombCallsCount(count).then(
                           (_) {
                             if (mounted) {
@@ -382,11 +441,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                   Switch(
                     value: _blockedNumbersController.isBombCallsBlocked,
                     onChanged: (value) {
-                      // 즉시 UI 업데이트
                       setState(() {
                         _blockedNumbersController.setBombCallsBlocked(value);
                       });
-                      // 백그라운드에서 서버 업데이트
                       _blockedNumbersController.setBombCallsBlocked(value).then(
                         (_) {
                           if (mounted) {
@@ -400,94 +457,25 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
             ListTile(
-              title: const Text('차단된 전화번호 관리'),
+              title: const Text('개별 차단번호 관리'),
+              subtitle: Text(
+                '${_blockedNumbersController.blockedNumbers.length}개의 번호가 차단되어 있습니다',
+              ),
+              trailing: const Icon(Icons.settings),
               onTap: () => _showBlockedNumbersDialog(context),
             ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_checking) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return Scaffold(
-      appBar: AppBar(title: Text('설정'), actions: [const DropdownMenusWidget()]),
-      body: ListView(
-        children: [
-          // (1) 만약 서버 버전이 내 버전과 다르면 => "업데이트가 있습니다." 버튼
-          if (_updateAvailable)
-            ListTile(
-              title: const Text(
-                '업데이트가 있습니다!',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-              subtitle: Text('서버 버전: $_serverVersion\n현재 버전: $APP_VERSION'),
-              trailing: ElevatedButton(
-                onPressed: _onTapUpdate,
-                child: const Text('업데이트'),
-              ),
+          ] else ...[
+            // 오버레이 권한 (기본 전화앱이 아닐 때만 표시)
+            SwitchListTile(
+              secondary: const Icon(Icons.window),
+              title: const Text('오버레이 권한'),
+              subtitle: Text(_overlayGranted ? '허용됨' : '미허용 (수신전화 팝업용)'),
+              value: _overlayGranted,
+              onChanged: (val) {
+                _onRequestOverlayPermission();
+              },
             ),
-          ListTile(
-            leading: const Icon(Icons.phone_android),
-            title: const Text('내 휴대폰번호'),
-            subtitle: Text(_phoneNumber),
-          ),
-          ListTile(
-            leading: const Icon(Icons.account_circle),
-            title: const Text('내 아이디'),
-            subtitle: Text(_loginId),
-          ),
-          ListTile(
-            leading: const Icon(Icons.person),
-            title: const Text('내 이름'),
-            subtitle: Text(_userName),
-          ),
-          ListTile(
-            leading: const Icon(Icons.map),
-            title: const Text('내 지역'),
-            subtitle: Text(_userRegion),
-          ),
-          ListTile(
-            leading: const Icon(Icons.timer),
-            title: const Text('만료일'),
-            subtitle: Text(_validUntil),
-          ),
-          const Divider(),
-
-          // 기본 전화앱 등록
-          SwitchListTile(
-            secondary: const Icon(Icons.phone),
-            title: const Text('기본 전화앱 등록'),
-            subtitle: Text(_isDefaultDialer ? '이미 등록됨' : '아직 미등록'),
-            value: _isDefaultDialer,
-            onChanged: (val) {
-              if (!val) {
-                // 기본 전화앱 해지? 안드로이드상 해제는 복잡. 보통 OS 설정에서
-                // 여기서는 아무것도 안 함
-              } else {
-                _onRequestDefaultDialer();
-              }
-            },
-          ),
-
-          // 오버레이 권한
-          SwitchListTile(
-            secondary: const Icon(Icons.window),
-            title: const Text('오버레이 권한'),
-            subtitle: Text(_overlayGranted ? '허용됨' : '미허용 (수신전화 팝업용)'),
-            value: _overlayGranted,
-            onChanged: (val) {
-              _onRequestOverlayPermission();
-            },
-          ),
+          ],
 
           const Divider(),
 
@@ -504,8 +492,6 @@ class _SettingsScreenState extends State<SettingsScreen>
             title: const Text('로그아웃'),
             onTap: GraphQLClientManager.logout,
           ),
-
-          _buildBlockSettingsSection(),
         ],
       ),
     );
