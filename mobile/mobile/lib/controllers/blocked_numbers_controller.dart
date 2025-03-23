@@ -6,6 +6,7 @@ import '../models/blocked_number.dart';
 import '../models/blocked_history.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/graphql/search_api.dart';
 
 class BlockedNumbersController {
   static const String _blockedHistoryKey = 'blocked_history';
@@ -13,25 +14,40 @@ class BlockedNumbersController {
   final ContactsController _contactsController;
   List<BlockedNumber> _blockedNumbers = [];
   List<BlockedHistory> _blockedHistory = [];
+  List<String> _dangerNumbers = [];
+  List<String> _bombCallsNumbers = [];
   bool _isTodayBlocked = false;
   bool _isUnknownBlocked = false;
+  bool _isAutoBlockDanger = false;
+  bool _isBombCallsBlocked = false;
+  int _bombCallsCount = 0;
   DateTime? _todayBlockDate;
 
   BlockedNumbersController(this._contactsController) {
     _loadSettings();
     _loadBlockedNumbers();
     _loadBlockedHistory();
+    _loadDangerNumbers();
+    _loadBombCallsNumbers();
   }
 
   List<BlockedNumber> get blockedNumbers => _blockedNumbers;
   List<BlockedHistory> get blockedHistory => _blockedHistory;
+  List<String> get dangerNumbers => _dangerNumbers;
+  List<String> get bombCallsNumbers => _bombCallsNumbers;
   bool get isTodayBlocked => _isTodayBlocked;
   bool get isUnknownBlocked => _isUnknownBlocked;
+  bool get isAutoBlockDanger => _isAutoBlockDanger;
+  bool get isBombCallsBlocked => _isBombCallsBlocked;
+  int get bombCallsCount => _bombCallsCount;
 
   void _loadSettings() {
     final box = GetStorage();
     _isTodayBlocked = box.read<bool>('isTodayBlocked') ?? false;
     _isUnknownBlocked = box.read<bool>('isUnknownBlocked') ?? false;
+    _isAutoBlockDanger = box.read<bool>('isAutoBlockDanger') ?? false;
+    _isBombCallsBlocked = box.read<bool>('isBombCallsBlocked') ?? false;
+    _bombCallsCount = box.read<int>('bombCallsCount') ?? 0;
 
     final todayBlockDate = box.read<String>('todayBlockDate');
     if (todayBlockDate != null) {
@@ -123,7 +139,58 @@ class BlockedNumbersController {
     _blockedNumbers = numbers;
   }
 
+  Future<void> _loadDangerNumbers() async {
+    if (_isAutoBlockDanger) {
+      final numbers = await SearchApi.getPhoneNumbersByType(99);
+      _dangerNumbers = numbers.map((n) => n.phoneNumber).toList();
+    }
+  }
+
+  Future<void> _loadBombCallsNumbers() async {
+    if (_isBombCallsBlocked && _bombCallsCount > 0) {
+      final numbers = await BlockApi.getBlockNumbers(_bombCallsCount);
+      _bombCallsNumbers =
+          numbers.map((n) => n['phoneNumber'] as String).toList();
+    }
+  }
+
+  Future<void> setAutoBlockDanger(bool value) async {
+    _isAutoBlockDanger = value;
+    await _storage.write('isAutoBlockDanger', value);
+    if (value) {
+      await _loadDangerNumbers();
+    }
+  }
+
+  Future<void> setBombCallsBlocked(bool value) async {
+    _isBombCallsBlocked = value;
+    await _storage.write('isBombCallsBlocked', value);
+    if (value) {
+      await _loadBombCallsNumbers();
+    }
+  }
+
+  Future<void> setBombCallsCount(int count) async {
+    _bombCallsCount = count;
+    await _storage.write('bombCallsCount', count);
+    if (_isBombCallsBlocked) {
+      await _loadBombCallsNumbers();
+    }
+  }
+
   bool isNumberBlocked(String phoneNumber) {
+    // 위험번호 자동 차단 체크
+    if (_isAutoBlockDanger && _dangerNumbers.contains(phoneNumber)) {
+      _addBlockedHistory(phoneNumber, 'danger');
+      return true;
+    }
+
+    // 통화 횟수 기반 차단 체크
+    if (_isBombCallsBlocked && _bombCallsNumbers.contains(phoneNumber)) {
+      _addBlockedHistory(phoneNumber, 'bomb_calls');
+      return true;
+    }
+
     // 오늘 상담 차단 체크
     if (_isTodayBlocked && _todayBlockDate != null) {
       final now = DateTime.now();
