@@ -109,7 +109,6 @@ module.exports = {
       // 1) phoneNumber별로 그룹핑
       const mapByPhone = {};
       for (const rec of records) {
-
         console.log('map Rec', rec);
         const phone = rec.phoneNumber?.trim();
         if (!phone) continue;
@@ -124,8 +123,7 @@ module.exports = {
       // 2) 기존 PhoneNumber docs 한 번에 로딩
       const existingDocs = await PhoneNumber.find({
         phoneNumber: { $in: phoneNumbers }
-      }).lean(); // lean() -> plain object (optional)
-      // phoneDocMap: { [phoneNumber]: { phoneNumber, type, records: [...]} }
+      }).lean();
       const phoneDocMap = {};
       for (const doc of existingDocs) {
         phoneDocMap[doc.phoneNumber] = doc;
@@ -139,9 +137,11 @@ module.exports = {
         const doc = phoneDocMap[phone];
         let currentRecords = [];
         let currentType = 0;
+        let currentBlockCount = 0;
         if (doc) {
           currentRecords = doc.records || [];
           currentType = doc.type || 0;
+          currentBlockCount = doc.blockCount || 0;
         }
 
         // 병합
@@ -154,6 +154,15 @@ module.exports = {
           finalType = 99;
         }
 
+        // blockCount 계산
+        let blockCount = currentBlockCount;
+        for (const record of merged) {
+          const name = record.name?.toLowerCase() || '';
+          if (name.includes('ㅋㅍ') || name.includes('콜폭')) {
+            blockCount++;
+          }
+        }
+
         // 4) bulkOps: upsert
         bulkOps.push({
           updateOne: {
@@ -162,6 +171,7 @@ module.exports = {
               $set: {
                 phoneNumber: phone,
                 type: finalType,
+                blockCount: blockCount,
                 records: merged
               }
             },
@@ -226,5 +236,12 @@ module.exports = {
       return result;
     },
     
+    getBlockNumbers: async (_, { count }, { tokenData }) => {
+      if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
+      return PhoneNumber.find(
+        { blockCount: { $gte: count } },
+        { phoneNumber: 1, blockCount: 1, _id: 0 }  // 필요한 필드만 선택
+      );
+    },
   },
 };

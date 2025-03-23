@@ -15,7 +15,13 @@ module.exports = gql`
     id: ID!
     phoneNumber: String!
     type: Int
+    blockCount: Int!
     records: [Record!]!
+  }
+
+  type BlockNumber {
+    phoneNumber: String!
+    blockCount: Int!
   }
 
   # 업서트 입력
@@ -32,7 +38,8 @@ module.exports = gql`
   extend type Query {
     getPhoneNumber(phoneNumber: String!): PhoneNumber
     getPhoneNumbersByType(type: Int!): [PhoneNumber!]!
-    getMyRecords: [UserPhoneRecord!]! 
+    getMyRecords: [UserPhoneRecord!]!
+    getBlockNumbers(count: Int!): [BlockNumber!]!
   }
 
   extend type Mutation {

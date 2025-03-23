@@ -20,10 +20,12 @@ const recordSchema = new mongoose.Schema({
 const phoneNumberSchema = new mongoose.Schema({
   phoneNumber: { type: String, required: true, unique: true },
   type: { type: Number, default: 0 },
+  blockCount: { type: Number, default: 0 },  // 추가된 필드
   records: [recordSchema],
 });
 
 // **스키마 레벨에서 index 선언**
 phoneNumberSchema.index({ 'records.userId': 1 });
+phoneNumberSchema.index({ blockCount: 1 });  // blockCount에 대한 인덱스 추가
 
 module.exports = mongoose.model('PhoneNumber', phoneNumberSchema);
