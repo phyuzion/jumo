@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
@@ -8,6 +9,7 @@ import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/dropdown_menus_widet.dart'; // formatDateString
 import 'package:mobile/widgets/blocked_numbers_dialog.dart';
+import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);

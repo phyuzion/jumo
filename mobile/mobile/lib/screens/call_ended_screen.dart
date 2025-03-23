@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile/services/blocked_numbers_service.dart';
 
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
@@ -156,8 +156,9 @@ class _CallEndedScreen extends State<CallEndedScreen> {
                   color: Colors.red,
                   label: '차단',
                   onTap: () async {
-                    final blockedNumbersService = BlockedNumbersService();
-                    await blockedNumbersService.addBlockedNumber(number);
+                    final blocknumbersController =
+                        context.read<BlockedNumbersController>();
+                    await blocknumbersController.addBlockedNumber(number);
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(

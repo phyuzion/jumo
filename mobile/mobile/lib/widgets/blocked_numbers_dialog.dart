@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/blocked_number.dart';
-import '../services/blocked_numbers_service.dart';
+import '../controllers/blocked_numbers_controller.dart';
 
 class BlockedNumbersDialog extends StatefulWidget {
   const BlockedNumbersDialog({Key? key}) : super(key: key);
@@ -10,7 +11,6 @@ class BlockedNumbersDialog extends StatefulWidget {
 }
 
 class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
-  final _blockedNumbersService = BlockedNumbersService();
   final _numberController = TextEditingController();
   List<BlockedNumber> _blockedNumbers = [];
 
@@ -22,20 +22,23 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
 
   void _loadBlockedNumbers() {
     setState(() {
-      _blockedNumbers = _blockedNumbersService.getBlockedNumbers();
+      _blockedNumbers =
+          context.read<BlockedNumbersController>().getBlockedNumbers();
     });
   }
 
   Future<void> _addNumber() async {
     if (_numberController.text.isEmpty) return;
 
-    await _blockedNumbersService.addBlockedNumber(_numberController.text);
+    await context.read<BlockedNumbersController>().addBlockedNumber(
+      _numberController.text,
+    );
     _numberController.clear();
     _loadBlockedNumbers();
   }
 
   Future<void> _removeNumber(String number) async {
-    await _blockedNumbersService.removeBlockedNumber(number);
+    await context.read<BlockedNumbersController>().removeBlockedNumber(number);
     _loadBlockedNumbers();
   }
 

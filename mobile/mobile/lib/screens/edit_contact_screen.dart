@@ -5,7 +5,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
-import 'package:mobile/services/blocked_numbers_service.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 
 /// 신규: initialPhone==null => 전화번호 입력 가능
 /// 기존: 전화번호 수정불가, contactId, memo, type 편집
@@ -50,16 +50,16 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
   void _checkBlockedStatus() {
     if (widget.initialPhone != null) {
-      final blockedNumbersService = BlockedNumbersService();
-      _isBlocked = blockedNumbersService.isNumberBlocked(widget.initialPhone!);
+      final blocknumbersController = context.read<BlockedNumbersController>();
+      _isBlocked = blocknumbersController.isNumberBlocked(widget.initialPhone!);
     }
   }
 
   Future<void> _toggleBlockStatus() async {
     if (widget.initialPhone == null) return;
 
-    final blockedNumbersService = BlockedNumbersService();
-    final isCurrentlyBlocked = blockedNumbersService.isNumberBlocked(
+    final blocknumbersController = context.read<BlockedNumbersController>();
+    final isCurrentlyBlocked = blocknumbersController.isNumberBlocked(
       widget.initialPhone!,
     );
 
@@ -86,9 +86,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     if (result == true) {
       if (isCurrentlyBlocked) {
-        await blockedNumbersService.removeBlockedNumber(widget.initialPhone!);
+        await blocknumbersController.removeBlockedNumber(widget.initialPhone!);
       } else {
-        await blockedNumbersService.addBlockedNumber(widget.initialPhone!);
+        await blocknumbersController.addBlockedNumber(widget.initialPhone!);
       }
       setState(() {
         _isBlocked = !isCurrentlyBlocked;

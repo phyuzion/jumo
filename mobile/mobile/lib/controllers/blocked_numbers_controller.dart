@@ -1,8 +1,8 @@
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/graphql/block_api.dart';
 import '../models/blocked_number.dart';
-import '../graphql/log_api.dart';
 
-class BlockedNumbersService {
+class BlockedNumbersController {
   static const String _storageKey = 'blocked_numbers';
   final _storage = GetStorage();
 
@@ -17,7 +17,7 @@ class BlockedNumbersService {
       blockedNumbers.add(BlockedNumber(number: number));
 
       // 서버에 전체 목록 업데이트
-      final serverNumbers = await LogApi.updateBlockedNumbers(
+      final serverNumbers = await BlockApi.updateBlockedNumbers(
         blockedNumbers.map((bn) => bn.number).toList(),
       );
 
@@ -40,7 +40,7 @@ class BlockedNumbersService {
       blockedNumbers.removeWhere((blocked) => blocked.number == number);
 
       // 서버에 전체 목록 업데이트
-      final serverNumbers = await LogApi.updateBlockedNumbers(
+      final serverNumbers = await BlockApi.updateBlockedNumbers(
         blockedNumbers.map((bn) => bn.number).toList(),
       );
 

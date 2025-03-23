@@ -3,21 +3,22 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/services/native_methods.dart';
-import 'package:mobile/services/blocked_numbers_service.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 
 class NavigationController {
   static final navKey = GlobalKey<NavigatorState>();
-  static final _blockedNumbersService = BlockedNumbersService();
 
-  static Future<void> init() async {
+  static Future<void> init(
+    BlockedNumbersController blockedNumbersController,
+  ) async {
     // 네이티브 -> Flutter 이벤트 핸들러
     NativeMethods.setMethodCallHandler((call) async {
       switch (call.method) {
         case 'onIncomingNumber':
           final number = call.arguments as String;
           // 차단된 번호인지 확인
-          if (_blockedNumbersService.isNumberBlocked(number)) {
+          if (blockedNumbersController.isNumberBlocked(number)) {
             // 차단된 번호면 전화 거절
             await NativeMethods.rejectCall();
             return;
@@ -40,7 +41,7 @@ class NavigationController {
             final reason = map['reason'] as String? ?? '';
 
             // 차단된 번호인 경우 call_ended_screen으로 이동하지 않고 콜로그만 업데이트
-            if (_blockedNumbersService.isNumberBlocked(endedNumber)) {
+            if (blockedNumbersController.isNumberBlocked(endedNumber)) {
               final ctx = navKey.currentContext;
               if (ctx != null) {
                 final callLogController = ctx.read<CallLogController>();

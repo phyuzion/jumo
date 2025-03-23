@@ -1,6 +1,7 @@
 // lib/controllers/app_controller.dart
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/permission_controller.dart';
@@ -16,12 +17,14 @@ class AppController {
   final ContactsController contactsController;
   final CallLogController callLogController;
   final SmsController smsController;
+  final BlockedNumbersController blockedNumbersController;
 
   AppController(
     this.phoneStateController,
     this.contactsController,
     this.callLogController,
     this.smsController,
+    this.blockedNumbersController,
   );
 
   Future<bool> checkEssentialPermissions() async {

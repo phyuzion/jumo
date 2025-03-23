@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
@@ -60,18 +61,21 @@ void overlayMain() {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await NavigationController.init(); // 네이티브 이벤트 -> navigation 연동
   await GetStorage.init();
 
   final contactsController = ContactsController();
   final callLogContoller = CallLogController();
   final smsController = SmsController();
-
+  final blockedNumbersController = BlockedNumbersController();
   // 1) phoneStateController
   final phoneStateController = PhoneStateController(
     NavigationController.navKey,
     callLogContoller,
   );
+
+  await NavigationController.init(
+    blockedNumbersController,
+  ); // 네이티브 이벤트 -> navigation 연동
 
   // 2) appController (의존성으로 phoneStateController 주입)
   final appController = AppController(
@@ -79,6 +83,7 @@ void main() async {
     contactsController,
     callLogContoller,
     smsController,
+    blockedNumbersController,
   );
 
   runApp(
@@ -89,6 +94,9 @@ void main() async {
         Provider<ContactsController>.value(value: contactsController),
         Provider<CallLogController>.value(value: callLogContoller),
         Provider<SmsController>.value(value: smsController),
+        Provider<BlockedNumbersController>.value(
+          value: blockedNumbersController,
+        ),
       ],
       child: const MyApp(),
     ),

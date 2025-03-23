@@ -65,28 +65,4 @@ class LogApi {
 
     return updated;
   }
-
-  static const String _updateBlockedNumbersMutation = r'''
-    mutation UpdateBlockedNumbers($numbers: [String!]!) {
-      updateBlockedNumbers(numbers: $numbers)
-    }
-  ''';
-
-  /// 차단된 전화번호 목록 업데이트
-  static Future<List<String>> updateBlockedNumbers(List<String> numbers) async {
-    final client = GraphQLClientManager.client;
-    final token = GraphQLClientManager.accessToken;
-    if (token == null) throw Exception('로그인 필요');
-
-    final opts = MutationOptions(
-      document: gql(_updateBlockedNumbersMutation),
-      variables: {'numbers': numbers},
-    );
-
-    final result = await client.mutate(opts);
-    GraphQLClientManager.handleExceptions(result);
-
-    final List<dynamic> data = result.data?['updateBlockedNumbers'] ?? [];
-    return data.map((number) => number.toString()).toList();
-  }
 }
