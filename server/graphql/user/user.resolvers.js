@@ -341,47 +341,72 @@ module.exports = {
           return dt >= oneDayAgo;
         });
 
-        // TodayRecord 업데이트
-        for (const log of recentLogs) {
-          let dt = new Date(log.time);
-          if (isNaN(dt.getTime())) {
-            const epoch = parseFloat(log.time);
-            if (!isNaN(epoch)) dt = new Date(epoch);
-          }
-
+        if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            // phoneNumber와 userName으로 레코드 찾기
-            const existingRecord = await TodayRecord.findOne({
-              phoneNumber: log.phoneNumber,
-              userName: user.name,
+            // 1. 기존 레코드들을 한 번에 조회
+            const existingRecords = await TodayRecord.find({
+              phoneNumber: { $in: recentLogs.map(log => log.phoneNumber) },
+              userName: user.name
             }).session(session);
 
-            if (existingRecord) {
-              // 기존 레코드의 시간과 비교
-              const existingTime = new Date(existingRecord.createdAt);
-              if (dt > existingTime) {
-                // 새로운 통화가 더 최신이면 업데이트
-                existingRecord.userType = user.type;
-                existingRecord.callType = log.callType;
-                existingRecord.createdAt = dt;
-                await existingRecord.save({ session });
+            // 2. 기존 레코드들을 Map으로 변환하여 빠른 조회 가능하게 함
+            const existingMap = new Map(
+              existingRecords.map(record => [record.phoneNumber, record])
+            );
+
+            // 3. 업데이트할 레코드와 새로 생성할 레코드를 분리
+            const updates = [];
+            const inserts = [];
+
+            for (const log of recentLogs) {
+              let dt = new Date(log.time);
+              if (isNaN(dt.getTime())) {
+                const epoch = parseFloat(log.time);
+                if (!isNaN(epoch)) dt = new Date(epoch);
               }
-            } else {
-              // 새 레코드 생성
-              const record = new TodayRecord({
-                phoneNumber: log.phoneNumber,
-                userName: user.name,
-                userType: user.type,
-                callType: log.callType,
-                createdAt: dt,
-              });
-              await record.save({ session });
+
+              const existing = existingMap.get(log.phoneNumber);
+              if (existing) {
+                // 기존 레코드가 있고 새로운 통화가 더 최신인 경우만 업데이트
+                if (dt > existing.createdAt) {
+                  updates.push({
+                    updateOne: {
+                      filter: { _id: existing._id },
+                      update: {
+                        $set: {
+                          userType: user.type,
+                          callType: log.callType,
+                          createdAt: dt
+                        }
+                      }
+                    }
+                  });
+                }
+              } else {
+                // 새 레코드 생성
+                inserts.push({
+                  insertOne: {
+                    document: {
+                      phoneNumber: log.phoneNumber,
+                      userName: user.name,
+                      userType: user.type,
+                      callType: log.callType,
+                      createdAt: dt
+                    }
+                  }
+                });
+              }
+            }
+
+            // 4. 한 번의 bulkWrite로 모든 작업 실행
+            if (updates.length > 0 || inserts.length > 0) {
+              await TodayRecord.bulkWrite([...updates, ...inserts], { session });
             }
           });
         }
       } catch (error) {
         console.error('TodayRecord 업데이트 실패:', error);
-        // TodayRecord 업데이트 실패는 전체 mutation을 실패시키지 않음
+        // TodayRecord 업데이트 실패는 전체 mutation 실패로 이어지지 않도록 함
       }
 
       return true;
