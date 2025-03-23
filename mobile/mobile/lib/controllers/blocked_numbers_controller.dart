@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/block_api.dart';
 import '../models/blocked_number.dart';
@@ -21,7 +23,9 @@ class BlockedNumbersController {
 
   List<BlockedNumber> getBlockedNumbers() {
     final List<dynamic> jsonList = GetStorage().read('blocked_numbers') ?? [];
-    return jsonList.map((json) => BlockedNumber.fromJson(json)).toList();
+    _blockedNumbers =
+        jsonList.map((json) => BlockedNumber.fromJson(json)).toList();
+    return _blockedNumbers;
   }
 
   Future<void> addBlockedNumber(String number) async {
@@ -50,7 +54,7 @@ class BlockedNumbersController {
   Future<void> removeBlockedNumber(String number) async {
     try {
       final blockedNumbers = getBlockedNumbers();
-      blockedNumbers.removeWhere((blocked) => blocked.number == number);
+      blockedNumbers.removeWhere((bn) => bn.number == number);
 
       // 서버에 전체 목록 업데이트
       final serverNumbers = await BlockApi.updateBlockedNumbers(
@@ -62,9 +66,9 @@ class BlockedNumbersController {
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
     } catch (e) {
-      // 서버 오류 시 로컬에서만 제거
+      // 서버 오류 시 로컬에만 저장
       final blockedNumbers = getBlockedNumbers();
-      blockedNumbers.removeWhere((blocked) => blocked.number == number);
+      blockedNumbers.removeWhere((bn) => bn.number == number);
       await _saveBlockedNumbers(blockedNumbers);
       rethrow;
     }
@@ -124,7 +128,6 @@ class BlockedNumbersController {
         return true;
       }
     }
-
     // 사용자가 추가한 번호 체크 (포함)
     return _blockedNumbers.any(
       (blocked) => phoneNumber.contains(blocked.number),
