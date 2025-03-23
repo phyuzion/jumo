@@ -7,6 +7,7 @@ const {
   ForbiddenError,
 } = require('apollo-server-errors');
 const { GraphQLJSON } = require('graphql-type-json');
+const { withTransaction } = require('../../utils/transaction');
 
 const jwt = require('jsonwebtoken');
 const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
@@ -229,7 +230,9 @@ module.exports = {
       const accessToken = generateAccessToken({ userId: user._id });
       const refreshToken = generateRefreshToken({ userId: user._id });
       user.refreshToken = refreshToken;
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
 
       return { accessToken, refreshToken, user };
     },
@@ -247,7 +250,9 @@ module.exports = {
       }
 
       user.password = await bcrypt.hash(newPassword, 10);
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
 
       return {
         success: true,
@@ -277,7 +282,9 @@ module.exports = {
         user.region = region;
       }
 
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
       return user;
     },
 
@@ -291,7 +298,9 @@ module.exports = {
 
       const newPass = generateRandomString(6);
       user.password = await bcrypt.hash(newPass, 10);
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
       return newPass;
     },
 
@@ -299,7 +308,7 @@ module.exports = {
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
-      // 1. User의 callLogs 업데이트 (기존 로직 유지)
+      // 1. User의 callLogs 업데이트
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
@@ -313,7 +322,9 @@ module.exports = {
         };
         pushNewLog(user.callLogs, newLog, 200);
       }
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
 
       // 2. TodayRecord 업데이트
       try {
@@ -338,33 +349,35 @@ module.exports = {
             if (!isNaN(epoch)) dt = new Date(epoch);
           }
 
-          // phoneNumber와 userName으로 레코드 찾기
-          const existingRecord = await TodayRecord.findOne({
-            phoneNumber: log.phoneNumber,
-            userName: user.name,
-          });
-
-          if (existingRecord) {
-            // 기존 레코드의 시간과 비교
-            const existingTime = new Date(existingRecord.createdAt);
-            if (dt > existingTime) {
-              // 새로운 통화가 더 최신이면 업데이트
-              existingRecord.userType = user.type;
-              existingRecord.callType = log.callType;
-              existingRecord.createdAt = dt;
-              await existingRecord.save();
-            }
-          } else {
-            // 새 레코드 생성
-            const record = new TodayRecord({
+          await withTransaction(async (session) => {
+            // phoneNumber와 userName으로 레코드 찾기
+            const existingRecord = await TodayRecord.findOne({
               phoneNumber: log.phoneNumber,
               userName: user.name,
-              userType: user.type,
-              callType: log.callType,
-              createdAt: dt,
-            });
-            await record.save();
-          }
+            }).session(session);
+
+            if (existingRecord) {
+              // 기존 레코드의 시간과 비교
+              const existingTime = new Date(existingRecord.createdAt);
+              if (dt > existingTime) {
+                // 새로운 통화가 더 최신이면 업데이트
+                existingRecord.userType = user.type;
+                existingRecord.callType = log.callType;
+                existingRecord.createdAt = dt;
+                await existingRecord.save({ session });
+              }
+            } else {
+              // 새 레코드 생성
+              const record = new TodayRecord({
+                phoneNumber: log.phoneNumber,
+                userName: user.name,
+                userType: user.type,
+                callType: log.callType,
+                createdAt: dt,
+              });
+              await record.save({ session });
+            }
+          });
         }
       } catch (error) {
         console.error('TodayRecord 업데이트 실패:', error);
@@ -392,7 +405,9 @@ module.exports = {
         };
         pushNewLog(user.smsLogs, newLog, 200);
       }
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
       return true;
     },
 
@@ -400,14 +415,18 @@ module.exports = {
     setUserSetting: async (_, { settings }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
       user.settings = settings;
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
       return true;
     },
 
     updateBlockedNumbers: async (_, { numbers }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
       user.blockList = numbers;
-      await user.save();
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
       return user.blockList;
     },
   },

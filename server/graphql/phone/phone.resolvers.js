@@ -7,6 +7,7 @@ const {
 } = require('apollo-server-errors');
 const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
+const { withTransaction } = require('../../utils/transaction');
 
 async function checkUserOrAdmin(tokenData) {
   // 반환: { isAdmin: boolean, user: User doc or null }
@@ -124,6 +125,7 @@ module.exports = {
       const existingDocs = await PhoneNumber.find({
         phoneNumber: { $in: phoneNumbers }
       }).lean();
+
       const phoneDocMap = {};
       for (const doc of existingDocs) {
         phoneDocMap[doc.phoneNumber] = doc;
@@ -182,7 +184,9 @@ module.exports = {
 
       // 5) bulkWrite
       if (bulkOps.length > 0) {
-        await PhoneNumber.bulkWrite(bulkOps);
+        await withTransaction(async (session) => {
+          await PhoneNumber.bulkWrite(bulkOps, { session });
+        });
       }
 
       console.log('bulkWrite done. ops=', bulkOps.length);
