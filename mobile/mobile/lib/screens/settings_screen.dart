@@ -315,7 +315,10 @@ class _SettingsScreenState extends State<SettingsScreen>
             ),
 
             SwitchListTile(
-              title: const Text('오늘 상담 차단'),
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: const Text('오늘 상담 차단'),
+              ),
               value: _blockedNumbersController.isTodayBlocked,
               onChanged: (value) async {
                 await _blockedNumbersController.setTodayBlocked(value);
@@ -323,7 +326,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               },
             ),
             SwitchListTile(
-              title: const Text('모르는번호 차단'),
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: const Text('모르는번호 차단'),
+              ),
               value: _blockedNumbersController.isUnknownBlocked,
               onChanged: (value) async {
                 await _blockedNumbersController.setUnknownBlocked(value);
@@ -331,7 +337,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               },
             ),
             SwitchListTile(
-              title: const Text('위험번호 자동 차단'),
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: const Text('위험번호 자동 차단'),
+              ),
               value: _blockedNumbersController.isAutoBlockDanger,
               onChanged: (value) {
                 setState(() {
@@ -345,9 +354,15 @@ class _SettingsScreenState extends State<SettingsScreen>
               },
             ),
             ListTile(
-              title: const Text('콜폭 차단'),
-              subtitle: Text(
-                '현재 설정: ${_blockedNumbersController.bombCallsCount}회',
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: const Text('콜폭 차단'),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(left: 24.0),
+                child: Text(
+                  '현재 설정: ${_blockedNumbersController.bombCallsCount}회',
+                ),
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -457,9 +472,15 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
             ),
             ListTile(
-              title: const Text('개별 차단번호 관리'),
-              subtitle: Text(
-                '${_blockedNumbersController.blockedNumbers.length}개의 번호가 차단되어 있습니다',
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: const Text('개별 차단번호 관리'),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(left: 24.0),
+                child: Text(
+                  '${_blockedNumbersController.blockedNumbers.length}개의 번호가 차단되어 있습니다',
+                ),
               ),
               trailing: const Icon(Icons.settings),
               onTap: () => _showBlockedNumbersDialog(context),
