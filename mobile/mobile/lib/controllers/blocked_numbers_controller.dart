@@ -14,12 +14,43 @@ class BlockedNumbersController {
   DateTime? _todayBlockDate;
 
   BlockedNumbersController(this._contactsController) {
+    _loadSettings();
     loadUserBlockedNumbers();
   }
 
   List<BlockedNumber> get blockedNumbers => _blockedNumbers;
   bool get isTodayBlocked => _isTodayBlocked;
   bool get isUnknownBlocked => _isUnknownBlocked;
+
+  void _loadSettings() {
+    final box = GetStorage();
+    _isTodayBlocked = box.read<bool>('isTodayBlocked') ?? false;
+    _isUnknownBlocked = box.read<bool>('isUnknownBlocked') ?? false;
+
+    final todayBlockDate = box.read<String>('todayBlockDate');
+    if (todayBlockDate != null) {
+      _todayBlockDate = DateTime.parse(todayBlockDate);
+    }
+  }
+
+  Future<void> setTodayBlocked(bool value) async {
+    _isTodayBlocked = value;
+    final box = GetStorage();
+    await box.write('isTodayBlocked', value);
+
+    if (value) {
+      _todayBlockDate = DateTime.now();
+      await box.write('todayBlockDate', _todayBlockDate!.toIso8601String());
+    } else {
+      _todayBlockDate = null;
+      await box.remove('todayBlockDate');
+    }
+  }
+
+  Future<void> setUnknownBlocked(bool value) async {
+    _isUnknownBlocked = value;
+    await GetStorage().write('isUnknownBlocked', value);
+  }
 
   List<BlockedNumber> getBlockedNumbers() {
     final List<dynamic> jsonList = GetStorage().read('blocked_numbers') ?? [];
@@ -76,58 +107,42 @@ class BlockedNumbersController {
 
   Future<void> _saveBlockedNumbers(List<BlockedNumber> numbers) async {
     final jsonList = numbers.map((number) => number.toJson()).toList();
-    GetStorage().write('blocked_numbers', jsonList);
+    await GetStorage().write('blocked_numbers', jsonList);
+    _blockedNumbers = numbers;
   }
 
   void loadUserBlockedNumbers() {
     _blockedNumbers = getBlockedNumbers();
   }
 
-  // 오늘 상담 차단 설정
-  Future<void> setTodayBlocked(bool value) async {
-    _isTodayBlocked = value;
-    if (value) {
-      _todayBlockDate = DateTime.now();
-    } else {
-      _todayBlockDate = null;
-    }
-  }
-
-  // 모르는번호 차단 설정
-  Future<void> setUnknownBlocked(bool value) async {
-    _isUnknownBlocked = value;
-  }
-
   // 번호가 차단되어 있는지 확인
   bool isNumberBlocked(String phoneNumber) {
-    final box = GetStorage();
-
     // 오늘 상담 차단 체크
-    if (box.read<bool>('isTodayBlocked') == true) {
-      final todayBlockDate = box.read<String>('todayBlockDate');
-      if (todayBlockDate != null) {
-        final blockDate = DateTime.parse(todayBlockDate);
-        final now = DateTime.now();
-        final today = DateTime(blockDate.year, blockDate.month, blockDate.day);
-        final tomorrow = today.add(const Duration(days: 1));
+    if (_isTodayBlocked && _todayBlockDate != null) {
+      final now = DateTime.now();
+      final today = DateTime(
+        _todayBlockDate!.year,
+        _todayBlockDate!.month,
+        _todayBlockDate!.day,
+      );
+      final tomorrow = today.add(const Duration(days: 1));
 
-        if (now.isBefore(tomorrow)) {
-          return true;
-        } else {
-          // 자정이 지났으면 차단 해제
-          box.write('isTodayBlocked', false);
-          box.remove('todayBlockDate');
-        }
+      if (now.isBefore(tomorrow)) {
+        return true;
+      } else {
+        // 자정이 지났으면 차단 해제
+        setTodayBlocked(false);
       }
     }
 
     // 모르는번호 차단 체크
-    if (box.read<bool>('isUnknownBlocked') == true) {
+    if (_isUnknownBlocked) {
       final savedContacts = _contactsController.getSavedContacts();
       if (!savedContacts.any((contact) => contact.phoneNumber == phoneNumber)) {
         return true;
       }
     }
+
     // 사용자가 추가한 번호 체크 (포함)
     return _blockedNumbers.any(
       (blocked) => phoneNumber.contains(blocked.number),

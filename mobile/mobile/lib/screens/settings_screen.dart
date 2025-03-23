@@ -41,6 +41,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool get _updateAvailable =>
       _serverVersion.isNotEmpty && _serverVersion != APP_VERSION;
 
+  // 차단 설정 컨트롤러
+  late final BlockedNumbersController _blockedNumbersController;
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +67,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     _checkStatus();
 
     _checkVersionManually();
+
+    // 3) 차단 설정 컨트롤러 초기화
+    _blockedNumbersController = context.read<BlockedNumbersController>();
   }
 
   /// (A) 업데이트 체크(수동)
@@ -223,10 +229,6 @@ class _SettingsScreenState extends State<SettingsScreen>
   }
 
   Widget _buildBlockSettingsSection() {
-    final box = GetStorage();
-    final isTodayBlocked = box.read<bool>('isTodayBlocked') ?? false;
-    final isUnknownBlocked = box.read<bool>('isUnknownBlocked') ?? false;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -240,23 +242,18 @@ class _SettingsScreenState extends State<SettingsScreen>
             SwitchListTile(
               title: const Text('오늘 상담 차단'),
               subtitle: const Text('오늘 하루 동안 모든 전화를 차단합니다'),
-              value: isTodayBlocked,
-              onChanged: (value) {
-                box.write('isTodayBlocked', value);
-                if (value) {
-                  box.write('todayBlockDate', DateTime.now().toIso8601String());
-                } else {
-                  box.remove('todayBlockDate');
-                }
+              value: _blockedNumbersController.isTodayBlocked,
+              onChanged: (value) async {
+                await _blockedNumbersController.setTodayBlocked(value);
                 setState(() {});
               },
             ),
             SwitchListTile(
               title: const Text('모르는번호 차단'),
               subtitle: const Text('전화번호부에 없는 번호를 차단합니다'),
-              value: isUnknownBlocked,
-              onChanged: (value) {
-                box.write('isUnknownBlocked', value);
+              value: _blockedNumbersController.isUnknownBlocked,
+              onChanged: (value) async {
+                await _blockedNumbersController.setUnknownBlocked(value);
                 setState(() {});
               },
             ),
