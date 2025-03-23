@@ -3,22 +3,28 @@ import 'dart:developer';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/block_api.dart';
 import '../models/blocked_number.dart';
+import '../models/blocked_history.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 
 class BlockedNumbersController {
+  static const String _blockedHistoryKey = 'blocked_history';
+  final _storage = GetStorage();
   final ContactsController _contactsController;
   List<BlockedNumber> _blockedNumbers = [];
+  List<BlockedHistory> _blockedHistory = [];
   bool _isTodayBlocked = false;
   bool _isUnknownBlocked = false;
   DateTime? _todayBlockDate;
 
   BlockedNumbersController(this._contactsController) {
     _loadSettings();
-    _loadBlockedNumbers(); // 생성자에서 한 번만 로드
+    _loadBlockedNumbers();
+    _loadBlockedHistory();
   }
 
   List<BlockedNumber> get blockedNumbers => _blockedNumbers;
+  List<BlockedHistory> get blockedHistory => _blockedHistory;
   bool get isTodayBlocked => _isTodayBlocked;
   bool get isUnknownBlocked => _isUnknownBlocked;
 
@@ -33,11 +39,33 @@ class BlockedNumbersController {
     }
   }
 
-  // private 메서드로 변경
   void _loadBlockedNumbers() {
     final List<dynamic> jsonList = GetStorage().read('blocked_numbers') ?? [];
     _blockedNumbers =
         jsonList.map((json) => BlockedNumber.fromJson(json)).toList();
+  }
+
+  void _loadBlockedHistory() {
+    final List<dynamic> jsonList = _storage.read(_blockedHistoryKey) ?? [];
+    _blockedHistory =
+        jsonList.map((json) => BlockedHistory.fromJson(json)).toList();
+  }
+
+  Future<void> _saveBlockedHistory() async {
+    final jsonList =
+        _blockedHistory.map((history) => history.toJson()).toList();
+    await _storage.write(_blockedHistoryKey, jsonList);
+  }
+
+  Future<void> _addBlockedHistory(String number, String type) async {
+    _blockedHistory.add(
+      BlockedHistory(
+        phoneNumber: number,
+        blockedAt: DateTime.now(),
+        type: type,
+      ),
+    );
+    await _saveBlockedHistory();
   }
 
   Future<void> setTodayBlocked(bool value) async {
@@ -61,20 +89,14 @@ class BlockedNumbersController {
 
   Future<void> addBlockedNumber(String number) async {
     try {
-      // 현재 메모리의 _blockedNumbers 사용
       _blockedNumbers.add(BlockedNumber(number: number));
-
-      // 서버에 전체 목록 업데이트
       final serverNumbers = await BlockApi.updateBlockedNumbers(
         _blockedNumbers.map((bn) => bn.number).toList(),
       );
-
-      // 로컬 저장소 업데이트
       await _saveBlockedNumbers(
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
     } catch (e) {
-      // 서버 오류 시에도 현재 메모리의 상태를 저장
       await _saveBlockedNumbers(_blockedNumbers);
       rethrow;
     }
@@ -82,20 +104,14 @@ class BlockedNumbersController {
 
   Future<void> removeBlockedNumber(String number) async {
     try {
-      // 현재 메모리의 _blockedNumbers 사용
       _blockedNumbers.removeWhere((bn) => bn.number == number);
-
-      // 서버에 전체 목록 업데이트
       final serverNumbers = await BlockApi.updateBlockedNumbers(
         _blockedNumbers.map((bn) => bn.number).toList(),
       );
-
-      // 로컬 저장소 업데이트
       await _saveBlockedNumbers(
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
     } catch (e) {
-      // 서버 오류 시에도 현재 메모리의 상태를 저장
       await _saveBlockedNumbers(_blockedNumbers);
       rethrow;
     }
@@ -107,7 +123,6 @@ class BlockedNumbersController {
     _blockedNumbers = numbers;
   }
 
-  // 번호가 차단되어 있는지 확인
   bool isNumberBlocked(String phoneNumber) {
     // 오늘 상담 차단 체크
     if (_isTodayBlocked && _todayBlockDate != null) {
@@ -120,9 +135,9 @@ class BlockedNumbersController {
       final tomorrow = today.add(const Duration(days: 1));
 
       if (now.isBefore(tomorrow)) {
+        _addBlockedHistory(phoneNumber, 'today');
         return true;
       } else {
-        // 자정이 지났으면 차단 해제
         setTodayBlocked(false);
       }
     }
@@ -131,13 +146,19 @@ class BlockedNumbersController {
     if (_isUnknownBlocked) {
       final savedContacts = _contactsController.getSavedContacts();
       if (!savedContacts.any((contact) => contact.phoneNumber == phoneNumber)) {
+        _addBlockedHistory(phoneNumber, 'unknown');
         return true;
       }
     }
 
     // 사용자가 추가한 번호 체크 (포함)
-    return _blockedNumbers.any(
+    if (_blockedNumbers.any(
       (blocked) => phoneNumber.contains(blocked.number),
-    );
+    )) {
+      _addBlockedHistory(phoneNumber, 'user');
+      return true;
+    }
+
+    return false;
   }
 }
