@@ -4,7 +4,6 @@ import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/block_api.dart';
 import '../models/blocked_number.dart';
 import '../models/blocked_history.dart';
-import 'package:flutter/material.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/graphql/search_api.dart';
 
