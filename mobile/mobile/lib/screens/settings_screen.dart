@@ -44,6 +44,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   // 차단 설정 컨트롤러
   late final BlockedNumbersController _blockedNumbersController;
 
+  // 콜폭 차단 횟수 입력 컨트롤러
+  late final TextEditingController _bombCallsCountController;
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +73,11 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     // 3) 차단 설정 컨트롤러 초기화
     _blockedNumbersController = context.read<BlockedNumbersController>();
+
+    // 4) 콜폭 차단 횟수 입력 컨트롤러 초기화
+    _bombCallsCountController = TextEditingController(
+      text: _blockedNumbersController.bombCallsCount.toString(),
+    );
   }
 
   /// (A) 업데이트 체크(수동)
@@ -91,6 +99,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _bombCallsCountController.dispose();
     super.dispose();
   }
 
@@ -256,6 +265,139 @@ class _SettingsScreenState extends State<SettingsScreen>
                 await _blockedNumbersController.setUnknownBlocked(value);
                 setState(() {});
               },
+            ),
+            SwitchListTile(
+              title: const Text('위험번호 자동 차단'),
+              subtitle: const Text('위험번호로 등록된 번호 자동 차단'),
+              value: _blockedNumbersController.isAutoBlockDanger,
+              onChanged: (value) {
+                // 즉시 UI 업데이트
+                setState(() {
+                  _blockedNumbersController.setAutoBlockDanger(value);
+                });
+                // 백그라운드에서 서버 업데이트
+                _blockedNumbersController.setAutoBlockDanger(value).then((_) {
+                  if (mounted) {
+                    setState(() {});
+                  }
+                });
+              },
+            ),
+            ListTile(
+              title: const Text('콜폭 차단'),
+              subtitle: Text(
+                '현재 설정: ${_blockedNumbersController.bombCallsCount}회',
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    onPressed: () async {
+                      final controller = TextEditingController(
+                        text:
+                            _blockedNumbersController.bombCallsCount.toString(),
+                      );
+                      final count = await showDialog<int>(
+                        context: context,
+                        builder:
+                            (context) => AlertDialog(
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(5),
+                              ),
+                              insetPadding: const EdgeInsets.symmetric(
+                                horizontal: 40,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              content: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      keyboardType: TextInputType.number,
+                                      decoration: const InputDecoration(
+                                        labelText: '횟수',
+                                        hintText: '예: 5',
+                                        border: OutlineInputBorder(),
+                                        contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      controller: controller,
+                                      onSubmitted: (value) {
+                                        final count = int.tryParse(value);
+                                        if (count != null && count > 0) {
+                                          Navigator.pop(context, count);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  SizedBox(
+                                    height: 40,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.black,
+                                        foregroundColor: Colors.white,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            5,
+                                          ),
+                                        ),
+                                      ),
+                                      onPressed: () {
+                                        final count = int.tryParse(
+                                          controller.text,
+                                        );
+                                        if (count != null && count > 0) {
+                                          Navigator.pop(context, count);
+                                        }
+                                      },
+                                      child: const Text('저장'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                      );
+                      if (count != null) {
+                        // 즉시 UI 업데이트
+                        setState(() {
+                          _blockedNumbersController.setBombCallsCount(count);
+                        });
+                        // 백그라운드에서 서버 업데이트
+                        _blockedNumbersController.setBombCallsCount(count).then(
+                          (_) {
+                            if (mounted) {
+                              setState(() {});
+                            }
+                          },
+                        );
+                      }
+                    },
+                  ),
+                  Switch(
+                    value: _blockedNumbersController.isBombCallsBlocked,
+                    onChanged: (value) {
+                      // 즉시 UI 업데이트
+                      setState(() {
+                        _blockedNumbersController.setBombCallsBlocked(value);
+                      });
+                      // 백그라운드에서 서버 업데이트
+                      _blockedNumbersController.setBombCallsBlocked(value).then(
+                        (_) {
+                          if (mounted) {
+                            setState(() {});
+                          }
+                        },
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
             ListTile(
               title: const Text('차단된 전화번호 관리'),
