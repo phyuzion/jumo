@@ -215,6 +215,61 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  void _showBlockedNumbersDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const BlockedNumbersDialog(),
+    );
+  }
+
+  Widget _buildBlockSettingsSection() {
+    final box = GetStorage();
+    final isTodayBlocked = box.read<bool>('isTodayBlocked') ?? false;
+    final isUnknownBlocked = box.read<bool>('isUnknownBlocked') ?? false;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '차단 설정',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        Column(
+          children: [
+            SwitchListTile(
+              title: const Text('오늘 상담 차단'),
+              subtitle: const Text('오늘 하루 동안 모든 전화를 차단합니다'),
+              value: isTodayBlocked,
+              onChanged: (value) {
+                box.write('isTodayBlocked', value);
+                if (value) {
+                  box.write('todayBlockDate', DateTime.now().toIso8601String());
+                } else {
+                  box.remove('todayBlockDate');
+                }
+                setState(() {});
+              },
+            ),
+            SwitchListTile(
+              title: const Text('모르는번호 차단'),
+              subtitle: const Text('전화번호부에 없는 번호를 차단합니다'),
+              value: isUnknownBlocked,
+              onChanged: (value) {
+                box.write('isUnknownBlocked', value);
+                setState(() {});
+              },
+            ),
+            ListTile(
+              title: const Text('차단된 전화번호 관리'),
+              onTap: () => _showBlockedNumbersDialog(context),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -311,16 +366,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             onTap: GraphQLClientManager.logout,
           ),
 
-          ListTile(
-            leading: const Icon(Icons.block),
-            title: const Text('차단된 전화번호 관리'),
-            onTap: () {
-              showDialog(
-                context: context,
-                builder: (context) => const BlockedNumbersDialog(),
-              );
-            },
-          ),
+          _buildBlockSettingsSection(),
         ],
       ),
     );

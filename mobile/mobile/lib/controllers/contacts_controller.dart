@@ -154,38 +154,34 @@ class ContactsController {
 
     final mergedSet = <PhoneBookModel>{};
 
-    // A. 서버 기준
-    for (var entry in serverMap.entries) {
+    // 1. 내 폰에 있는 번호만 처리
+    for (var entry in deviceMap.entries) {
       final phone = entry.key;
-      final s = entry.value;
-      final deviceItem = deviceMap[phone];
+      final deviceItem = entry.value;
+      final serverItem = serverMap[phone];
       final oldItem = oldMap[phone];
 
-      // 메모/타입 => 서버 or oldItem
-      final sMemo = s['memo'] as String? ?? '';
-      final sType = s['type'] as int? ?? 0;
+      // 2. 내 폰에 있는 번호의 메모/타입이 없는 경우 서버에서 가져옴
+      final oldMemo = oldItem?.memo ?? '';
+      final oldType = oldItem?.type ?? 0;
+      final serverMemo = serverItem?['memo'] as String? ?? '';
+      final serverType = serverItem?['type'] as int? ?? 0;
 
-      final finalMemo = sMemo.isNotEmpty ? sMemo : (oldItem?.memo ?? '');
-      final finalType = sType != 0 ? sType : (oldItem?.type ?? 0);
+      final finalMemo =
+          oldMemo.isNotEmpty
+              ? oldMemo
+              : (serverMemo.isNotEmpty ? serverMemo : '');
+      final finalType =
+          oldType != 0 ? oldType : (serverType != 0 ? serverType : 0);
 
-      // 이름 => 디바이스 우선
-      final sName = s['name'] as String? ?? '';
+      // 3. 내 폰의 이름이 서버와 다르면 내 폰 이름으로 업데이트
+      final serverName = serverItem?['name'] as String? ?? '';
       final finalName =
-          (deviceItem != null && deviceItem.name.isNotEmpty)
-              ? deviceItem.name
-              : sName;
-
-      // contactId => oldItem or deviceItem
-      String finalContactId = '';
-      if (oldItem != null && oldItem.contactId.isNotEmpty) {
-        finalContactId = oldItem.contactId;
-      } else if (deviceItem != null && deviceItem.contactId.isNotEmpty) {
-        finalContactId = deviceItem.contactId;
-      }
+          deviceItem.name != serverName ? deviceItem.name : serverName;
 
       mergedSet.add(
         PhoneBookModel(
-          contactId: finalContactId,
+          contactId: deviceItem.contactId,
           name: finalName,
           phoneNumber: phone,
           memo: finalMemo.isNotEmpty ? finalMemo : null,
@@ -195,26 +191,25 @@ class ContactsController {
       );
     }
 
-    // B. 디바이스 중 서버에 없는 번호
-    for (var d in deviceList) {
-      if (!serverMap.containsKey(d.phoneNumber)) {
-        final oldItem = oldMap[d.phoneNumber];
-        final finalMemo = oldItem?.memo ?? '';
-        final finalType = oldItem?.type ?? 0;
+    // 4. 내 폰에만 있고 서버에는 없는 번호는 초기값으로 서버에 올림
+    for (var entry in deviceMap.entries) {
+      final phone = entry.key;
+      if (!serverMap.containsKey(phone)) {
+        final deviceItem = entry.value;
         mergedSet.add(
-          d.copyWith(
-            memo: finalMemo.isNotEmpty ? finalMemo : null,
-            type: finalType != 0 ? finalType : null,
-            updatedAt: oldItem?.updatedAt,
+          PhoneBookModel(
+            contactId: deviceItem.contactId,
+            name: deviceItem.name,
+            phoneNumber: phone,
+            memo: null,
+            type: null,
+            updatedAt: DateTime.now().toIso8601String(),
           ),
         );
       }
     }
 
-    // C. oldList 중 server/device 모두 없는 => 무시
-    final mergedList = mergedSet.toList();
-    mergedList.sort((a, b) => a.name.compareTo(b.name));
-    return mergedList;
+    return mergedSet.toList();
   }
 
   /// diff => 서버 업서트

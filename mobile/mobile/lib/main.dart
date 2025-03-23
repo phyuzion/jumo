@@ -66,7 +66,7 @@ void main() async {
   final contactsController = ContactsController();
   final callLogContoller = CallLogController();
   final smsController = SmsController();
-  final blockedNumbersController = BlockedNumbersController();
+  final blockedNumbersController = BlockedNumbersController(contactsController);
   // 1) phoneStateController
   final phoneStateController = PhoneStateController(
     NavigationController.navKey,
