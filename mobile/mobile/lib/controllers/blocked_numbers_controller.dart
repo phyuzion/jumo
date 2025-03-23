@@ -15,7 +15,7 @@ class BlockedNumbersController {
 
   BlockedNumbersController(this._contactsController) {
     _loadSettings();
-    loadUserBlockedNumbers();
+    _loadBlockedNumbers(); // 생성자에서 한 번만 로드
   }
 
   List<BlockedNumber> get blockedNumbers => _blockedNumbers;
@@ -31,6 +31,13 @@ class BlockedNumbersController {
     if (todayBlockDate != null) {
       _todayBlockDate = DateTime.parse(todayBlockDate);
     }
+  }
+
+  // private 메서드로 변경
+  void _loadBlockedNumbers() {
+    final List<dynamic> jsonList = GetStorage().read('blocked_numbers') ?? [];
+    _blockedNumbers =
+        jsonList.map((json) => BlockedNumber.fromJson(json)).toList();
   }
 
   Future<void> setTodayBlocked(bool value) async {
@@ -52,21 +59,14 @@ class BlockedNumbersController {
     await GetStorage().write('isUnknownBlocked', value);
   }
 
-  List<BlockedNumber> getBlockedNumbers() {
-    final List<dynamic> jsonList = GetStorage().read('blocked_numbers') ?? [];
-    _blockedNumbers =
-        jsonList.map((json) => BlockedNumber.fromJson(json)).toList();
-    return _blockedNumbers;
-  }
-
   Future<void> addBlockedNumber(String number) async {
     try {
-      final blockedNumbers = getBlockedNumbers();
-      blockedNumbers.add(BlockedNumber(number: number));
+      // 현재 메모리의 _blockedNumbers 사용
+      _blockedNumbers.add(BlockedNumber(number: number));
 
       // 서버에 전체 목록 업데이트
       final serverNumbers = await BlockApi.updateBlockedNumbers(
-        blockedNumbers.map((bn) => bn.number).toList(),
+        _blockedNumbers.map((bn) => bn.number).toList(),
       );
 
       // 로컬 저장소 업데이트
@@ -74,22 +74,20 @@ class BlockedNumbersController {
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
     } catch (e) {
-      // 서버 오류 시 로컬에만 저장
-      final blockedNumbers = getBlockedNumbers();
-      blockedNumbers.add(BlockedNumber(number: number));
-      await _saveBlockedNumbers(blockedNumbers);
+      // 서버 오류 시에도 현재 메모리의 상태를 저장
+      await _saveBlockedNumbers(_blockedNumbers);
       rethrow;
     }
   }
 
   Future<void> removeBlockedNumber(String number) async {
     try {
-      final blockedNumbers = getBlockedNumbers();
-      blockedNumbers.removeWhere((bn) => bn.number == number);
+      // 현재 메모리의 _blockedNumbers 사용
+      _blockedNumbers.removeWhere((bn) => bn.number == number);
 
       // 서버에 전체 목록 업데이트
       final serverNumbers = await BlockApi.updateBlockedNumbers(
-        blockedNumbers.map((bn) => bn.number).toList(),
+        _blockedNumbers.map((bn) => bn.number).toList(),
       );
 
       // 로컬 저장소 업데이트
@@ -97,10 +95,8 @@ class BlockedNumbersController {
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
     } catch (e) {
-      // 서버 오류 시 로컬에만 저장
-      final blockedNumbers = getBlockedNumbers();
-      blockedNumbers.removeWhere((bn) => bn.number == number);
-      await _saveBlockedNumbers(blockedNumbers);
+      // 서버 오류 시에도 현재 메모리의 상태를 저장
+      await _saveBlockedNumbers(_blockedNumbers);
       rethrow;
     }
   }
@@ -109,10 +105,6 @@ class BlockedNumbersController {
     final jsonList = numbers.map((number) => number.toJson()).toList();
     await GetStorage().write('blocked_numbers', jsonList);
     _blockedNumbers = numbers;
-  }
-
-  void loadUserBlockedNumbers() {
-    _blockedNumbers = getBlockedNumbers();
   }
 
   // 번호가 차단되어 있는지 확인

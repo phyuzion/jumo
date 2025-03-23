@@ -79,6 +79,7 @@ class UserApi {
 
     // 차단 목록 저장
     final blockList = userData['blockList'] ?? [];
+    log('[UserApi.userLogin] blockList=$blockList');
     box.write(
       'blocked_numbers',
       blockList.map((number) => {'number': number}).toList(),

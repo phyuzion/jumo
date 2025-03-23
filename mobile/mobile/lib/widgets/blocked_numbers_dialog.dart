@@ -22,8 +22,7 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
 
   void _loadBlockedNumbers() {
     setState(() {
-      _blockedNumbers =
-          context.read<BlockedNumbersController>().getBlockedNumbers();
+      _blockedNumbers = context.read<BlockedNumbersController>().blockedNumbers;
     });
   }
 

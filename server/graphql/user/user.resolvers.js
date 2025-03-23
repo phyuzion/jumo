@@ -415,7 +415,9 @@ module.exports = {
     // 문자내역 upsert
     updateSMSLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
+      console.log(`[updateSMSLog] 시작 - 유저: ${user.name}, 로그 수: ${logs.length}`);
 
+      // 1. User의 smsLogs 업데이트
       for (const log of logs) {
         let dt = new Date(log.time);
         if (isNaN(dt.getTime())) {
@@ -425,14 +427,112 @@ module.exports = {
         const newLog = {
           phoneNumber: log.phoneNumber,
           time: dt,
-          content: log.content || '',
+          content: log.content,
           smsType: log.smsType,
         };
         pushNewLog(user.smsLogs, newLog, 200);
       }
+      console.log(`[updateSMSLog] User.smsLogs 업데이트 완료 - 최종 로그 수: ${user.smsLogs.length}`);
+      
       await withTransaction(async (session) => {
         await user.save({ session });
       });
+
+      // 2. TodayRecord 업데이트
+      try {
+        // 24시간 이내의 새로운 로그들만 필터링
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        
+        const recentLogs = logs.filter(log => {
+          let dt = new Date(log.time);
+          if (isNaN(dt.getTime())) {
+            const epoch = parseFloat(log.time);
+            if (!isNaN(epoch)) dt = new Date(epoch);
+          }
+          return dt >= oneDayAgo;
+        });
+        console.log(`[updateSMSLog] 최근 24시간 로그 수: ${recentLogs.length}`);
+
+        if (recentLogs.length > 0) {
+          await withTransaction(async (session) => {
+            console.log(`[updateSMSLog] TodayRecord 트랜잭션 시작`);
+            
+            // 1. 기존 레코드들을 한 번에 조회
+            const existingRecords = await TodayRecord.find({
+              phoneNumber: { $in: recentLogs.map(log => log.phoneNumber) },
+              userName: user.name
+            }).session(session);
+            console.log(`[updateSMSLog] 기존 TodayRecord 조회 완료 - ${existingRecords.length}개`);
+
+            // 2. 기존 레코드들을 Map으로 변환하여 빠른 조회 가능하게 함
+            const existingMap = new Map(
+              existingRecords.map(record => [record.phoneNumber, record])
+            );
+
+            // 3. 업데이트할 레코드와 새로 생성할 레코드를 분리
+            const updates = [];
+            const inserts = [];
+
+            for (const log of recentLogs) {
+              let dt = new Date(log.time);
+              if (isNaN(dt.getTime())) {
+                const epoch = parseFloat(log.time);
+                if (!isNaN(epoch)) dt = new Date(epoch);
+              }
+
+              const existing = existingMap.get(log.phoneNumber);
+              if (existing) {
+                // 기존 레코드가 있고 새로운 문자메시지가 더 최신인 경우만 업데이트
+                if (dt > existing.createdAt) {
+                  updates.push({
+                    updateOne: {
+                      filter: { _id: existing._id },
+                      update: {
+                        $set: {
+                          userType: user.type,
+                          smsType: log.smsType,
+                          createdAt: dt
+                        }
+                      }
+                    }
+                  });
+                }
+              } else {
+                // 새 레코드 생성
+                inserts.push({
+                  insertOne: {
+                    document: {
+                      phoneNumber: log.phoneNumber,
+                      userName: user.name,
+                      userType: user.type,
+                      smsType: log.smsType,
+                      createdAt: dt
+                    }
+                  }
+                });
+              }
+            }
+
+            console.log(`[updateSMSLog] TodayRecord 업데이트/삽입 준비 완료 - 업데이트: ${updates.length}개, 삽입: ${inserts.length}개`);
+
+            // 4. 한 번의 bulkWrite로 모든 작업 실행
+            if (updates.length > 0 || inserts.length > 0) {
+              const result = await TodayRecord.bulkWrite([...updates, ...inserts], { session });
+              console.log(`[updateSMSLog] TodayRecord bulkWrite 완료 - 수정: ${result.modifiedCount}, 삽입: ${result.insertedCount}`);
+            } else {
+              console.log(`[updateSMSLog] TodayRecord 업데이트/삽입 없음`);
+            }
+            
+            console.log(`[updateSMSLog] TodayRecord 트랜잭션 완료`);
+          });
+        }
+      } catch (error) {
+        console.error('[updateSMSLog] TodayRecord 업데이트 실패:', error);
+        // TodayRecord 업데이트 실패는 전체 mutation 실패로 이어지지 않도록 함
+      }
+
+      console.log(`[updateSMSLog] 전체 작업 완료`);
       return true;
     },
 
