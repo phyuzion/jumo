@@ -150,6 +150,25 @@ const Users = () => {
     return dt.toISOString().slice(0, 10); // "YYYY-MM-DD"
   };
 
+  // 시간 변환 헬퍼
+  const timeAccessor = (field, data) => {
+    if (!data[field]) return '';
+    let dt = new Date(data[field]);
+    if (isNaN(dt.getTime())) return data[field];
+    
+    const koreanTime = new Date(dt.getTime());
+    
+    // YYYY-MM-DD HH:mm:ss 형식으로 변환
+    const year = koreanTime.getFullYear();
+    const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
+    const day = String(koreanTime.getDate()).padStart(2, '0');
+    const hours = String(koreanTime.getHours()).padStart(2, '0');
+    const minutes = String(koreanTime.getMinutes()).padStart(2, '0');
+    const seconds = String(koreanTime.getSeconds()).padStart(2, '0');
+    
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
+
   // ============= CREATE =============
   const handleCreate = () => {
     setFormPhone('');
@@ -496,91 +515,20 @@ const Users = () => {
       {/* RECORDS MODAL (전화번호부 + 통화로그 + 문자로그 탭) */}
       {showRecordsModal && recordUser && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-4 w-96 rounded shadow max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-2">유저 상세</h2>
-            <p className="mb-2">
-              {recordUser.loginId} ({recordUser.name})
-            </p>
-
-            {/* 탭 버튼 */}
-            <div className="flex gap-2 mb-4">
-              <button
-                className={`px-2 py-1 rounded ${
-                  selectedTab === 'phoneRecords' ? 'bg-blue-300' : ''
-                }`}
-                onClick={() => handleTabSelect('phoneRecords')}
-              >
-                번호부
-              </button>
-              <button
-                className={`px-2 py-1 rounded ${
-                  selectedTab === 'callLogs' ? 'bg-blue-300' : ''
-                }`}
-                onClick={() => handleTabSelect('callLogs')}
-              >
-                콜로그
-              </button>
-              <button
-                className={`px-2 py-1 rounded ${
-                  selectedTab === 'smsLogs' ? 'bg-blue-300' : ''
-                }`}
-                onClick={() => handleTabSelect('smsLogs')}
-              >
-                문자로그
-              </button>
-            </div>
-
-            {/* 탭 내용 */}
-            {selectedTab === 'phoneRecords' && (
-              <div className="flex flex-col gap-2">
-                {phoneRecords.length === 0 && <p>기록이 없습니다.</p>}
-                {phoneRecords.map((r, idx) => (
-                  <div key={idx} className="border p-2 rounded">
-                    <p>Phone: {r.phoneNumber}</p>
-                    <p>Name: {r.name}</p>
-                    <p>Memo: {r.memo}</p>
-                    <p>Type: {r.type}</p>
-                    <p>CreatedAt: {r.createdAt}</p>
-                  </div>
-                ))}
+          <div className="bg-white rounded shadow w-[90vw] h-[90vh] flex flex-col">
+            {/* 헤더 영역 - 고정 */}
+            <div className="flex justify-between items-center p-4 border-b">
+              <div>
+                <h2 className="text-xl font-bold">유저 상세</h2>
+                <p className="text-sm text-gray-600">
+                  {recordUser.loginId} ({recordUser.name})
+                </p>
               </div>
-            )}
-
-            {selectedTab === 'callLogs' && (
-              <div className="flex flex-col gap-2">
-                {callLogs.length === 0 && <p>통화로그가 없습니다.</p>}
-                {callLogs.map((c, idx) => (
-                  <div key={idx} className="border p-2 rounded">
-                    <p>Phone: {c.phoneNumber}</p>
-                    <p>Time: {c.time}</p>
-                    <p>Type: {c.callType}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {selectedTab === 'smsLogs' && (
-              <div className="flex flex-col gap-2">
-                {smsLogs.length === 0 && <p>문자로그가 없습니다.</p>}
-                {smsLogs.map((m, idx) => (
-                  <div key={idx} className="border p-2 rounded">
-                    <p>Phone: {m.phoneNumber}</p>
-                    <p>Time: {m.time}</p>
-                    <p>Type: {m.smsType}</p>
-                    <p>Content: {m.content}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="mt-4 flex gap-2">
               <button
-                className="bg-gray-300 px-3 py-1 rounded"
+                className="bg-gray-300 px-3 py-1 rounded hover:bg-gray-400"
                 onClick={() => {
-                  // 모달 닫기
                   setShowRecordsModal(false);
                   setRecordUser(null);
-                  // state 초기화
                   setPhoneRecords([]);
                   setCallLogs([]);
                   setSmsLogs([]);
@@ -589,6 +537,114 @@ const Users = () => {
               >
                 닫기
               </button>
+            </div>
+
+            {/* 탭 영역 - 고정 */}
+            <div className="flex gap-2 p-4 border-b">
+              <button
+                className={`px-4 py-2 rounded ${
+                  selectedTab === 'phoneRecords' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                }`}
+                onClick={() => handleTabSelect('phoneRecords')}
+              >
+                번호부
+              </button>
+              <button
+                className={`px-4 py-2 rounded ${
+                  selectedTab === 'callLogs' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                }`}
+                onClick={() => handleTabSelect('callLogs')}
+              >
+                콜로그
+              </button>
+              <button
+                className={`px-4 py-2 rounded ${
+                  selectedTab === 'smsLogs' ? 'bg-blue-500 text-white' : 'bg-gray-200'
+                }`}
+                onClick={() => handleTabSelect('smsLogs')}
+              >
+                문자로그
+              </button>
+            </div>
+
+            {/* 그리드 영역 - 스크롤 가능 */}
+            <div className="flex-1 p-4 overflow-auto">
+              {selectedTab === 'phoneRecords' && (
+                <GridComponent
+                  dataSource={phoneRecords}
+                  enableHover={true}
+                  allowPaging={true}
+                  pageSettings={{ pageSize: 10 }}
+                  toolbar={['Search']}
+                  allowSorting={true}
+                >
+                  <ColumnsDirective>
+                    <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
+                    <ColumnDirective field="name" headerText="이름" width="120" />
+                    <ColumnDirective field="memo" headerText="메모" width="200" />
+                    <ColumnDirective field="type" headerText="타입" width="80" />
+                    <ColumnDirective field="createdAt" headerText="생성일" width="150" />
+                  </ColumnsDirective>
+                  <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
+                </GridComponent>
+              )}
+
+              {selectedTab === 'callLogs' && (
+                <GridComponent
+                  dataSource={callLogs}
+                  enableHover={true}
+                  allowPaging={true}
+                  pageSettings={{ pageSize: 10 }}
+                  toolbar={['Search']}
+                  allowSorting={true}
+                  sortSettings={{
+                    columns: [
+                      { field: 'time', direction: 'Descending' }
+                    ]
+                  }}
+                >
+                  <ColumnsDirective>
+                    <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
+                    <ColumnDirective 
+                      field="time" 
+                      headerText="시간" 
+                      width="180"
+                      valueAccessor={timeAccessor}
+                    />
+                    <ColumnDirective field="callType" headerText="통화타입" width="100" />
+                  </ColumnsDirective>
+                  <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
+                </GridComponent>
+              )}
+
+              {selectedTab === 'smsLogs' && (
+                <GridComponent
+                  dataSource={smsLogs}
+                  enableHover={true}
+                  allowPaging={true}
+                  pageSettings={{ pageSize: 10 }}
+                  toolbar={['Search']}
+                  allowSorting={true}
+                  sortSettings={{
+                    columns: [
+                      { field: 'time', direction: 'Descending' }
+                    ]
+                  }}
+                >
+                  <ColumnsDirective>
+                    <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
+                    <ColumnDirective 
+                      field="time" 
+                      headerText="시간" 
+                      width="180"
+                      valueAccessor={timeAccessor}
+                    />
+                    <ColumnDirective field="smsType" headerText="문자타입" width="100" />
+                    <ColumnDirective field="content" headerText="내용" width="300" />
+                  </ColumnsDirective>
+                  <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
+                </GridComponent>
+              )}
             </div>
           </div>
         </div>
