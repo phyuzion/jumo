@@ -164,13 +164,8 @@ module.exports = {
       return user.settings; // String
     },
 
-    getUserBlockNumbers: async (_, { userId }, { tokenData }) => {
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
-      }
-      const user = await User.findById(userId);
-      if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
-
+    getUserBlockNumbers: async (_, __, { tokenData }) => {
+      const user = await checkUserValid(tokenData);
       return user.blockList || [];
     },
   },

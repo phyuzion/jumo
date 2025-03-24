@@ -96,9 +96,9 @@ module.exports = gql`
     getUserSetting: String
 
     """
-    (Admin 전용) 특정 유저의 차단된 전화번호 목록
+    현재 로그인된 유저의 차단된 전화번호 목록 조회
     """
-    getUserBlockNumbers(userId: ID!): [String!]!
+    getUserBlockNumbers: [String!]!
   }
 
   extend type Mutation {
