@@ -5,10 +5,12 @@ import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
+import 'package:mobile/models/blocked_history.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/dropdown_menus_widet.dart'; // formatDateString
 import 'package:mobile/widgets/blocked_numbers_dialog.dart';
+import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -237,6 +239,16 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  void _showBlockedHistoryDialog(
+    BuildContext context,
+    List<BlockedHistory> history,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => BlockedHistoryDialog(history: history),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checking) {
@@ -356,7 +368,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             ListTile(
               title: Padding(
                 padding: const EdgeInsets.only(left: 16.0),
-                child: const Text('콜폭 차단'),
+                child: const Text('콜폭/ㅋㅍ 차단'),
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(left: 24.0),
@@ -484,6 +496,24 @@ class _SettingsScreenState extends State<SettingsScreen>
               ),
               trailing: const Icon(Icons.settings),
               onTap: () => _showBlockedNumbersDialog(context),
+            ),
+            ListTile(
+              title: Padding(
+                padding: const EdgeInsets.only(left: 16.0),
+                child: const Text('차단 이력'),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(left: 24.0),
+                child: Text(
+                  '${_blockedNumbersController.blockedHistory.length}개의 차단 이력이 있습니다',
+                ),
+              ),
+              trailing: const Icon(Icons.history),
+              onTap:
+                  () => _showBlockedHistoryDialog(
+                    context,
+                    _blockedNumbersController.blockedHistory,
+                  ),
             ),
           ] else ...[
             // 오버레이 권한 (기본 전화앱이 아닐 때만 표시)

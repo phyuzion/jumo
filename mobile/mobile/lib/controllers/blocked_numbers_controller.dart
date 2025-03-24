@@ -178,20 +178,18 @@ class BlockedNumbersController {
   }
 
   bool isNumberBlocked(String phoneNumber) {
+    String? blockType;
+
     // 위험번호 자동 차단 체크
     if (_isAutoBlockDanger && _dangerNumbers.contains(phoneNumber)) {
-      _addBlockedHistory(phoneNumber, 'danger');
-      return true;
+      blockType = 'danger';
     }
-
     // 통화 횟수 기반 차단 체크
-    if (_isBombCallsBlocked && _bombCallsNumbers.contains(phoneNumber)) {
-      _addBlockedHistory(phoneNumber, 'bomb_calls');
-      return true;
+    else if (_isBombCallsBlocked && _bombCallsNumbers.contains(phoneNumber)) {
+      blockType = 'bomb_calls';
     }
-
     // 오늘 상담 차단 체크
-    if (_isTodayBlocked && _todayBlockDate != null) {
+    else if (_isTodayBlocked && _todayBlockDate != null) {
       final now = DateTime.now();
       final today = DateTime(
         _todayBlockDate!.year,
@@ -201,27 +199,27 @@ class BlockedNumbersController {
       final tomorrow = today.add(const Duration(days: 1));
 
       if (now.isBefore(tomorrow)) {
-        _addBlockedHistory(phoneNumber, 'today');
-        return true;
+        blockType = 'today';
       } else {
         setTodayBlocked(false);
       }
     }
-
     // 모르는번호 차단 체크
-    if (_isUnknownBlocked) {
+    else if (_isUnknownBlocked) {
       final savedContacts = _contactsController.getSavedContacts();
       if (!savedContacts.any((contact) => contact.phoneNumber == phoneNumber)) {
-        _addBlockedHistory(phoneNumber, 'unknown');
-        return true;
+        blockType = 'unknown';
       }
     }
-
     // 사용자가 추가한 번호 체크 (포함)
-    if (_blockedNumbers.any(
+    else if (_blockedNumbers.any(
       (blocked) => phoneNumber.contains(blocked.number),
     )) {
-      _addBlockedHistory(phoneNumber, 'user');
+      blockType = 'user';
+    }
+
+    if (blockType != null) {
+      _addBlockedHistory(phoneNumber, blockType);
       return true;
     }
 
