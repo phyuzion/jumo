@@ -11,6 +11,12 @@ class BlockApi {
     }
   ''';
 
+  static const _queryGetBlockedNumbers = r'''
+    query getUserBlockNumbers {
+      getUserBlockNumbers
+    }
+  ''';
+
   static Future<List<Map<String, dynamic>>> getBlockNumbers(int count) async {
     final client = GraphQLClientManager.client;
     final token = GraphQLClientManager.accessToken;
@@ -29,6 +35,23 @@ class BlockApi {
     if (data == null) return [];
 
     return data.map((e) => e as Map<String, dynamic>).toList();
+  }
+
+  static Future<List<String>> getBlockedNumbers() async {
+    final client = GraphQLClientManager.client;
+    final token = GraphQLClientManager.accessToken;
+    if (token == null) throw Exception('로그인 필요');
+
+    final opts = QueryOptions(
+      document: gql(_queryGetBlockedNumbers),
+      fetchPolicy: FetchPolicy.networkOnly,
+    );
+
+    final result = await client.query(opts);
+    GraphQLClientManager.handleExceptions(result);
+
+    final List<dynamic> data = result.data?['getUserBlockNumbers'] ?? [];
+    return data.map((number) => number.toString()).toList();
   }
 
   static const String _updateBlockedNumbersMutation = r'''

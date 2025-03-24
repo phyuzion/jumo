@@ -77,13 +77,13 @@ class UserApi {
     box.write('userValidUntil', userData['validUntil'] ?? '');
     box.write('userRegion', userData['region'] ?? '');
 
-    // 차단 목록 저장
-    final blockList = userData['blockList'] ?? [];
-    log('[UserApi.userLogin] blockList=$blockList');
-    box.write(
-      'blocked_numbers',
-      blockList.map((number) => {'number': number}).toList(),
-    );
+    // 차단 목록 저장 부분 제거
+    // final blockList = userData['blockList'] ?? [];
+    // log('[UserApi.userLogin] blockList=$blockList');
+    // box.write(
+    //   'blocked_numbers',
+    //   blockList.map((number) => {'number': number}).toList(),
+    // );
   }
 
   // ==================== 2) userChangePassword ====================

@@ -508,12 +508,16 @@ class _SettingsScreenState extends State<SettingsScreen>
                   '${_blockedNumbersController.blockedHistory.length}개의 차단 이력이 있습니다',
                 ),
               ),
-              trailing: const Icon(Icons.history),
-              onTap:
-                  () => _showBlockedHistoryDialog(
-                    context,
-                    _blockedNumbersController.blockedHistory,
-                  ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                showDialog(
+                  context: context,
+                  builder:
+                      (context) => BlockedHistoryDialog(
+                        history: _blockedNumbersController.blockedHistory,
+                      ),
+                );
+              },
             ),
           ] else ...[
             // 오버레이 권한 (기본 전화앱이 아닐 때만 표시)

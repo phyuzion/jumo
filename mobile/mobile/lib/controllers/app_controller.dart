@@ -56,6 +56,7 @@ class AppController {
     await contactsController.syncContactsAll();
     await callLogController.refreshCallLogs();
     await smsController.refreshSms();
+    await blockedNumbersController.initialize();
   }
 
   Future<void> stopApp() async {

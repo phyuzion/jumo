@@ -13,6 +13,7 @@ class BlockedNumbersController {
   final ContactsController _contactsController;
   List<BlockedNumber> _blockedNumbers = [];
   List<BlockedHistory> _blockedHistory = [];
+  bool _isInitialized = false;
   List<String> _dangerNumbers = [];
   List<String> _bombCallsNumbers = [];
   bool _isTodayBlocked = false;
@@ -22,14 +23,9 @@ class BlockedNumbersController {
   int _bombCallsCount = 0;
   DateTime? _todayBlockDate;
 
-  BlockedNumbersController(this._contactsController) {
-    _loadSettings();
-    _loadBlockedNumbers();
-    _loadBlockedHistory();
-    _loadDangerNumbers();
-    _loadBombCallsNumbers();
-  }
+  BlockedNumbersController(this._contactsController);
 
+  bool get isInitialized => _isInitialized;
   List<BlockedNumber> get blockedNumbers => _blockedNumbers;
   List<BlockedHistory> get blockedHistory => _blockedHistory;
   List<String> get dangerNumbers => _dangerNumbers;
@@ -40,27 +36,91 @@ class BlockedNumbersController {
   bool get isBombCallsBlocked => _isBombCallsBlocked;
   int get bombCallsCount => _bombCallsCount;
 
-  void _loadSettings() {
-    final box = GetStorage();
-    _isTodayBlocked = box.read<bool>('isTodayBlocked') ?? false;
-    _isUnknownBlocked = box.read<bool>('isUnknownBlocked') ?? false;
-    _isAutoBlockDanger = box.read<bool>('isAutoBlockDanger') ?? false;
-    _isBombCallsBlocked = box.read<bool>('isBombCallsBlocked') ?? false;
-    _bombCallsCount = box.read<int>('bombCallsCount') ?? 0;
+  Future<void> initialize() async {
+    try {
+      log('[BlockedNumbers] Starting initialization...');
 
-    final todayBlockDate = box.read<String>('todayBlockDate');
-    if (todayBlockDate != null) {
-      _todayBlockDate = DateTime.parse(todayBlockDate);
+      // 1. 기본 설정 로드
+      await _loadSettings();
+      log(
+        '[BlockedNumbers] Settings loaded: todayBlocked=$_isTodayBlocked, unknownBlocked=$_isUnknownBlocked, autoBlockDanger=$_isAutoBlockDanger, bombCallsBlocked=$_isBombCallsBlocked, bombCallsCount=$_bombCallsCount',
+      );
+
+      // 2. 서버 데이터와 동기화
+      await _loadBlockedNumbers();
+      log(
+        '[BlockedNumbers] Blocked numbers loaded: ${_blockedNumbers.length} numbers',
+      );
+
+      // 3. 차단 이력 로드
+      await _loadBlockedHistory();
+      log(
+        '[BlockedNumbers] Blocked history loaded: ${_blockedHistory.length} entries',
+      );
+
+      // 4. 위험번호 로드 (자동차단이 켜져있을 때만)
+      if (_isAutoBlockDanger) {
+        await _loadDangerNumbers();
+        log(
+          '[BlockedNumbers] Danger numbers loaded: ${_dangerNumbers.length} numbers',
+        );
+      }
+
+      // 5. 콜폭 번호 로드 (콜폭 차단이 켜져있을 때만)
+      if (_isBombCallsBlocked && _bombCallsCount > 0) {
+        await _loadBombCallsNumbers();
+        log(
+          '[BlockedNumbers] Bomb calls numbers loaded: ${_bombCallsNumbers.length} numbers',
+        );
+      }
+
+      log('[BlockedNumbers] Initialization completed successfully');
+    } catch (e) {
+      log('[BlockedNumbers] Error during initialization: $e');
+      rethrow;
     }
   }
 
-  void _loadBlockedNumbers() {
-    final List<dynamic> jsonList = GetStorage().read('blocked_numbers') ?? [];
-    _blockedNumbers =
-        jsonList.map((json) => BlockedNumber.fromJson(json)).toList();
+  Future<void> _loadSettings() async {
+    try {
+      _isTodayBlocked = _storage.read<bool>('isTodayBlocked') ?? false;
+      _isUnknownBlocked = _storage.read<bool>('isUnknownBlocked') ?? false;
+      _isAutoBlockDanger = _storage.read<bool>('isAutoBlockDanger') ?? false;
+      _isBombCallsBlocked = _storage.read<bool>('isBombCallsBlocked') ?? false;
+      _bombCallsCount = _storage.read<int>('bombCallsCount') ?? 0;
+
+      final todayBlockDate = _storage.read<String>('todayBlockDate');
+      if (todayBlockDate != null) {
+        _todayBlockDate = DateTime.parse(todayBlockDate);
+      }
+    } catch (e) {
+      log('Error loading settings: $e');
+      rethrow;
+    }
   }
 
-  void _loadBlockedHistory() {
+  Future<void> _loadBlockedNumbers() async {
+    try {
+      log('[BlockedNumbers] Starting to load blocked numbers...');
+
+      // 서버에서 모든 번호 가져오기
+      final serverNumbers = await BlockApi.getBlockedNumbers();
+      log(
+        '[BlockedNumbers] Server numbers received: ${serverNumbers.length} numbers',
+      );
+
+      // 로컬 저장소에 저장
+      final updatedNumbers =
+          serverNumbers.map((n) => BlockedNumber(number: n)).toList();
+      await _saveBlockedNumbers(updatedNumbers);
+      log('[BlockedNumbers] Numbers updated and saved successfully');
+    } catch (e) {
+      log('[BlockedNumbers] Error loading blocked numbers: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> _loadBlockedHistory() async {
     final List<dynamic> jsonList = _storage.read(_blockedHistoryKey) ?? [];
     _blockedHistory =
         jsonList.map((json) => BlockedHistory.fromJson(json)).toList();
@@ -85,33 +145,46 @@ class BlockedNumbersController {
 
   Future<void> setTodayBlocked(bool value) async {
     _isTodayBlocked = value;
-    final box = GetStorage();
-    await box.write('isTodayBlocked', value);
+    await _storage.write('isTodayBlocked', value);
 
     if (value) {
       _todayBlockDate = DateTime.now();
-      await box.write('todayBlockDate', _todayBlockDate!.toIso8601String());
+      await _storage.write(
+        'todayBlockDate',
+        _todayBlockDate!.toIso8601String(),
+      );
     } else {
       _todayBlockDate = null;
-      await box.remove('todayBlockDate');
+      await _storage.remove('todayBlockDate');
     }
   }
 
   Future<void> setUnknownBlocked(bool value) async {
     _isUnknownBlocked = value;
-    await GetStorage().write('isUnknownBlocked', value);
+    await _storage.write('isUnknownBlocked', value);
   }
 
   Future<void> addBlockedNumber(String number) async {
     try {
+      log('[BlockedNumbers] Adding blocked number: $number');
       _blockedNumbers.add(BlockedNumber(number: number));
+      log(
+        '[BlockedNumbers] Current blocked numbers: ${_blockedNumbers.length} numbers',
+      );
+
       final serverNumbers = await BlockApi.updateBlockedNumbers(
         _blockedNumbers.map((bn) => bn.number).toList(),
       );
+      log(
+        '[BlockedNumbers] Server update response: ${serverNumbers.length} numbers',
+      );
+
       await _saveBlockedNumbers(
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
+      log('[BlockedNumbers] Number added and saved successfully');
     } catch (e) {
+      log('[BlockedNumbers] Error adding blocked number: $e');
       await _saveBlockedNumbers(_blockedNumbers);
       rethrow;
     }
@@ -119,23 +192,43 @@ class BlockedNumbersController {
 
   Future<void> removeBlockedNumber(String number) async {
     try {
+      log('[BlockedNumbers] Removing blocked number: $number');
       _blockedNumbers.removeWhere((bn) => bn.number == number);
+      log(
+        '[BlockedNumbers] Current blocked numbers: ${_blockedNumbers.length} numbers',
+      );
+
       final serverNumbers = await BlockApi.updateBlockedNumbers(
         _blockedNumbers.map((bn) => bn.number).toList(),
       );
+      log(
+        '[BlockedNumbers] Server update response: ${serverNumbers.length} numbers',
+      );
+
       await _saveBlockedNumbers(
         serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
       );
+      log('[BlockedNumbers] Number removed and saved successfully');
     } catch (e) {
+      log('[BlockedNumbers] Error removing blocked number: $e');
       await _saveBlockedNumbers(_blockedNumbers);
       rethrow;
     }
   }
 
   Future<void> _saveBlockedNumbers(List<BlockedNumber> numbers) async {
-    final jsonList = numbers.map((number) => number.toJson()).toList();
-    await GetStorage().write('blocked_numbers', jsonList);
-    _blockedNumbers = numbers;
+    try {
+      log('[BlockedNumbers] Saving blocked numbers...');
+      final jsonList = numbers.map((number) => number.toJson()).toList();
+      await _storage.write('blocked_numbers', jsonList);
+      _blockedNumbers = numbers;
+      log(
+        '[BlockedNumbers] Numbers saved successfully: ${_blockedNumbers.length} numbers',
+      );
+    } catch (e) {
+      log('[BlockedNumbers] Error saving blocked numbers: $e');
+      rethrow;
+    }
   }
 
   Future<void> _loadDangerNumbers() async {
