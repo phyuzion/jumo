@@ -69,10 +69,22 @@ async function checkUserValid(tokenData) {
    - if arr.length > max => arr.pop() (가장 오래된 제거)
 ========================================================= */
 function pushNewLog(logArray, newLog, maxLen = 200) {
-  const newLogKey = JSON.stringify(newLog);
-  const isDup = logArray.some((item) => JSON.stringify(item) === newLogKey);
+  // 시간을 밀리초 단위로 변환하여 비교
+  const newLogTime = newLog.time.getTime();
+  
+  // 이미 같은 시간의 로그가 있는지 확인
+  const isDup = logArray.some(item => {
+    // phoneNumber와 time이 같으면 중복으로 간주
+    return item.phoneNumber === newLog.phoneNumber && 
+           item.time.getTime() === newLogTime;
+  });
+
   if (isDup) return;
+
+  // 중복이 아니면 배열 앞에 추가
   logArray.unshift(newLog);
+  
+  // 최대 길이 제한
   if (logArray.length > maxLen) {
     logArray.pop();
   }
