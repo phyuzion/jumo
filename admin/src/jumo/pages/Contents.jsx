@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useQuery, useLazyQuery, useMutation } from '@apollo/client';
+import { loadErrorMessages, loadDevMessages } from "@apollo/client/dev";
 import {
   GridComponent,
   ColumnsDirective,
@@ -9,16 +10,15 @@ import {
   Filter,
   Inject,
 } from '@syncfusion/ej2-react-grids';
-
-import { Header } from '../components';
-
 import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Quill from 'quill'; // Delta -> HTML 변환용
 
+import { Header } from '../components';
 import {
   GET_CONTENTS,
-  GET_SINGLE_CONTENT
+  GET_SINGLE_CONTENT,
+  GET_ALL_REGIONS
 } from '../graphql/queries';
 import {
   CREATE_CONTENT,
@@ -27,6 +27,12 @@ import {
   CREATE_REPLY,
   DELETE_REPLY,
 } from '../graphql/mutations';
+
+// 개발 환경에서 에러 메시지 로드
+if (process.env.NODE_ENV !== "production") {
+  loadDevMessages();
+  loadErrorMessages();
+}
 
 // Quill 설정
 const quillModules = {
@@ -76,7 +82,17 @@ function Contents() {
   const gridRef = useRef(null);
 
   // ============ 목록 필터 ============
-  const [typeFilter, setTypeFilter] = useState(0);
+  const [typeFilter, setTypeFilter] = useState('공지사항');
+
+  // ============ 지역 목록 ============
+  const { data: regionsData } = useQuery(GET_ALL_REGIONS);
+  const [regions, setRegions] = useState([]);
+
+  useEffect(() => {
+    if (regionsData?.getRegions) {
+      setRegions(regionsData.getRegions);
+    }
+  }, [regionsData]);
 
   // ============ 목록 Query ============
   const { data, loading, error, refetch } = useQuery(GET_CONTENTS, {
@@ -100,7 +116,7 @@ function Contents() {
 
   // ============ 새글 모달 ============
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newType,  setNewType]  = useState(0);
+  const [newType,  setNewType]  = useState('공지사항');
   const [newTitle, setNewTitle] = useState('');
   const [newDelta, setNewDelta] = useState(null); // Delta
 
@@ -110,7 +126,7 @@ function Contents() {
   const [editMode,        setEditMode]        = useState(false);
 
   // 수정 시
-  const [editType,   setEditType]   = useState(0);
+  const [editType,   setEditType]   = useState('공지사항');
   const [editTitle,  setEditTitle]  = useState('');
   const editQuillRef = useRef(null);
 
@@ -139,13 +155,13 @@ function Contents() {
       // 초기값
       setReplyText('');
       setEditTitle(item.title || '');
-      setEditType(item.type || 0);
+      setEditType(item.type || '공지사항');
     }
   }, [singleData]);
 
   // ============ 목록 필터 ============
   const handleTypeChange = (e) => {
-    const val = parseInt(e.target.value, 10);
+    const val = e.target.value;
     setTypeFilter(val);
     refetch({ type: val });
   };
@@ -280,9 +296,11 @@ function Contents() {
       {/* Filter */}
       <div className="flex gap-2 mb-4">
         <select value={typeFilter} onChange={handleTypeChange} className="border p-1 rounded">
-          <option value={0}>CONTENT_0</option>
-          <option value={1}>CONTENT_1</option>
-          <option value={2}>CONTENT_2</option>
+          <option value="공지사항">공지사항</option>
+            {regions.map((region, index) => (
+              <option key={index} value={region.name}>{region.name}</option>
+            ))}
+          <option value="익명">익명</option>
         </select>
         <button
           className="bg-blue-500 text-white px-3 py-1 rounded"
@@ -361,11 +379,15 @@ function Contents() {
               <select
                 className="border p-1 rounded w-32 ml-1 mr-2"
                 value={newType}
-                onChange={(e) => setNewType(parseInt(e.target.value, 10))}
+                onChange={(e) => setNewType(e.target.value)}
               >
-                <option value={0}>CONTENT_0</option>
-                <option value={1}>CONTENT_1</option>
-                <option value={2}>CONTENT_2</option>
+
+                <option value="공지사항">공지사항</option>
+                  {regions.map((region, index) => (
+                    <option key={index} value={region.name}>{region.name}</option>
+                  ))}
+                <option value="익명">익명</option>
+
               </select>
 
               <label>Title:</label>
@@ -501,11 +523,13 @@ function Contents() {
                   <select
                     className="border p-1 rounded w-32 ml-1 mr-3"
                     value={editType}
-                    onChange={(e) => setEditType(parseInt(e.target.value, 10))}
+                    onChange={(e) => setEditType(e.target.value)}
                   >
-                    <option value={0}>CONTENT_0</option>
-                    <option value={1}>CONTENT_1</option>
-                    <option value={2}>CONTENT_2</option>
+                    <option value="공지사항">공지사항</option>
+                    {regions.map((region, index) => (
+                      <option key={index} value={region.name}>{region.name}</option>
+                    ))}
+                    <option value="익명">익명</option>
                   </select>
 
                   <label>Title:</label>
