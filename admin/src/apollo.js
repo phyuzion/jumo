@@ -53,7 +53,7 @@ const tokenRefreshLink = new TokenRefreshLink({
     console.error('Failed to refresh token:', err);
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminRefreshToken');
-    window.location.href = '/login';
+    window.location.href = '/';
   },
 });
 
@@ -77,7 +77,7 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
         console.log('UNAUTHENTICATED -> forced logout');
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminRefreshToken');
-        window.location.href = '/login';
+        window.location.href = '/';
       }
     }
   }
@@ -85,7 +85,7 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
     console.log('401 -> forced logout');
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminRefreshToken');
-    window.location.href = '/login';
+    window.location.href = '/';
   }
 });
 
