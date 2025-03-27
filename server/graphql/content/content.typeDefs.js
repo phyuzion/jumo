@@ -17,7 +17,7 @@ module.exports = gql`
     userId: String!
     userName: String!
     userRegion: String!
-    type: Int!
+    type: String!
     title: String!
     content: JSON!
     createdAt: String!
@@ -29,7 +29,7 @@ module.exports = gql`
     게시판 목록 조회 (type으로 필터링 가능)
     content, comments 필드는 제외
     """
-    getContents(type: Int): [Content!]!
+    getContents(type: String): [Content!]!
 
     """
     게시글 상세 조회
@@ -42,8 +42,8 @@ module.exports = gql`
     content: JSON 으로 전송 가능
     클라이언트에서 Delta 객체 통째로 전송 가능
     """
-    createContent(type: Int, title: String, content: JSON!): Content
-    updateContent(contentId: ID!, title: String, content: JSON, type: Int): Content
+    createContent(type: String, title: String, content: JSON!): Content
+    updateContent(contentId: ID!, title: String, content: JSON, type: String): Content
     deleteContent(contentId: ID!): Boolean
 
     createReply(contentId: ID!, comment: String!): Content

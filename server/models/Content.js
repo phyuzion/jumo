@@ -13,7 +13,7 @@ const contentSchema = new mongoose.Schema({
   userId: { type: String },  
   userName: { type: String, default: '' }, 
   userRegion: { type: String, default: '' },
-  type: { type: Number, default: 0 },
+  type: { type: String, default: '' },
   title: { type: String, default: '' },
   content: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt: { type: Date, default: Date.now },

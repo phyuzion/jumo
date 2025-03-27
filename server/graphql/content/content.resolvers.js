@@ -64,7 +64,7 @@ module.exports = {
         userId,
         userName,
         userRegion,
-        type: type || 0,
+        type: type || '',
         title: title || '',
         content: content,
         createdAt: new Date(),
