@@ -38,6 +38,9 @@ async function startServer() {
   // 2) 정적 경로: /download -> /var/data/public_downloads
   //    (퍼시스턴트 디스크가 /var/data 에 마운트되었다고 가정)
   app.use('/download', express.static('/var/data/public_downloads'));
+  
+  // 3) 정적 경로: /contents/images -> /var/data/contents/images
+  app.use('/contents/images', express.static('/var/data/contents/images'));
 
   const limiter = rateLimit({
     windowMs: 1000,
@@ -70,6 +73,7 @@ async function startServer() {
     console.log(`✅ Server running on port ${PORT}`);
     console.log(`GraphQL endpoint: http://localhost:${PORT}/graphql`);
     console.log(`APK download link: http://localhost:${PORT}/download/app.apk`);
+    console.log(`Images directory: http://localhost:${PORT}/contents/images`);
   });
 }
 
