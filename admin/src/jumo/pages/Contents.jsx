@@ -26,6 +26,7 @@ import {
   DELETE_CONTENT,
   CREATE_REPLY,
   DELETE_REPLY,
+  UPLOAD_CONTENT_IMAGE,
 } from '../graphql/mutations';
 
 // 개발 환경에서 에러 메시지 로드
@@ -83,6 +84,28 @@ function Contents() {
 
   // ============ 목록 필터 ============
   const [typeFilter, setTypeFilter] = useState('공지사항');
+
+  // ============ 이미지 업로드 테스트 ============
+  const [uploadImageMut] = useMutation(UPLOAD_CONTENT_IMAGE);
+  const [testFile, setTestFile] = useState(null);
+
+  const handleTestUpload = async () => {
+    if (!testFile) {
+      alert('파일을 선택해주세요');
+      return;
+    }
+
+    try {
+      const result = await uploadImageMut({
+        variables: {
+          file: testFile,
+        },
+      });
+      alert('업로드 성공: ' + result.data.uploadContentImage);
+    } catch (err) {
+      alert('업로드 실패: ' + err.message);
+    }
+  };
 
   // ============ 지역 목록 ============
   const { data: regionsData } = useQuery(GET_ALL_REGIONS);
@@ -292,6 +315,22 @@ function Contents() {
   return (
     <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
       <Header category="Page" title="게시판" />
+
+      {/* 이미지 업로드 테스트 */}
+      <div className="flex gap-2 mb-4 border p-2 rounded">
+        <input
+          type="file"
+          accept="image/*"
+          onChange={(e) => setTestFile(e.target.files[0])}
+          className="border p-1"
+        />
+        <button
+          className="bg-green-500 text-white px-3 py-1 rounded"
+          onClick={handleTestUpload}
+        >
+          이미지 업로드 테스트
+        </button>
+      </div>
 
       {/* Filter */}
       <div className="flex gap-2 mb-4">
