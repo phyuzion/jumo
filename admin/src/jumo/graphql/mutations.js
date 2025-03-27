@@ -14,20 +14,34 @@ export const ADMIN_LOGIN = gql`
 
 /**
  * 2) 유저 생성
- *    - region 필드 추가
+ *    - region, grade 필드 추가
  */
 export const CREATE_USER = gql`
-  mutation createUser($phoneNumber: String!, $name: String!, $region: String) {
-    createUser(phoneNumber: $phoneNumber, name: $name, region: $region) {
+  mutation createUser(
+    $loginId: String!
+    $phoneNumber: String!
+    $name: String!
+    $type: Int
+    $region: String
+    $grade: String
+  ) {
+    createUser(
+      loginId: $loginId
+      phoneNumber: $phoneNumber
+      name: $name
+      type: $type
+      region: $region
+      grade: $grade
+    ) {
       user {
         id
-        systemId
         loginId
         name
         phoneNumber
         type
         validUntil
         region
+        grade
         settings
       }
       tempPassword
@@ -37,7 +51,7 @@ export const CREATE_USER = gql`
 
 /**
  * 3) 유저 정보 업데이트
- *    - region 필드 추가
+ *    - region, grade 필드 추가
  */
 export const UPDATE_USER = gql`
   mutation updateUser(
@@ -47,6 +61,7 @@ export const UPDATE_USER = gql`
     $validUntil: String
     $type: Int
     $region: String
+    $grade: String
   ) {
     updateUser(
       userId: $userId
@@ -55,15 +70,16 @@ export const UPDATE_USER = gql`
       validUntil: $validUntil
       type: $type
       region: $region
+      grade: $grade
     ) {
       id
-      systemId
       loginId
       name
       phoneNumber
       type
       validUntil
       region
+      grade
       settings
     }
   }
@@ -208,5 +224,28 @@ export const CREATE_NOTIFICATION = gql`
 export const UPLOAD_APK = gql`
   mutation uploadAPK($version: String!, $file: Upload!) {
     uploadAPK(version: $version, file: $file)
+  }
+`;
+
+/**
+ * Grade 관련 뮤테이션
+ */
+export const ADD_GRADE = gql`
+  mutation addGrade($name: String!, $limit: Int!) {
+    addGrade(name: $name, limit: $limit) {
+      name
+      limit
+    }
+  }
+`;
+
+/**
+ * Region 관련 뮤테이션
+ */
+export const ADD_REGION = gql`
+  mutation addRegion($name: String!) {
+    addRegion(name: $name) {
+      name
+    }
   }
 `;

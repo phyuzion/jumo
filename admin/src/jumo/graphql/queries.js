@@ -15,13 +15,12 @@ export const GET_SUMMARY = gql`
 
 /**
  * (1) 모든 유저 조회
- *     - region, settings 추가
+ *     - region, settings, grade 추가
  */
 export const GET_ALL_USERS = gql`
   query {
     getAllUsers {
       id
-      systemId
       loginId
       name
       phoneNumber
@@ -29,6 +28,7 @@ export const GET_ALL_USERS = gql`
       createdAt
       validUntil
       region
+      grade
       settings
     }
   }
@@ -36,14 +36,13 @@ export const GET_ALL_USERS = gql`
 
 /**
  * (2) 특정 유저 + 전화번호부 기록
- *     - user { region, settings } 추가
+ *     - user { region, settings, grade } 추가
  */
 export const GET_USER_RECORDS = gql`
   query getUserRecords($userId: ID!) {
     getUserRecords(userId: $userId) {
       user {
         id
-        systemId
         loginId
         name
         phoneNumber
@@ -51,6 +50,7 @@ export const GET_USER_RECORDS = gql`
         createdAt
         validUntil
         region
+        grade
         settings
       }
       records {
@@ -92,8 +92,8 @@ export const GET_USER_SMS_LOG = gql`
  * (A) 전화번호로 1개 문서 조회
  */
 export const GET_PHONE_NUMBER = gql`
-  query getPhoneNumber($phoneNumber: String!) {
-    getPhoneNumber(phoneNumber: $phoneNumber) {
+  query getPhoneNumber($phoneNumber: String!, $isRequested: Boolean) {
+    getPhoneNumber(phoneNumber: $phoneNumber, isRequested: $isRequested) {
       id
       phoneNumber
       type
@@ -105,6 +105,29 @@ export const GET_PHONE_NUMBER = gql`
         type
         createdAt
       }
+    }
+  }
+`;
+
+/**
+ * Grade 관련 쿼리
+ */
+export const GET_ALL_GRADES = gql`
+  query {
+    getGrades {
+      name
+      limit
+    }
+  }
+`;
+
+/**
+ * Region 관련 쿼리
+ */
+export const GET_ALL_REGIONS = gql`
+  query {
+    getRegions {
+      name
     }
   }
 `;
