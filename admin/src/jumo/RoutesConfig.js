@@ -19,6 +19,12 @@ export const routes = [
     category: "카테고리",
     links: [
       {
+        path: "common-settings",
+        name: "공통설정",
+        component: <CommonSettings />,
+        icon: <AiOutlineSetting />,
+      },
+      {
         path: "users",
         name: "유저",
         component: <Users />,
@@ -47,12 +53,6 @@ export const routes = [
         name: "버전",
         component: <Version />,
         icon: <AiOutlineFile />,
-      },
-      {
-        path: "common-settings",
-        name: "공통설정",
-        component: <CommonSettings />,
-        icon: <AiOutlineSetting />,
       },
     ],
   },

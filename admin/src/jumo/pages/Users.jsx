@@ -18,6 +18,8 @@ import {
   GET_USER_RECORDS,
   GET_USER_CALL_LOG, // 통화로그
   GET_USER_SMS_LOG,  // 문자로그
+  GET_ALL_GRADES,
+  GET_ALL_REGIONS,
 } from "../graphql/queries";
 import {
   CREATE_USER,
@@ -37,18 +39,22 @@ const Users = () => {
     fetchPolicy: 'network-only',
   });
 
-  // (2) create / update / reset
+  // (2) 등급/지역 목록
+  const { data: gradesData } = useQuery(GET_ALL_GRADES);
+  const { data: regionsData } = useQuery(GET_ALL_REGIONS);
+
+  // (3) create / update / reset
   const [createUserMutation]         = useMutation(CREATE_USER);
   const [updateUserMutation]         = useMutation(UPDATE_USER);
   const [resetUserPasswordMutation]  = useMutation(RESET_USER_PASSWORD);
 
-  // (3-1) 전화번호부 기록 (lazy)
+  // (4) 전화번호부 기록 (lazy)
   const [getUserRecordsLazy, { data: recordsData }] = useLazyQuery(GET_USER_RECORDS, {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
   });
 
-  // (3-2) 통화/문자 로그 (lazy)
+  // (5) 통화/문자 로그 (lazy)
   const [getUserCallLogLazy, { data: callLogData }] = useLazyQuery(GET_USER_CALL_LOG, {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
@@ -60,6 +66,8 @@ const Users = () => {
 
   // ========== State ==========
   const [users, setUsers] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [regions, setRegions] = useState([]);
 
   // 생성/수정 모달 표시 여부
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -77,16 +85,21 @@ const Users = () => {
   const [smsLogs,      setSmsLogs]      = useState([]);
 
   // 생성 폼
-  const [formPhone,  setFormPhone]  = useState('');
-  const [formName,   setFormName]   = useState('');
-  const [formRegion, setFormRegion] = useState('');
+  const [formLoginId,  setFormLoginId]  = useState('');
+  const [formPhone,    setFormPhone]    = useState('');
+  const [formName,     setFormName]     = useState('');
+  const [formType,     setFormType]     = useState(0);
+  const [formRegion,   setFormRegion]   = useState('');
+  const [formGrade,    setFormGrade]    = useState('');
 
   // 수정 폼
-  const [editPhone,      setEditPhone]      = useState('');
-  const [editName,       setEditName]       = useState('');
-  const [editType,       setEditType]       = useState(0);
-  const [editValidUntil, setEditValidUntil] = useState('');
-  const [editRegion,     setEditRegion]     = useState('');
+  const [editLoginId,      setEditLoginId]      = useState('');
+  const [editPhone,        setEditPhone]        = useState('');
+  const [editName,         setEditName]         = useState('');
+  const [editType,         setEditType]         = useState(0);
+  const [editValidUntil,   setEditValidUntil]   = useState('');
+  const [editRegion,       setEditRegion]       = useState('');
+  const [editGrade,        setEditGrade]        = useState('');
 
   // ================= useEffect =================
 
@@ -96,6 +109,26 @@ const Users = () => {
       setUsers(data.getAllUsers);
     }
   }, [data]);
+
+  // 등급/지역 데이터 설정
+  useEffect(() => {
+    if (gradesData?.getGrades) {
+      setGrades(gradesData.getGrades);
+      // 첫 번째 등급을 기본값으로 설정
+      if (gradesData.getGrades.length > 0) {
+        setFormGrade(gradesData.getGrades[0].name);
+        setEditGrade(gradesData.getGrades[0].name);
+      }
+    }
+    if (regionsData?.getRegions) {
+      setRegions(regionsData.getRegions);
+      // 첫 번째 지역을 기본값으로 설정
+      if (regionsData.getRegions.length > 0) {
+        setFormRegion(regionsData.getRegions[0].name);
+        setEditRegion(regionsData.getRegions[0].name);
+      }
+    }
+  }, [gradesData, regionsData]);
 
   // 전화번호부 기록
   useEffect(() => {
@@ -171,9 +204,12 @@ const Users = () => {
 
   // ============= CREATE =============
   const handleCreate = () => {
+    setFormLoginId('');
     setFormPhone('');
     setFormName('');
+    setFormType(0);
     setFormRegion('');
+    setFormGrade('');
     setShowCreateModal(true);
   };
 
@@ -181,16 +217,18 @@ const Users = () => {
     try {
       const res = await createUserMutation({
         variables: {
+          loginId: formLoginId,
           phoneNumber: formPhone,
           name: formName,
+          type: parseInt(formType, 10),
           region: formRegion,
+          grade: formGrade,
         },
       });
-      const tempPass = res.data?.createUser?.tempPassword;
-      alert(`유저 생성 완료! 임시비번: ${tempPass}`);
+      alert(`임시비번: ${res.data?.createUser?.tempPassword}`);
 
       setShowCreateModal(false);
-      handleRefresh(); // 목록 재조회
+      handleRefresh();
     } catch (err) {
       alert(err.message);
     }
@@ -208,16 +246,17 @@ const Users = () => {
   // ============= EDIT =============
   const handleEditClick = (u) => {
     setEditUser(u);
+    setEditLoginId(u.loginId || '');
     setEditPhone(u.phoneNumber || '');
     setEditName(u.name || '');
     setEditType(u.type || 0);
     setEditRegion(u.region || '');
+    setEditGrade(u.grade || '');
 
     // validUntil => "YYYY-MM-DD"
     let dtStr = '';
     if (u.validUntil) {
       try {
-        // epoch 시도
         const maybeEpoch = parseInt(u.validUntil, 10);
         let dt = null;
         if (!isNaN(maybeEpoch)) {
@@ -248,11 +287,12 @@ const Users = () => {
       await updateUserMutation({
         variables: {
           userId: editUser.id,
-          phoneNumber: editPhone,
           name: editName,
+          phoneNumber: editPhone,
           type: parseInt(editType, 10),
           validUntil: validStr,
           region: editRegion,
+          grade: editGrade,
         }
       });
       alert('수정 완료!');
@@ -354,6 +394,7 @@ const Users = () => {
             <ColumnDirective field="phoneNumber" headerText="번호"      width="110" />
             <ColumnDirective field="type"        headerText="타입"      width="60"  textAlign="Center" />
             <ColumnDirective field="region"      headerText="지역"      width="80"  textAlign="Center" />
+            <ColumnDirective field="grade"       headerText="등급"      width="80"  textAlign="Center" />
             <ColumnDirective
               field="validUntil"
               headerText="유효기간"
@@ -415,23 +456,52 @@ const Users = () => {
             <h2 className="text-xl font-bold mb-2">유저 생성</h2>
             <div className="flex flex-col gap-2">
               <input
-                placeholder="PhoneNumber"
+                placeholder="아이디"
+                value={formLoginId}
+                onChange={(e) => setFormLoginId(e.target.value)}
+                className="border p-1"
+              />
+              <input
+                placeholder="전화번호"
                 value={formPhone}
                 onChange={(e) => setFormPhone(e.target.value)}
                 className="border p-1"
               />
               <input
-                placeholder="Name"
+                placeholder="상호"
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
                 className="border p-1"
               />
               <input
-                placeholder="Region"
+                type="number"
+                placeholder="타입"
+                value={formType}
+                onChange={(e) => setFormType(e.target.value)}
+                className="border p-1"
+              />
+              <select
                 value={formRegion}
                 onChange={(e) => setFormRegion(e.target.value)}
                 className="border p-1"
-              />
+              >
+                {regions.map((region) => (
+                  <option key={region.name} value={region.name}>
+                    {region.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={formGrade}
+                onChange={(e) => setFormGrade(e.target.value)}
+                className="border p-1"
+              >
+                {grades.map((grade) => (
+                  <option key={grade.name} value={grade.name}>
+                    {grade.name} (제한: {grade.limit}회)
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="mt-4 flex gap-2">
               <button
@@ -459,35 +529,50 @@ const Users = () => {
             <p className="mb-2">UserID: {editUser.loginId}</p>
             <div className="flex flex-col gap-2">
               <input
-                placeholder="PhoneNumber"
+                placeholder="전화번호"
                 value={editPhone}
                 onChange={(e) => setEditPhone(e.target.value)}
                 className="border p-1"
               />
               <input
-                placeholder="Name"
+                placeholder="상호"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 className="border p-1"
               />
               <input
-                placeholder="Type (정수)"
                 type="number"
+                placeholder="타입"
                 value={editType}
                 onChange={(e) => setEditType(e.target.value)}
                 className="border p-1"
               />
+              <select
+                value={editRegion}
+                onChange={(e) => setEditRegion(e.target.value)}
+                className="border p-1"
+              >
+                {regions.map((region) => (
+                  <option key={region.name} value={region.name}>
+                    {region.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={editGrade}
+                onChange={(e) => setEditGrade(e.target.value)}
+                className="border p-1"
+              >
+                {grades.map((grade) => (
+                  <option key={grade.name} value={grade.name}>
+                    {grade.name} (제한: {grade.limit}회)
+                  </option>
+                ))}
+              </select>
               <input
-                placeholder="YYYY-MM-DD"
                 type="date"
                 value={editValidUntil}
                 onChange={(e) => setEditValidUntil(e.target.value)}
-                className="border p-1"
-              />
-              <input
-                placeholder="Region"
-                value={editRegion}
-                onChange={(e) => setEditRegion(e.target.value)}
                 className="border p-1"
               />
             </div>
