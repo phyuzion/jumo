@@ -3,6 +3,7 @@ const { gql } = require('apollo-server-express');
 
 module.exports = gql`
   scalar JSON
+  scalar Upload
 
   type Comment {
     userId: String
@@ -48,5 +49,13 @@ module.exports = gql`
 
     createReply(contentId: ID!, comment: String!): Content
     deleteReply(contentId: ID!, index: Int!): Boolean
+
+    """
+    게시판 이미지 업로드
+    - /var/data/contents/images 디렉토리에 저장
+    - UUID로 파일명 생성
+    - URL 반환
+    """
+    uploadContentImage(file: Upload!): String!
   }
 `;

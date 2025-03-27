@@ -8,7 +8,18 @@ const { GraphQLJSON } = require('graphql-type-json');
 const Content = require('../../models/Content');
 const User = require('../../models/User');
 
-const { checkUserValid, checkAdminValid, checkAuthorOrAdmin } = require('../auth/utils');
+const { checkUserValid, checkAdminValid, checkAuthorOrAdmin, checkUserOrAdmin } = require('../auth/utils');
+const path = require('path');
+const fs = require('fs');
+const { v4: uuidv4 } = require('uuid');
+
+// 이미지 저장 경로
+const IMAGES_DIR = '/var/data/contents/images';
+
+// 디렉토리가 없으면 생성
+if (!fs.existsSync(IMAGES_DIR)) {
+  fs.mkdirSync(IMAGES_DIR, { recursive: true });
+}
 
 module.exports = {
   JSON: GraphQLJSON,
@@ -160,6 +171,51 @@ module.exports = {
       doc.comments.splice(index, 1);
       await doc.save();
       return true;
+    },
+
+    uploadContentImage: async (_, { file }, { tokenData }) => {
+      // 권한 체크
+      checkUserOrAdmin(tokenData);
+
+      console.log("==== [uploadContentImage] START ====");
+      console.log("file argument =", file);
+
+      // 1) await file
+      const upload = await file;
+      // 2) destruct from upload.file
+      const { filename, mimetype, encoding, createReadStream } = upload.file;
+
+      console.log("filename =", filename);
+      console.log("mimetype =", mimetype);
+      console.log("encoding =", encoding);
+      console.log("createReadStream =", createReadStream);
+
+      if (!createReadStream) {
+        throw new Error("createReadStream is missing");
+      }
+
+      // 파일 확장자 추출
+      const ext = path.extname(filename);
+      
+      // UUID로 새 파일명 생성
+      const newFilename = `${uuidv4()}${ext}`;
+      const filepath = path.join(IMAGES_DIR, newFilename);
+
+      return new Promise((resolve, reject) => {
+        const readStream = createReadStream();
+        const writeStream = fs.createWriteStream(filepath);
+
+        readStream
+          .pipe(writeStream)
+          .on('finish', () => {
+            console.log(`✅ Image file saved at: ${filepath}`);
+            resolve(`/contents/images/${newFilename}`);
+          })
+          .on('error', (err) => {
+            console.error('File upload error:', err);
+            reject(err);
+          });
+      });
     },
   },
 };
