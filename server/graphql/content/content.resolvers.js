@@ -7,17 +7,8 @@ const {
 const { GraphQLJSON } = require('graphql-type-json');
 const Content = require('../../models/Content');
 const User = require('../../models/User');
-const path = require('path');
-const fs = require('fs');
-const { v4: uuidv4 } = require('uuid');
 
 const { checkUserValid, checkAdminValid, checkAuthorOrAdmin } = require('../auth/utils');
-
-// 이미지 저장 경로
-const IMAGES_DIR = '/var/data/public_downloads/images';
-if (!fs.existsSync(IMAGES_DIR)) {
-  fs.mkdirSync(IMAGES_DIR, { recursive: true });
-}
 
 module.exports = {
   JSON: GraphQLJSON,
@@ -169,32 +160,6 @@ module.exports = {
       doc.comments.splice(index, 1);
       await doc.save();
       return true;
-    },
-
-    // 이미지 업로드
-    uploadContentImage: async (_, { file }, { tokenData }) => {
-      // 권한 체크
-      await checkUserValid(tokenData);
-
-      const { createReadStream, filename, mimetype } = await file;
-      const stream = createReadStream();
-
-      // 파일 확장자 추출
-      const ext = path.extname(filename);
-      // UUID로 새 파일명 생성
-      const newFilename = `${uuidv4()}${ext}`;
-      const filepath = path.join(IMAGES_DIR, newFilename);
-
-      // 파일 저장
-      await new Promise((resolve, reject) => {
-        const writeStream = fs.createWriteStream(filepath);
-        stream.pipe(writeStream)
-          .on('finish', resolve)
-          .on('error', reject);
-      });
-
-      // URL 반환
-      return `/download/images/${newFilename}`;
     },
   },
 };

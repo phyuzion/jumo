@@ -107,7 +107,6 @@ export const UPSERT_PHONE_RECORDS = gql`
  * Content 관련
  * - createContent / updateContent / deleteContent
  * - createReply / deleteReply
- * - uploadContentImage (Quill 에디터용)
  * 
  * 새로운 필드 userName / userRegion, 
  * 댓글(Comment)에도 userName / userRegion 추가
@@ -248,17 +247,5 @@ export const ADD_REGION = gql`
     addRegion(name: $name) {
       name
     }
-  }
-`;
-
-/**
- * Content 관련
- * - createContent / updateContent / deleteContent
- * - createReply / deleteReply
- * - uploadContentImage (Quill 에디터용)
- */
-export const UPLOAD_CONTENT_IMAGE = gql`
-  mutation uploadContentImage($file: Upload!) {
-    uploadContentImage(file: $file)
   }
 `;
