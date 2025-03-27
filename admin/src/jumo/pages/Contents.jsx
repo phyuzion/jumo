@@ -35,6 +35,11 @@ if (process.env.NODE_ENV !== "production") {
   loadErrorMessages();
 }
 
+// Quill 이미지 모듈 등록
+const Image = Quill.import('formats/image');
+Image.sanitize = (url) => url; // URL sanitize 비활성화
+Quill.register(Image, true);
+
 // Quill 설정
 const quillModules = {
   toolbar: [
@@ -42,6 +47,7 @@ const quillModules = {
     ['bold', 'italic', 'underline'],
     [{ color: [] }, { background: [] }],
     [{ align: [] }],
+    ['image'],
     ['clean'],
   ],
 };
@@ -50,6 +56,7 @@ const quillFormats = [
   'bold', 'italic', 'underline',
   'color', 'background',
   'align',
+  'image',
 ];
 
 const PAGE_SIZE = 10;
@@ -62,7 +69,15 @@ function deltaToHtml(deltaObj) {
   const tempDiv = document.createElement('div');
   const tempQuill = new Quill(tempDiv);
   tempQuill.setContents(deltaObj);
-  return tempQuill.root.innerHTML;
+  
+  // 이미지 URL에 서버 주소 추가
+  const html = tempQuill.root.innerHTML;
+  const modifiedHtml = html.replace(
+    /src="(\/contents\/images\/[^"]+)"/g,
+    'src="https://jumo-vs8e.onrender.com$1"'
+  );
+  
+  return modifiedHtml;
 }
 
 /** 날짜 포맷 */
@@ -81,6 +96,7 @@ function formatDate(dateStr) {
 
 function Contents() {
   const gridRef = useRef(null);
+  const quillRef = useRef(null);
 
   // ============ 목록 필터 ============
   const [typeFilter, setTypeFilter] = useState('공지사항');
@@ -197,9 +213,64 @@ function Contents() {
     setShowCreateModal(true);
   };
 
+  // base64 데이터를 File 객체로 변환
+  const dataURLtoFile = (dataurl, filename) => {
+    let arr = dataurl.split(','),
+        mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), 
+        n = bstr.length, 
+        u8arr = new Uint8Array(n);
+    while(n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    // File 객체를 생성할 때 필요한 속성들을 포함
+    return new File([u8arr], filename, {
+      type: mime,
+      lastModified: new Date().getTime(),
+      name: filename
+    });
+  };
+
   const handleCreateSubmit = async () => {
     try {
-      const finalDelta = newDelta || { ops: [] };
+      let finalDelta = newDelta || { ops: [] };
+      
+      // Delta 데이터 로깅
+      console.log('=== Delta Data ===');
+      console.log(JSON.stringify(finalDelta, null, 2));
+      console.log('Delta size:', JSON.stringify(finalDelta).length);
+      console.log('=================');
+
+      // Delta 데이터를 간단하게 만들기
+      if (finalDelta.ops && finalDelta.ops.length > 0) {
+        // 이미지 업로드 Promise 배열
+        const uploadPromises = finalDelta.ops.map(async op => {
+          // base64 이미지 데이터가 있는 경우
+          if (op.insert && typeof op.insert === 'object' && op.insert.image) {
+            const imageData = op.insert.image;
+            if (imageData.startsWith('data:image')) {
+              // 이미지 데이터를 서버에 업로드하고 URL로 치환
+              const file = dataURLtoFile(imageData, 'image.png');
+              const result = await uploadImageMut({
+                variables: { file }
+              });
+              return {
+                insert: { image: result.data.uploadContentImage },
+                attributes: op.attributes
+              };
+            }
+          }
+          return {
+            insert: op.insert,
+            attributes: op.attributes
+          };
+        });
+
+        // 모든 이미지 업로드가 완료될 때까지 대기
+        const processedOps = await Promise.all(uploadPromises);
+        finalDelta = { ops: processedOps };
+      }
+
       await createContentMut({
         variables: {
           type: newType,
@@ -295,6 +366,24 @@ function Contents() {
     }
 
     try {
+      // Delta 데이터의 이미지 URL에 서버 주소 추가
+      if (finalDelta.ops && finalDelta.ops.length > 0) {
+        finalDelta = {
+          ops: finalDelta.ops.map(op => {
+            if (op.insert && typeof op.insert === 'object' && op.insert.image) {
+              const imageUrl = op.insert.image;
+              if (imageUrl.startsWith('/contents/images/')) {
+                return {
+                  insert: { image: `https://jumo-vs8e.onrender.com${imageUrl}` },
+                  attributes: op.attributes
+                };
+              }
+            }
+            return op;
+          })
+        };
+      }
+
       const res = await updateContentMut({
         variables: {
           contentId: detailItem.id,
@@ -310,6 +399,36 @@ function Contents() {
     } catch (err) {
       alert(err.message);
     }
+  };
+
+  // Quill 이미지 핸들러
+  const handleImageUpload = async () => {
+    const input = document.createElement('input');
+    input.setAttribute('type', 'file');
+    input.setAttribute('accept', 'image/*');
+    input.click();
+
+    input.onchange = async () => {
+      const file = input.files[0];
+      try {
+        const result = await uploadImageMut({
+          variables: {
+            file,
+          },
+        });
+        const url = result.data.uploadContentImage;
+        const quill = quillRef.current.getEditor();
+        const range = quill.getSelection(true);
+        
+        // 서버 주소를 포함한 전체 URL 생성
+        const fullUrl = `https://jumo-vs8e.onrender.com${url}`;
+        quill.insertText(range.index, '\n', { 'image': fullUrl });
+        quill.setSelection(range.index + 1);
+      } catch (err) {
+        console.error('이미지 업로드 실패:', err);
+        alert('이미지 업로드에 실패했습니다.');
+      }
+    };
   };
 
   return (
@@ -439,6 +558,7 @@ function Contents() {
 
             <div className="flex-auto overflow-auto border mb-2">
               <ReactQuill
+                ref={quillRef}
                 modules={quillModules}
                 formats={quillFormats}
                 style={{ height: '100%' }}
