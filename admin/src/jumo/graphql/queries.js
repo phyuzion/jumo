@@ -137,7 +137,7 @@ export const GET_ALL_REGIONS = gql`
  *  - userName, userRegion 추가
  */
 export const GET_CONTENTS = gql`
-  query getContents($type: Int) {
+  query getContents($type: String) {
     getContents(type: $type) {
       id
       userId

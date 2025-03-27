@@ -112,7 +112,7 @@ export const UPSERT_PHONE_RECORDS = gql`
  * 댓글(Comment)에도 userName / userRegion 추가
  */
 export const CREATE_CONTENT = gql`
-  mutation createContent($type: Int, $title: String, $content: JSON!) {
+  mutation createContent($type: String, $title: String, $content: JSON!) {
     createContent(type: $type, title: $title, content: $content) {
       id
       userId
@@ -138,7 +138,7 @@ export const UPDATE_CONTENT = gql`
     $contentId: ID!
     $title: String
     $content: JSON
-    $type: Int
+    $type: String
   ) {
     updateContent(
       contentId: $contentId
