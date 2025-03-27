@@ -35,6 +35,17 @@ const tokenRefreshLink = new TokenRefreshLink({
             refreshToken(refreshToken:$refreshToken) {
               accessToken
               refreshToken
+              user {
+                id
+                loginId
+                name
+                phoneNumber
+                type
+                validUntil
+                region
+                grade
+                settings
+              }
             }
           }
         `,
