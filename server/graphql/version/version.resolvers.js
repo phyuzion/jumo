@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const Version = require('../../models/Version');
+const { checkAdminValid } = require('../auth/utils');
 
 module.exports = {
   Query: {
@@ -17,7 +18,10 @@ module.exports = {
   },
 
   Mutation: {
-    uploadAPK: async (_, { version, file }) => {
+    uploadAPK: async (_, { version, file }, { tokenData }) => {
+      // 어드민 체크
+      await checkAdminValid(tokenData);
+
       console.log("==== [uploadAPK] START ====");
       console.log("version =", version);
       console.log("file argument =", file);

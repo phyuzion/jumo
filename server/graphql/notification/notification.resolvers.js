@@ -2,6 +2,7 @@
 const { ForbiddenError, AuthenticationError } = require('apollo-server-errors');
 const Notification = require('../../models/Notification');
 const User = require('../../models/User');
+const { checkAdminValid } = require('../auth/utils');
 
 module.exports = {
   Query: {
@@ -37,9 +38,7 @@ module.exports = {
   Mutation: {
     createNotification: async (_, { title, message, validUntil, userId }, { tokenData }) => {
       // 어드민 체크
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
-      }
+      await checkAdminValid(tokenData);
 
       let validDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 기본 1일
       if (validUntil) {

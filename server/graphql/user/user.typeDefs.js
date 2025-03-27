@@ -5,7 +5,6 @@ const { gql } = require('apollo-server-express');
 module.exports = gql`
   type User {
     id: ID!
-    systemId: String!
     loginId: String!
     name: String
     phoneNumber: String
@@ -13,6 +12,7 @@ module.exports = gql`
     createdAt: String
     validUntil: String
     region: String           # 새로 추가
+    grade: String           # 새로 추가
     settings: String         # 새로 추가
     blockList: [String!]     # 차단된 전화번호 목록
   }
@@ -106,7 +106,14 @@ module.exports = gql`
     (Admin 전용) 유저 생성
     region: Optional
     """
-    createUser(phoneNumber: String!, name: String!, region: String): CreateUserPayload
+    createUser(
+      loginId: String!
+      phoneNumber: String!
+      name: String!
+      type: Int
+      region: String
+      grade: String
+    ): CreateUserPayload
 
     """
     유저 로그인 -> (accessToken, refreshToken)
@@ -129,6 +136,7 @@ module.exports = gql`
       validUntil: String
       type: Int
       region: String
+      grade: String
     ): User
 
     """

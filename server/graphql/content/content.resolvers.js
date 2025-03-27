@@ -8,42 +8,7 @@ const { GraphQLJSON } = require('graphql-type-json');
 const Content = require('../../models/Content');
 const User = require('../../models/User');
 
-// 유저 토큰 검증 (일반 유저)
-async function checkUserValid(tokenData) {
-  if (!tokenData?.userId) {
-    throw new AuthenticationError('로그인이 필요합니다.');
-  }
-  const user = await User.findById(tokenData.userId);
-  if (!user) {
-    throw new ForbiddenError('유효하지 않은 유저입니다.(checkUserValid)');
-  }
-  if (user.validUntil && user.validUntil < new Date()) {
-    throw new ForbiddenError('유효 기간이 만료된 계정입니다.');
-  }
-  return user;
-}
-
-/*
-  작성자 권한 or 관리자 권한 체크
-  - 관리자면 바로 OK
-  - 일반 유저라면 contentDoc.userId === tokenData.userId 이어야 함
-*/
-async function checkAuthorOrAdmin(tokenData, contentDoc) {
-  if (tokenData?.adminId) {
-    return; // 관리자
-  }
-  if (!tokenData?.userId) {
-    throw new ForbiddenError('권한이 없습니다.(로그인 필요)');
-  }
-  const user = await User.findById(tokenData.userId);
-  if (!user) {
-    throw new ForbiddenError('유효하지 않은 유저입니다.(checkAuthorOrAdmin)');
-  }
-  // contentDoc.userId가 로그인 유저의 _id와 같아야 함
-  if (contentDoc.userId !== user._id.toString()) {
-    throw new ForbiddenError('수정/삭제 권한이 없습니다.');
-  }
-}
+const { checkUserValid, checkAdminValid, checkAuthorOrAdmin } = require('../auth/utils');
 
 module.exports = {
   JSON: GraphQLJSON,
@@ -114,6 +79,7 @@ module.exports = {
       const doc = await Content.findById(contentId);
       if (!doc) throw new UserInputError('글 없음');
 
+      // 권한 체크
       await checkAuthorOrAdmin(tokenData, doc);
 
       if (title !== undefined) doc.title = title;
@@ -121,6 +87,7 @@ module.exports = {
       if (content !== undefined) {
         doc.content = content;
       }
+
       await doc.save();
       return doc;
     },

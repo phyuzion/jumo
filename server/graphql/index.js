@@ -20,6 +20,10 @@ const versionTypeDefs = require('./version/version.typeDefs');
 const versionResolvers = require('./version/version.resolvers');
 const todayRecordTypeDefs = require('./todayRecord/todayRecord.typeDefs');
 const todayRecordResolvers = require('./todayRecord/todayRecord.resolvers');
+const regionTypeDefs = require('./region/region.typeDefs');
+const regionResolvers = require('./region/region.resolvers');
+const gradeTypeDefs = require('./grade/grade.typeDefs');
+const gradeResolvers = require('./grade/grade.resolvers');
 
 
 /*
@@ -54,6 +58,8 @@ const typeDefs = mergeTypeDefs([
   authTypeDefs,
   versionTypeDefs,
   todayRecordTypeDefs,
+  regionTypeDefs,
+  gradeTypeDefs,
 ]);
 
 // 모든 resolvers 합치기
@@ -69,6 +75,8 @@ const resolvers = mergeResolvers([
   authResolvers,
   versionResolvers,
   todayRecordResolvers,
+  regionResolvers,
+  gradeResolvers,
 ]);
 
 module.exports = {

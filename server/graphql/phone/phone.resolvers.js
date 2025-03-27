@@ -7,23 +7,10 @@ const {
 } = require('apollo-server-errors');
 const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
+const Grade = require('../../models/Grade');
 const { withTransaction } = require('../../utils/transaction');
 
-async function checkUserOrAdmin(tokenData) {
-  // 반환: { isAdmin: boolean, user: User doc or null }
-  if (tokenData?.adminId) {
-    return { isAdmin: true, user: null };
-  } else if (tokenData?.userId) {
-    const user = await User.findById(tokenData.userId);
-    if (!user) throw new ForbiddenError('유효하지 않은 유저입니다.');
-    if (user.validUntil && user.validUntil < new Date()) {
-      throw new ForbiddenError('유효 기간이 만료된 계정입니다.');
-    }
-    return { isAdmin: false, user };
-  } else {
-    throw new AuthenticationError('로그인이 필요합니다.');
-  }
-}
+const { checkUserOrAdmin } = require('../auth/utils');
 
 /**
  * 레코드 병합 로직
@@ -100,6 +87,7 @@ module.exports = {
      * 4) bulkWrite
      */
     upsertPhoneRecords: async (_, { records }, { tokenData }) => {
+      // 1) 권한 체크
       const { isAdmin, user } = await checkUserOrAdmin(tokenData);
 
       if (!records || !Array.isArray(records) || records.length === 0) {
@@ -195,11 +183,45 @@ module.exports = {
   },
 
   Query: {
-    async getPhoneNumber(_, { phoneNumber }, { tokenData }) {
+    async getPhoneNumber(_, { phoneNumber, isRequested }, { tokenData }) {
       if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
       if (!phoneNumber || phoneNumber.trim() === '') {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
+
+      // 유저이고 isRequested가 true일 때만 검색 횟수 체크
+      if (isRequested && tokenData.userId) {
+        const user = await User.findById(tokenData.userId);
+        if (!user) {
+          throw new UserInputError('유저를 찾을 수 없습니다.');
+        }
+
+        // 오늘 날짜의 시작 시간 (00:00:00)
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // 마지막 검색 시간이 오늘이 아니면 카운트 리셋
+        if (!user.lastSearchTime || user.lastSearchTime < today) {
+          user.searchCount = 0;
+        }
+
+        // grade에 해당하는 limit 값 가져오기
+        const grade = await Grade.findOne({ name: user.grade });
+        if (!grade) {
+          throw new UserInputError('유효하지 않은 등급입니다.');
+        }
+
+        // limit 값보다 크면 에러
+        if (user.searchCount >= grade.limit) {
+          throw new ForbiddenError('오늘의 검색 제한을 초과했습니다. 내일 다시 시도해주세요.');
+        }
+
+        // 검색 횟수 증가 및 시간 업데이트
+        user.searchCount += 1;
+        user.lastSearchTime = new Date();
+        await user.save();
+      }
+
       return PhoneNumber.findOne({ phoneNumber });
     },
 

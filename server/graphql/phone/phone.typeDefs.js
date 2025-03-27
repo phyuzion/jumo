@@ -36,7 +36,11 @@ module.exports = gql`
   }
 
   extend type Query {
-    getPhoneNumber(phoneNumber: String!): PhoneNumber
+    """
+    특정 전화번호의 상세 정보 조회
+    isRequested: true면 통화 제한 체크
+    """
+    getPhoneNumber(phoneNumber: String!, isRequested: Boolean): PhoneNumber
     getPhoneNumbersByType(type: Int!): [PhoneNumber!]!
     getMyRecords: [UserPhoneRecord!]!
     getBlockNumbers(count: Int!): [BlockNumber!]!

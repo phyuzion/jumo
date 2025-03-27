@@ -8,16 +8,11 @@ const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 const PhoneNumber = require('../../models/PhoneNumber');
 
-// JWT 관련: 실제로는 helpers에 두고 import 할 수도 있음
-const jwt = require('jsonwebtoken');
-const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
-
-function generateAccessToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: '1D' });
-}
-function generateRefreshToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: '7d' });
-}
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  checkAdminValid
+} = require('../auth/utils');
 
 module.exports = {
   Mutation: {
@@ -57,20 +52,19 @@ module.exports = {
     },
   },
 
-
- Query: {
+  Query: {
     getSummary: async (_, __, { tokenData }) => {
       // 관리자 권한 체크
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
-      }
-        // 1) 유저 수
+      await checkAdminValid(tokenData);
+
+      // 1) 유저 수
       const usersCount = await User.countDocuments({});
       // 2) 전화번호 문서 수
       const phoneCount = await PhoneNumber.countDocuments({});
       // 3) 위험 번호(type=99) 문서 수
       const dangerPhoneCount = await PhoneNumber.countDocuments({ type: 99 });
-        return {
+
+      return {
         usersCount,
         phoneCount,
         dangerPhoneCount,

@@ -1,31 +1,15 @@
 // graphql/auth/auth.resolvers.js
 
-const jwt = require('jsonwebtoken');
 const { ForbiddenError } = require('apollo-server-errors');
 
 const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 
-// JWT 시크릿/만료시간 (예시)
-const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
-const ACCESS_TOKEN_EXPIRE = '1h';   // 1시간
-const REFRESH_TOKEN_EXPIRE = '7d'; // 7일
-
-function verifyRefreshToken(token) {
-  try {
-    return jwt.verify(token, SECRET_KEY);
-  } catch (e) {
-    return null;
-  }
-}
-
-function generateAccessToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: ACCESS_TOKEN_EXPIRE });
-}
-
-function generateRefreshToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: REFRESH_TOKEN_EXPIRE });
-}
+const {
+  verifyRefreshToken,
+  generateAccessToken,
+  generateRefreshToken
+} = require('./utils');
 
 module.exports = {
   Mutation: {

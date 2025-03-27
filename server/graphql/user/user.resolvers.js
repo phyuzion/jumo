@@ -9,27 +9,19 @@ const {
 const { GraphQLJSON } = require('graphql-type-json');
 const { withTransaction } = require('../../utils/transaction');
 
-const jwt = require('jsonwebtoken');
-const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
+  checkAdminValid,
+  checkUserValid,
+  SECRET_KEY
+} = require('../auth/utils');
 
 const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 const PhoneNumber = require('../../models/PhoneNumber'); // userRecords 조회용
 const TodayRecord = require('../../models/TodayRecord');
-
-function generateAccessToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: '1d' });
-}
-function generateRefreshToken(payload) {
-  return jwt.sign(payload, SECRET_KEY, { expiresIn: '7d' });
-}
-function verifyRefreshToken(token) {
-  try {
-    return jwt.verify(token, SECRET_KEY);
-  } catch (e) {
-    return null;
-  }
-}
 
 /* 랜덤 문자열 생성 함수 (영문+숫자 6자리) */
 function generateRandomString(length = 6) {
@@ -40,26 +32,6 @@ function generateRandomString(length = 6) {
     result += chars[randomIndex];
   }
   return result;
-}
-
-// 권한 체크
-async function checkAdminValid(tokenData) {
-  if (!tokenData?.adminId) {
-    throw new ForbiddenError('관리자 권한이 필요합니다.');
-  }
-}
-async function checkUserValid(tokenData) {
-  if (!tokenData?.userId) {
-    throw new AuthenticationError('로그인이 필요합니다.');
-  }
-  const user = await User.findById(tokenData.userId);
-  if (!user) {
-    throw new ForbiddenError('유효하지 않은 유저입니다.');
-  }
-  if (user.validUntil && user.validUntil < new Date()) {
-    throw new ForbiddenError('유효 기간이 만료된 계정입니다.');
-  }
-  return user;
 }
 
 /* =========================================================
@@ -94,9 +66,7 @@ module.exports = {
   Query: {
     // (Admin 전용) 유저 전화 내역
     getUserCallLog: async (_, { userId }, { tokenData }) => {
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
-      }
+      await checkAdminValid(tokenData);
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
@@ -109,9 +79,7 @@ module.exports = {
 
     // (Admin 전용) 유저 문자 내역
     getUserSMSLog: async (_, { userId }, { tokenData }) => {
-      if (!tokenData?.adminId) {
-        throw new ForbiddenError('관리자 권한이 필요합니다.');
-      }
+      await checkAdminValid(tokenData);
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
@@ -170,10 +138,10 @@ module.exports = {
       };
     },
 
-    // (새로 추가) 로그인 유저의 settings 조회
+    // 현재 로그인된 유저의 settings 조회
     getUserSetting: async (_, __, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-      return user.settings; // String
+      return user.settings;
     },
 
     getUserBlockNumbers: async (_, __, { tokenData }) => {
@@ -183,37 +151,39 @@ module.exports = {
   },
 
   Mutation: {
-    // (Admin 전용) 유저 생성
-    createUser: async (_, { phoneNumber, name, region }, { tokenData }) => {
+    // 유저 생성
+    createUser: async (_, { loginId, phoneNumber, name, type, region, grade }, { tokenData }) => {
+      // 1) 관리자만 가능
       await checkAdminValid(tokenData);
-      if (!phoneNumber || !name) {
-        throw new UserInputError('phoneNumber와 name은 필수 입력입니다.');
+
+      // 2) loginId 중복 체크
+      const existingUser = await User.findOne({ loginId });
+      if (existingUser) {
+        throw new UserInputError('이미 사용 중인 ID입니다.');
       }
 
-      const systemId = generateRandomString(6);
-      const loginId = generateRandomString(6);
-      const generatedPassword = generateRandomString(6); // 임시 비번
+      // 3) loginId 형식 체크 (영문+숫자)
+      if (!/^[a-zA-Z0-9]+$/.test(loginId)) {
+        throw new UserInputError('ID는 영문과 숫자만 사용 가능합니다.');
+      }
 
-      const hashedPw = await bcrypt.hash(generatedPassword, 10);
-
-      const oneMonthLater = new Date();
-      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+      // 4) 임시 비밀번호 생성 (8자리)
+      const tempPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
       const newUser = new User({
-        systemId,
         loginId,
-        password: hashedPw,
-        name,
         phoneNumber,
-        validUntil: oneMonthLater,
-        region: region || '',         // 추가된 필드
+        name,
+        type,
+        region,
+        grade,
+        password: hashedPassword,
+        validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30일
       });
-      await newUser.save();
 
-      return {
-        user: newUser,
-        tempPassword: generatedPassword,
-      };
+      await newUser.save();
+      return { ...newUser.toObject(), tempPassword };
     },
 
     // 유저 로그인
@@ -267,31 +237,24 @@ module.exports = {
       };
     },
 
-    // (Admin 전용) 유저 정보 업데이트
-    updateUser: async (
-      _,
-      { userId, name, phoneNumber, validUntil, type, region },
-      { tokenData }
-    ) => {
+    // 유저 수정
+    updateUser: async (_, { userId, name, phoneNumber, type, region, grade, validUntil }, { tokenData }) => {
+      // 1) 관리자만 가능
       await checkAdminValid(tokenData);
 
       const user = await User.findById(userId);
       if (!user) {
-        throw new UserInputError('유저를 찾을 수 없습니다.');
+        throw new UserInputError('해당 유저 없음');
       }
+
       if (name !== undefined) user.name = name;
       if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
       if (type !== undefined) user.type = type;
-      if (validUntil !== undefined) {
-        user.validUntil = new Date(validUntil);
-      }
-      if (region !== undefined) {
-        user.region = region;
-      }
+      if (region !== undefined) user.region = region;
+      if (grade !== undefined) user.grade = grade;
+      if (validUntil !== undefined) user.validUntil = new Date(validUntil);
 
-      await withTransaction(async (session) => {
-        await user.save({ session });
-      });
+      await user.save();
       return user;
     },
 
