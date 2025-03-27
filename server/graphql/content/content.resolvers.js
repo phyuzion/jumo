@@ -176,25 +176,49 @@ module.exports = {
       // 권한 체크
       await checkUserValid(tokenData);
 
-      const { createReadStream, filename, mimetype } = await file;
-      const stream = createReadStream();
+      console.log("==== [uploadContentImage] START ====");
+      console.log("file argument =", file);
 
-      // 파일 확장자 추출
-      const ext = path.extname(filename);
+      // 1) await file
+      const upload = await file;
+      // 2) destruct from upload.file
+      const { filename, mimetype, encoding, createReadStream } = upload.file;
+
+      console.log("filename =", filename);
+      console.log("mimetype =", mimetype);
+      console.log("encoding =", encoding);
+      console.log("createReadStream =", createReadStream);
+
+      if (!createReadStream) {
+        throw new Error("createReadStream is missing");
+      }
+
+      // 이미지 저장 경로
+      const dirPath = '/var/data/public_downloads/images';
+      if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+      }
+
       // UUID로 새 파일명 생성
+      const ext = path.extname(filename);
       const newFilename = `${uuidv4()}${ext}`;
-      const filepath = path.join(IMAGES_DIR, newFilename);
+      const savePath = path.join(dirPath, newFilename);
 
-      // 파일 저장
-      await new Promise((resolve, reject) => {
-        const writeStream = fs.createWriteStream(filepath);
-        stream.pipe(writeStream)
-          .on('finish', resolve)
-          .on('error', reject);
+      return new Promise((resolve, reject) => {
+        const readStream = createReadStream();
+        const writeStream = fs.createWriteStream(savePath);
+
+        readStream
+          .pipe(writeStream)
+          .on('finish', () => {
+            console.log(`✅ Image file saved at: ${savePath}`);
+            resolve(`/download/images/${newFilename}`);
+          })
+          .on('error', (err) => {
+            console.error('File upload error:', err);
+            reject(err);
+          });
       });
-
-      // URL 반환
-      return `/download/images/${newFilename}`;
     },
   },
 };
