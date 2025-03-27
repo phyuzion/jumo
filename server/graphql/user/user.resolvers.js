@@ -183,7 +183,10 @@ module.exports = {
       });
 
       await newUser.save();
-      return { ...newUser.toObject(), tempPassword };
+      return {
+        user: newUser,
+        tempPassword
+      };
     },
 
     // 유저 로그인
