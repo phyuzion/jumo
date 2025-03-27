@@ -48,5 +48,10 @@ module.exports = gql`
 
     createReply(contentId: ID!, comment: String!): Content
     deleteReply(contentId: ID!, index: Int!): Boolean
+
+    """
+    Quill 에디터용 이미지 업로드
+    """
+    uploadContentImage(file: Upload!): String!
   }
 `;
