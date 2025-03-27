@@ -35,7 +35,6 @@ const quillFormats = [
   'bold', 'italic', 'underline',
   'color', 'background',
   'align',
-  'image'
 ];
 
 const PAGE_SIZE = 10;
@@ -279,46 +278,28 @@ function Contents() {
 
   // Quill 설정
   const quillModules = {
-    toolbar: {
-      container: [
-        [{ size: [] }],
-        ['bold', 'italic', 'underline'],
-        [{ color: [] }, { background: [] }],
-        [{ align: [] }],
-        ['image'],
-        ['clean'],
-      ],
-      handlers: {
-        image: async () => {
-          const input = document.createElement('input');
-          input.setAttribute('type', 'file');
-          input.setAttribute('accept', 'image/*');
-          input.click();
-
-          input.onchange = async () => {
-            const file = input.files[0];
-            if (file) {
-              try {
-                const { data } = await uploadImageMut({
-                  variables: { file },
-                });
-                const url = data.uploadContentImage;
-                const quill = quillRef.current.getEditor();
-                const range = quill.getSelection();
-                quill.insertEmbed(range.index, 'image', url);
-                quill.setSelection(range.index + 1);
-              } catch (err) {
-                console.error('이미지 업로드 실패:', err);
-                alert('이미지 업로드에 실패했습니다: ' + err.message);
-              }
-            }
-          };
-        },
+    toolbar: [
+      [{ size: [] }],
+      ['bold', 'italic', 'underline'],
+      [{ color: [] }, { background: [] }],
+      [{ align: [] }],
+      ['image'],
+      ['clean'],
+    ],
+    imageUploader: {
+      upload: async (file) => {
+        try {
+          const { data } = await uploadImageMut({
+            variables: { file },
+          });
+          return data.uploadContentImage;
+        } catch (err) {
+          console.error('이미지 업로드 실패:', err);
+          throw err;
+        }
       },
     },
   };
-
-  const quillRef = useRef(null);
 
   return (
     <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
@@ -429,7 +410,6 @@ function Contents() {
 
             <div className="flex-auto overflow-auto border mb-2">
               <ReactQuill
-                ref={quillRef}
                 modules={quillModules}
                 formats={quillFormats}
                 style={{ height: '100%' }}
