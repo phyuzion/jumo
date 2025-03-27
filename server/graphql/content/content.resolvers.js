@@ -11,7 +11,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
-const { checkUserValid, checkAdminValid, checkAuthorOrAdmin } = require('../auth/utils');
+const { checkUserValid, checkAdminValid, checkAuthorOrAdmin, checkUserOrAdmin } = require('../auth/utils');
 
 // 이미지 저장 경로
 const IMAGES_DIR = '/var/data/public_downloads/images';
@@ -173,8 +173,8 @@ module.exports = {
 
     // 이미지 업로드
     uploadContentImage: async (_, { file }, { tokenData }) => {
-      // 권한 체크
-      await checkUserValid(tokenData);
+      // 권한 체크 (어드민 또는 일반 유저)
+      await checkUserOrAdmin(tokenData);
 
       console.log("==== [uploadContentImage] START ====");
       console.log("file argument =", file);
