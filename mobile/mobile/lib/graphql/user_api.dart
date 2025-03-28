@@ -1,5 +1,4 @@
 import 'dart:developer';
-import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
@@ -66,7 +65,7 @@ class UserApi {
     if (userData == null) {
       throw Exception('user 필드가 null임');
     }
-    debugPrint('[[userLogin]] user=$userData');
+    print('[[userLogin]] user=$userData');
 
     // GetStorage 에 유저정보 저장
     final box = GetStorage();

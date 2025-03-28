@@ -52,7 +52,6 @@ class _BoardScreenState extends State<BoardScreen> {
           const DropdownMenuItem(value: '익명', child: Text('익명')),
         ];
       });
-      print('지역 목록 로드 실패: $e');
     }
   }
 

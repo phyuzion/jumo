@@ -19,7 +19,6 @@ dependencies:
   call_e_log: ^0.0.4
   flutter_sms_intellect: ^0.0.2
   event_bus: ^2.0.1
-  flutter_slidable: ^4.0.0
   provider: ^6.1.2
   graphql_flutter: ^5.1.2
   connectivity_plus: ^6.1.3

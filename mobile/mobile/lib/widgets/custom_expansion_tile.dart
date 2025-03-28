@@ -57,7 +57,6 @@ class _CustomExpansionTileState extends State<CustomExpansionTile>
 
   @override
   Widget build(BuildContext context) {
-    print('[CustomExpansionTile] build - isExpanded: ${widget.isExpanded}');
     return Column(
       children: [
         // 헤더 부분
