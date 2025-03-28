@@ -220,8 +220,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
             });
           },
         ),
-        // 드롭다운 메뉴
-        const DropdownMenusWidget(),
       ];
     } else {
       // 일반 모드 => "검색" 아이콘
@@ -232,8 +230,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
             setState(() => _isSearching = true);
           },
         ),
-        // 드롭다운 메뉴
-        const DropdownMenusWidget(),
       ];
     }
   }

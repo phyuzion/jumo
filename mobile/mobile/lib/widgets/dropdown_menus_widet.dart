@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/graphql/client.dart';
+import 'package:mobile/widgets/notification_dialog.dart';
 
 class DropdownMenusWidget extends StatelessWidget {
   const DropdownMenusWidget({super.key});
@@ -11,8 +12,10 @@ class DropdownMenusWidget extends StatelessWidget {
       onSelected: (String value) {
         switch (value) {
           case 'notifications':
-            // 예: '알림' 화면으로 이동
-            Navigator.pushNamed(context, '/notifications');
+            showDialog(
+              context: context,
+              builder: (context) => const NotificationDialog(),
+            );
             break;
           case 'reportError':
             // 예: 오류 신고 로직 / 신고 페이지 이동

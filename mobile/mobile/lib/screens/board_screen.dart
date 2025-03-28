@@ -92,7 +92,6 @@ class _BoardScreenState extends State<BoardScreen> {
           ),
           dropdownColor: Colors.white,
         ),
-        actions: [const DropdownMenusWidget()],
       ),
       // (1) BoardListView에 GlobalKey 전달
       body: BoardListView(key: _boardListKey, type: _selectedType),

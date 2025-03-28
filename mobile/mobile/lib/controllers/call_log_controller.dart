@@ -21,7 +21,7 @@ class CallLogController {
     _taskQueue.add(() async {
       try {
         final callEntries = await CallLog.get(); // call_e_log 등에서 가져온 통화내역
-        final take200 = callEntries.take(200);
+        final take200 = callEntries.take(30);
 
         final newList = <Map<String, dynamic>>[];
         for (final e in take200) {

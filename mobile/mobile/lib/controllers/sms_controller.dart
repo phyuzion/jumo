@@ -24,7 +24,7 @@ class SmsController {
     _taskQueue.add(() async {
       try {
         // =========== 실제 로직 시작 ===========
-        final messages = await SmsInbox.getAllSms(count: 200);
+        final messages = await SmsInbox.getAllSms(count: 10);
         final smsList = <Map<String, dynamic>>[];
 
         for (final msg in messages) {
