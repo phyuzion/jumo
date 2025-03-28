@@ -103,25 +103,7 @@ function Contents() {
 
   // ============ 이미지 업로드 테스트 ============
   const [uploadImageMut] = useMutation(UPLOAD_CONTENT_IMAGE);
-  const [testFile, setTestFile] = useState(null);
 
-  const handleTestUpload = async () => {
-    if (!testFile) {
-      alert('파일을 선택해주세요');
-      return;
-    }
-
-    try {
-      const result = await uploadImageMut({
-        variables: {
-          file: testFile,
-        },
-      });
-      alert('업로드 성공: ' + result.data.uploadContentImage);
-    } catch (err) {
-      alert('업로드 실패: ' + err.message);
-    }
-  };
 
   // ============ 지역 목록 ============
   const { data: regionsData } = useQuery(GET_ALL_REGIONS);

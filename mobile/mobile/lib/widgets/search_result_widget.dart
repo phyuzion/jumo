@@ -79,10 +79,11 @@ class SearchResultWidget extends StatelessWidget {
     return ListView.separated(
       itemCount:
           (todayRecords.isNotEmpty ? 1 : 0) + // TodayRecord 섹션
-          (todayRecords.length > 3 ? 1 : 0) + // 더보기 버튼
           todayRecords.length + // TodayRecord 아이템들
+          (todayRecords.length > 3 ? 1 : 0) + // 더보기 버튼
           (phoneRecords.isNotEmpty ? 1 : 0) + // PhoneRecord 섹션
-          phoneRecords.length, // PhoneRecord 아이템들
+          phoneRecords.length + // PhoneRecord 아이템들
+          (phoneRecords.isNotEmpty ? 1 : 0), // 마지막 아이템을 위한 추가 공간
       separatorBuilder: (context, index) {
         return const Divider(
           color: Colors.grey,
@@ -132,11 +133,16 @@ class SearchResultWidget extends StatelessWidget {
         }
 
         // PhoneRecord 아이템들
+        final headerOffset =
+            todayRecords.length + (todayRecords.length > 3 ? 2 : 1);
         final phoneRecordIndex =
-            index -
-            (todayRecords.length +
-                (todayRecords.length > 3 ? 2 : 1) +
-                (phoneRecords.isNotEmpty ? 1 : 0));
+            index - headerOffset - (phoneRecords.isNotEmpty ? 1 : 0);
+
+        // 음수 인덱스 체크
+        if (phoneRecordIndex < 0 || phoneRecordIndex >= phoneRecords.length) {
+          return const SizedBox.shrink();
+        }
+
         return _buildPhoneRecordItem(phoneRecords[phoneRecordIndex]);
       },
     );
@@ -149,6 +155,7 @@ class SearchResultWidget extends StatelessWidget {
     if (epoch != null) {
       dt = DateTime.fromMillisecondsSinceEpoch(epoch);
     }
+    final yearStr = (dt != null) ? '${dt.year}' : '';
     final dateStr = (dt != null) ? '${dt.month}/${dt.day}' : '';
     final timeStr =
         (dt != null)
@@ -169,7 +176,7 @@ class SearchResultWidget extends StatelessWidget {
             backgroundColor: userTypeColor,
             radius: 16,
             child: Text(
-              '${r.userType}',
+              r.userType.length > 2 ? r.userType.substring(0, 2) : r.userType,
               style: const TextStyle(color: Colors.white, fontSize: 13),
             ),
           ),
@@ -177,51 +184,32 @@ class SearchResultWidget extends StatelessWidget {
 
           // 가운데(이름, userName, 메모)
           Expanded(
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // (이름, userName)
-                Expanded(
-                  flex: 1,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        r.name.isNotEmpty ? r.name : '(이름 없음)',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (r.userName.isNotEmpty)
-                        Text(
-                          r.userName,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey,
-                          ),
-                        ),
-                    ],
+                Text(
+                  r.name.isNotEmpty ? r.name : '(이름 없음)',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(width: 8),
-                // 메모
-                Expanded(
-                  flex: 1,
-                  child:
-                      (r.memo.isNotEmpty)
-                          ? Text(
-                            r.memo,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 14),
-                          )
-                          : const SizedBox(),
-                ),
+                if (r.userName.isNotEmpty)
+                  Text(
+                    r.userName,
+                    style: const TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                if (r.memo.isNotEmpty)
+                  Text(
+                    r.memo,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 14),
+                  ),
               ],
             ),
           ),
-
-          const SizedBox(width: 12),
+          const SizedBox(width: 5),
 
           // 오른쪽: record type 서클 + 날짜/시간
           Row(
@@ -239,6 +227,10 @@ class SearchResultWidget extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  Text(
+                    yearStr,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   Text(
                     dateStr,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -262,6 +254,7 @@ class SearchResultWidget extends StatelessWidget {
     if (epoch != null) {
       dt = DateTime.fromMillisecondsSinceEpoch(epoch);
     }
+    final yearStr = (dt != null) ? '${dt.year}' : '';
     final dateStr = (dt != null) ? '${dt.month}/${dt.day}' : '';
     final timeStr =
         (dt != null)
@@ -327,7 +320,7 @@ class SearchResultWidget extends StatelessWidget {
                 backgroundColor: userTypeColor,
                 radius: 16,
                 child: Text(
-                  '${r.userType}',
+                  r.userType,
                   style: const TextStyle(color: Colors.white, fontSize: 13),
                 ),
               ),
@@ -335,6 +328,10 @@ class SearchResultWidget extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  Text(
+                    yearStr,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
                   Text(
                     dateStr,
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -359,16 +356,22 @@ class SearchResultWidget extends StatelessWidget {
   }
 
   // userType별 컬러
-  Color _pickColorForUserType(int userType) {
-    switch (userType) {
-      case 99:
-        return Colors.red;
-      case 1:
-        return Colors.blue;
-      case 2:
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
+  Color _pickColorForUserType(String userType) {
+    // userType 문자열의 해시값을 기반으로 색상 생성
+    final colors = [
+      Colors.red,
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.indigo,
+      Colors.pink,
+      Colors.amber,
+      Colors.cyan,
+    ];
+
+    final hash = userType.hashCode.abs();
+    return colors[hash % colors.length];
   }
 }

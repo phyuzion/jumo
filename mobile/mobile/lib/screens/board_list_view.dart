@@ -3,7 +3,7 @@ import 'package:mobile/graphql/contents_api.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString
 
 class BoardListView extends StatefulWidget {
-  final int type;
+  final String type;
   const BoardListView({Key? key, required this.type}) : super(key: key);
 
   @override

@@ -15,14 +15,14 @@ class UserApi {
         refreshToken
         user {
           id
-          systemId
           loginId
           name
           phoneNumber
-          type
+          userType
           createdAt
           validUntil
           region
+          grade
           blockList
         }
       }
@@ -72,10 +72,11 @@ class UserApi {
     final box = GetStorage();
     box.write('userId', userData['id']);
     box.write('userName', userData['name']);
-    box.write('userType', userData['type'].toString());
+    box.write('userType', userData['userType']);
     box.write('loginStatus', true);
     box.write('userValidUntil', userData['validUntil'] ?? '');
     box.write('userRegion', userData['region'] ?? '');
+    box.write('userGrade', userData['grade'] ?? '');
 
     // 차단 목록 저장 부분 제거
     // final blockList = userData['blockList'] ?? [];

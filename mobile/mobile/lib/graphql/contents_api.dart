@@ -5,7 +5,7 @@ class ContentsApi {
   // =================== QUERIES ===================
 
   static const _queryGetContents = r'''
-    query getContents($type: Int) {
+    query getContents($type: String) {
       getContents(type: $type) {
         id
         userId
@@ -43,7 +43,7 @@ class ContentsApi {
   // =================== MUTATIONS ===================
 
   static const _mutationCreateContent = r'''
-    mutation createContent($type: Int, $title: String, $content: JSON!) {
+    mutation createContent($type: String, $title: String, $content: JSON!) {
       createContent(type: $type, title: $title, content: $content) {
         id
         userId
@@ -57,7 +57,7 @@ class ContentsApi {
   ''';
 
   static const _mutationUpdateContent = r'''
-    mutation updateContent($contentId: ID!, $type: Int, $title: String, $content: JSON) {
+    mutation updateContent($contentId: ID!, $type: String, $title: String, $content: JSON) {
       updateContent(contentId: $contentId, type: $type, title: $title, content: $content) {
         id
         userId
@@ -115,7 +115,7 @@ class ContentsApi {
   // =================== METHODS ===================
 
   /// 글 목록 조회
-  static Future<List<Map<String, dynamic>>> getContents(int type) async {
+  static Future<List<Map<String, dynamic>>> getContents(String type) async {
     final client = GraphQLClientManager.client;
     final opts = QueryOptions(
       document: gql(_queryGetContents),
@@ -150,7 +150,7 @@ class ContentsApi {
 
   /// 글 생성 (Quill Delta 형태 content)
   static Future<Map<String, dynamic>?> createContent({
-    required int type,
+    required String type,
     required String title,
     required Map<String, dynamic> delta, // quill delta
   }) async {
@@ -169,7 +169,7 @@ class ContentsApi {
   /// 글 수정
   static Future<Map<String, dynamic>?> updateContent({
     required String contentId,
-    int? type,
+    String? type,
     String? title,
     Map<String, dynamic>? delta,
   }) async {

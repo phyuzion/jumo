@@ -53,10 +53,10 @@ class AppController {
   Future<void> initializeData() async {
     // 컨트롤러들(실제 diff 로직)
 
+    await blockedNumbersController.initialize();
     await contactsController.syncContactsAll();
     await callLogController.refreshCallLogs();
     await smsController.refreshSms();
-    await blockedNumbersController.initialize();
   }
 
   Future<void> stopApp() async {

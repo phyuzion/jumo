@@ -15,7 +15,7 @@ class ContentEditScreen extends StatefulWidget {
 class _ContentEditScreenState extends State<ContentEditScreen> {
   bool get isNew => widget.item == null;
 
-  int _type = 0;
+  String _type = '0';
 
   final _titleCtrl = TextEditingController();
   QuillController? _quillController;
@@ -29,8 +29,8 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
     if (!_initialized) {
       if (isNew) {
         // 새 글 작성
-
-        final typeArg = ModalRoute.of(context)?.settings.arguments as int? ?? 0;
+        final typeArg =
+            ModalRoute.of(context)?.settings.arguments as String? ?? '0';
         _type = typeArg;
         _titleCtrl.text = ''; // 초기값
         _quillController = QuillController.basic();
@@ -38,6 +38,7 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
         // 기존 글 수정
         final item = widget.item!;
         _titleCtrl.text = item['title'] ?? '';
+        _type = item['type']?.toString() ?? '0';
 
         // content Delta
         final contentMap = item['content'] as Map<String, dynamic>?;

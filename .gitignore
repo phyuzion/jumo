@@ -8,3 +8,4 @@ node_modules
 .DS_Store
 admin/.DS_Store
 *.sql
+record_parcer/uploaded_count.txt

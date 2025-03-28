@@ -2,7 +2,7 @@ class TodayRecord {
   final String id;
   final String phoneNumber;
   final String userName;
-  final int userType;
+  final String userType;
   final String callType;
   final String createdAt;
 
@@ -20,7 +20,7 @@ class TodayRecord {
       id: json['id'] as String,
       phoneNumber: json['phoneNumber'] as String,
       userName: json['userName'] as String,
-      userType: json['userType'] as int,
+      userType: json['userType'] as String? ?? '일반',
       callType: json['callType'] as String,
       createdAt: json['createdAt'] as String,
     );

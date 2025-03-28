@@ -34,7 +34,7 @@ class PhoneNumberModel {
 
 class PhoneRecordModel {
   final String userName;
-  final int userType;
+  final String userType;
   final String name;
   final String memo;
   final int type;
@@ -52,7 +52,7 @@ class PhoneRecordModel {
   factory PhoneRecordModel.fromJson(Map<String, dynamic> json) {
     return PhoneRecordModel(
       userName: json['userName'] as String? ?? '',
-      userType: json['userType'] as int? ?? 0,
+      userType: json['userType'] as String? ?? '일반',
       name: json['name'] as String? ?? '',
       memo: json['memo'] as String? ?? '',
       type: json['type'] as int? ?? 0,
