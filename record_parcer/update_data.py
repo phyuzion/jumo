@@ -6,7 +6,7 @@ import os
 
 # 📌 설정값
 SQL_FILE_PATH = "./faker20241122.sql"  # SQL 파일 경로
-BATCH_SIZE = 500  # 한 번에 보낼 레코드 개수 (조절 가능)
+BATCH_SIZE = 1000  # 한 번에 보낼 레코드 개수 (조절 가능)
 GRAPHQL_ENDPOINT = "https://jumo-vs8e.onrender.com/graphql"
 ADMIN_CREDENTIALS = {
     "username": "admin",
