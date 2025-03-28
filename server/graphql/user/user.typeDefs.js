@@ -11,10 +11,10 @@ module.exports = gql`
     type: Int
     createdAt: String
     validUntil: String
-    region: String           # 새로 추가
-    grade: String           # 새로 추가
-    settings: String         # 새로 추가
-    blockList: [String!]     # 차단된 전화번호 목록
+    region: String
+    grade: String
+    settings: String
+    blockList: [String!]
   }
 
   type CreateUserPayload {

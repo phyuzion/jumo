@@ -23,8 +23,9 @@ const todayRecordResolvers = require('./todayRecord/todayRecord.resolvers');
 const regionTypeDefs = require('./region/region.typeDefs');
 const regionResolvers = require('./region/region.resolvers');
 const gradeTypeDefs = require('./grade/grade.typeDefs');
-const gradeResolvers = require('./grade/grade.resolvers');
-
+const gradeResolvers = require('./grade/grade.resolvers');  
+const userTypeTypeDefs = require('./userType/userType.typeDefs');
+const userTypeResolvers = require('./userType/userType.resolvers');
 
 /*
   루트 스키마에 최소 1개씩 Query, Mutation 이 필요.
@@ -60,6 +61,7 @@ const typeDefs = mergeTypeDefs([
   todayRecordTypeDefs,
   regionTypeDefs,
   gradeTypeDefs,
+  userTypeTypeDefs,
 ]);
 
 // 모든 resolvers 합치기
@@ -77,6 +79,7 @@ const resolvers = mergeResolvers([
   todayRecordResolvers,
   regionResolvers,
   gradeResolvers,
+  userTypeResolvers,
 ]);
 
 module.exports = {

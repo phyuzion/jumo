@@ -13,13 +13,6 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 
-// 이미지 저장 경로
-const IMAGES_DIR = '/var/data/contents/images';
-
-// 디렉토리가 없으면 생성
-if (!fs.existsSync(IMAGES_DIR)) {
-  fs.mkdirSync(IMAGES_DIR, { recursive: true });
-}
 
 module.exports = {
   JSON: GraphQLJSON,
@@ -194,12 +187,20 @@ module.exports = {
         throw new Error("createReadStream is missing");
       }
 
+      // 이미지 저장 경로
+      const imgPath = '/var/data/contents/images';
+
+      // 디렉토리가 없으면 생성
+      if (!fs.existsSync(imgPath)) {
+        fs.mkdirSync(imgPath, { recursive: true });
+      }
+
       // 파일 확장자 추출
       const ext = path.extname(filename);
       
       // UUID로 새 파일명 생성
       const newFilename = `${uuidv4()}${ext}`;
-      const filepath = path.join(IMAGES_DIR, newFilename);
+      const filepath = path.join(imgPath, newFilename);
 
       return new Promise((resolve, reject) => {
         const readStream = createReadStream();
