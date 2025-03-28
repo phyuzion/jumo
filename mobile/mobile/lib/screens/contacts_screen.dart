@@ -1,13 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
-import 'package:mobile/widgets/dropdown_menus_widet.dart';
+import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'package:provider/provider.dart';
 
 class ContactsScreen extends StatefulWidget {
@@ -91,7 +90,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
         child: ListView.builder(
-          key: Key(_expandedIndex?.toString() ?? ''),
           itemCount: data.length,
           itemBuilder: (ctx, i) {
             final c = data[i];
@@ -110,12 +108,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     endIndent: 16.0,
                     height: 0,
                   ),
-                ExpansionTile(
-                  key: Key(i.toString()),
-                  initiallyExpanded: i == _expandedIndex,
-                  onExpansionChanged: (expanded) {
+                CustomExpansionTile(
+                  key: ValueKey('${phone}_$i'),
+                  isExpanded: i == _expandedIndex,
+                  onTap: () {
                     setState(() {
-                      _expandedIndex = expanded ? i : null;
+                      _expandedIndex = i == _expandedIndex ? null : i;
                     });
                   },
                   leading: CircleAvatar(
@@ -134,40 +132,38 @@ class _ContactsScreenState extends State<ContactsScreen> {
                     phone + (memo.isNotEmpty ? ' / $memo' : ''),
                     style: const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          if (_isDefaultDialer)
-                            _buildActionButton(
-                              icon: Icons.call,
-                              color: Colors.green,
-                              onPressed: () => _onTapCall(phone),
-                            ),
-                          _buildActionButton(
-                            icon: Icons.message,
-                            color: Colors.blue,
-                            onPressed: () => _onTapMessage(phone),
-                          ),
-                          _buildActionButton(
-                            icon: Icons.search,
-                            color: Colors.orange,
-                            onPressed: () => _onTapSearch(phone),
-                          ),
-                          _buildActionButton(
-                            icon: Icons.edit,
-                            color: Colors.blueGrey,
-                            onPressed: () => _onTapEdit(c),
-                          ),
-                        ],
-                      ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                  ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        if (_isDefaultDialer)
+                          _buildActionButton(
+                            icon: Icons.call,
+                            color: Colors.green,
+                            onPressed: () => _onTapCall(phone),
+                          ),
+                        _buildActionButton(
+                          icon: Icons.message,
+                          color: Colors.blue,
+                          onPressed: () => _onTapMessage(phone),
+                        ),
+                        _buildActionButton(
+                          icon: Icons.search,
+                          color: Colors.orange,
+                          onPressed: () => _onTapSearch(phone),
+                        ),
+                        _buildActionButton(
+                          icon: Icons.edit,
+                          color: Colors.blueGrey,
+                          onPressed: () => _onTapEdit(c),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
             );

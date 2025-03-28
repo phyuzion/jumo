@@ -1,18 +1,17 @@
 // recent_calls_screen.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart'; // ContactsController for name lookup
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/utils/constants.dart'; // normalizePhone, etc.
-import 'package:mobile/widgets/dropdown_menus_widet.dart';
 import 'package:provider/provider.dart'; // context.read()
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/screens/dialer_screen.dart';
+import 'package:mobile/widgets/custom_expansion_tile.dart';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -27,8 +26,10 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   bool _isDefaultDialer = false;
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
+  final _scrollController = ScrollController();
   bool _showSearchField = false;
   int? _expandedIndex;
+  double _scrollPosition = 0.0;
 
   List<Map<String, dynamic>> _callLogs = [];
   StreamSubscription? _eventSub;
@@ -40,6 +41,9 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     _loadCalls();
     _checkDefaultDialer();
     _searchFocusNode.addListener(_onFocusChange);
+    _scrollController.addListener(() {
+      _scrollPosition = _scrollController.position.pixels;
+    });
     _eventSub = appEventBus.on<CallLogUpdatedEvent>().listen((event) {
       _loadCalls();
     });
@@ -52,6 +56,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     _searchController.dispose();
     _searchFocusNode.removeListener(_onFocusChange);
     _searchFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -75,7 +80,13 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   Future<void> _loadCalls() async {
     final logs = _callLogController.getSavedCallLogs();
-    setState(() => _callLogs = logs);
+    setState(() {
+      _callLogs = logs;
+      // 스크롤 위치 복원
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollController.jumpTo(_scrollPosition);
+      });
+    });
   }
 
   Future<void> _refreshCalls() async {
@@ -113,54 +124,56 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        if (_showSearchField) {
-          _searchFocusNode.unfocus();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text('최근기록'),
-          actions: [
-            if (_showSearchField)
-              SizedBox(
-                width: 150,
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocusNode,
-                  decoration: InputDecoration(
-                    hintText: '번호 입력',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(
-                        color: Colors.grey.shade300,
-                        width: 1,
-                      ),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('최근기록'),
+        actions: [
+          if (_showSearchField)
+            SizedBox(
+              width: 150,
+              child: TextField(
+                controller: _searchController,
+                focusNode: _searchFocusNode,
+                decoration: InputDecoration(
+                  hintText: '번호 입력',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide(
+                      color: Colors.grey.shade300,
+                      width: 1,
                     ),
                   ),
-                  keyboardType: TextInputType.phone,
-                  showCursor: true,
-                  readOnly: false,
-                  autofocus: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                 ),
+                keyboardType: TextInputType.phone,
+                showCursor: true,
+                readOnly: false,
+                autofocus: true,
+                onSubmitted: (_) => _toggleSearch(),
               ),
-            IconButton(
-              icon: Icon(
-                _showSearchField ? Icons.search : Icons.search_outlined,
-              ),
-              onPressed: _toggleSearch,
             ),
-          ],
-        ),
-        body: RefreshIndicator(
-          onRefresh: _refreshCalls,
+          IconButton(
+            icon: Icon(_showSearchField ? Icons.search : Icons.search_outlined),
+            onPressed: _toggleSearch,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshCalls,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is ScrollStartNotification) {
+              if (_showSearchField) {
+                _searchFocusNode.unfocus();
+              }
+            }
+            return false;
+          },
           child: ListView.builder(
-            key: Key(_expandedIndex?.toString() ?? ''),
+            controller: _scrollController,
             itemCount: _callLogs.length,
             itemBuilder: (context, index) {
               final call = _callLogs[index];
@@ -212,74 +225,80 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
               );
               final name = contact.name; // 없으면 ''
 
-              return ExpansionTile(
-                key: Key(index.toString()),
-                initiallyExpanded: index == _expandedIndex,
-                onExpansionChanged: (expanded) {
-                  setState(() {
-                    _expandedIndex = expanded ? index : null;
-                  });
-                },
-                leading: Icon(iconData, color: iconColor, size: 28),
-                title: Text(
-                  name.isNotEmpty ? name : number,
-                  style: const TextStyle(fontSize: 16),
-                ),
-                subtitle:
-                    name.isNotEmpty
-                        ? Text(
-                          number,
+              return Column(
+                children: [
+                  if (index > 0)
+                    const Divider(
+                      color: Colors.grey,
+                      thickness: 0.5,
+                      indent: 16.0,
+                      endIndent: 16.0,
+                      height: 0,
+                    ),
+                  CustomExpansionTile(
+                    key: ValueKey('${number}_$ts'),
+                    isExpanded: index == _expandedIndex,
+                    onTap: () {
+                      if (_showSearchField) {
+                        _searchFocusNode.unfocus();
+                      }
+                      setState(() {
+                        _expandedIndex = index == _expandedIndex ? null : index;
+                      });
+                    },
+                    leading: Icon(iconData, color: iconColor),
+                    title: Text(name.isNotEmpty ? name : number),
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          dateStr,
                           style: const TextStyle(
                             fontSize: 12,
                             color: Colors.grey,
                           ),
-                        )
-                        : null,
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      dateStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    Text(
-                      timeStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
-                ),
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        if (_isDefaultDialer)
-                          _buildActionButton(
-                            icon: Icons.call,
-                            color: Colors.green,
-                            onPressed: () => _onTapCall(number),
+                        ),
+                        Text(
+                          timeStr,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
                           ),
-                        _buildActionButton(
-                          icon: Icons.message,
-                          color: Colors.blue,
-                          onPressed: () => _onTapMessage(number),
-                        ),
-                        _buildActionButton(
-                          icon: Icons.search,
-                          color: Colors.orange,
-                          onPressed: () => _onTapSearch(number),
-                        ),
-                        _buildActionButton(
-                          icon: Icons.edit,
-                          color: Colors.blueGrey,
-                          onPressed: () => _onTapEdit(number),
                         ),
                       ],
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          if (_isDefaultDialer)
+                            _buildActionButton(
+                              icon: Icons.call,
+                              color: Colors.green,
+                              onPressed: () => _onTapCall(number),
+                            ),
+                          _buildActionButton(
+                            icon: Icons.message,
+                            color: Colors.blue,
+                            onPressed: () => _onTapMessage(number),
+                          ),
+                          _buildActionButton(
+                            icon: Icons.search,
+                            color: Colors.orange,
+                            onPressed: () => _onTapSearch(number),
+                          ),
+                          _buildActionButton(
+                            icon: Icons.edit,
+                            color: Colors.blueGrey,
+                            onPressed: () => _onTapEdit(number),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
@@ -287,21 +306,21 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
             },
           ),
         ),
-        floatingActionButton:
-            _isDefaultDialer
-                ? FloatingActionButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const DialerScreen(),
-                      ),
-                    );
-                  },
-                  child: const Icon(Icons.dialpad),
-                )
-                : null,
       ),
+      floatingActionButton:
+          _isDefaultDialer
+              ? FloatingActionButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DialerScreen(),
+                    ),
+                  );
+                },
+                child: const Icon(Icons.dialpad),
+              )
+              : null,
     );
   }
 
