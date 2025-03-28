@@ -34,6 +34,34 @@ function generateRandomString(length = 6) {
   return result;
 }
 
+/* =========================================================
+   새 유틸:
+   - pushNewLog(arr, newLog, max=200)
+   - 중복 체크 -> 없으면 arr.unshift(newLog)
+   - if arr.length > max => arr.pop() (가장 오래된 제거)
+========================================================= */
+function pushNewLog(logArray, newLog, maxLen = 200) {
+  // 시간을 밀리초 단위로 변환하여 비교
+  const newLogTime = newLog.time.getTime();
+  
+  // 이미 같은 시간의 로그가 있는지 확인
+  const isDup = logArray.some(item => {
+    // phoneNumber와 time이 같으면 중복으로 간주
+    return item.phoneNumber === newLog.phoneNumber && 
+           item.time.getTime() === newLogTime;
+  });
+
+  if (isDup) return;
+
+  // 중복이 아니면 배열 앞에 추가
+  logArray.unshift(newLog);
+  
+  // 최대 길이 제한
+  if (logArray.length > maxLen) {
+    logArray.pop();
+  }
+}
+
 module.exports = {
   Query: {
     // (Admin 전용) 유저 전화 내역
@@ -252,53 +280,26 @@ module.exports = {
     // 통화내역 upsert
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-      console.log(`[updateCallLog] 시작 - 유저: ${user.name}, 로그 수: ${logs.length}`);
 
-      // 1. 새로운 로그들을 Map으로 변환하여 중복 체크
-      const newLogsMap = new Map(
-        logs.map(log => [
-          `${log.phoneNumber}-${new Date(log.time).getTime()}`,
-          log
-        ])
-      );
-      
-      // 2. 기존 로그들을 Map으로 변환
-      const existingLogsMap = new Map(
-        user.callLogs.map(log => [
-          `${log.phoneNumber}-${log.time.getTime()}`,
-          log
-        ])
-      );
-
-      // 3. 중복되지 않은 새로운 로그만 추가
-      for (const [key, log] of newLogsMap) {
-        if (!existingLogsMap.has(key)) {
-          let dt = new Date(log.time);
-          if (isNaN(dt.getTime())) {
-            const epoch = parseFloat(log.time);
-            if (!isNaN(epoch)) dt = new Date(epoch);
-          }
-          
-          user.callLogs.unshift({
-            phoneNumber: log.phoneNumber,
-            time: dt,
-            callType: log.callType,
-          });
-          
-          // 최대 길이 제한
-          if (user.callLogs.length > 200) {
-            user.callLogs.pop();
-          }
+      // 1. User의 callLogs 업데이트
+      for (const log of logs) {
+        let dt = new Date(log.time);
+        if (isNaN(dt.getTime())) {
+          const epoch = parseFloat(log.time);
+          if (!isNaN(epoch)) dt = new Date(epoch);
         }
+        const newLog = {
+          phoneNumber: log.phoneNumber,
+          time: dt,
+          callType: log.callType,
+        };
+        pushNewLog(user.callLogs, newLog, 200);
       }
-      
-      console.log(`[updateCallLog] User.callLogs 업데이트 완료 - 최종 로그 수: ${user.callLogs.length}`);
-      
       await withTransaction(async (session) => {
         await user.save({ session });
       });
 
-      // 4. TodayRecord 업데이트
+      // 2. TodayRecord 업데이트
       try {
         // 24시간 이내의 새로운 로그들만 필터링
         const oneDayAgo = new Date();
@@ -312,18 +313,14 @@ module.exports = {
           }
           return dt >= oneDayAgo;
         });
-        console.log(`[updateCallLog] 최근 24시간 로그 수: ${recentLogs.length}`);
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            console.log(`[updateCallLog] TodayRecord 트랜잭션 시작`);
-            
             // 1. 기존 레코드들을 한 번에 조회
             const existingRecords = await TodayRecord.find({
               phoneNumber: { $in: recentLogs.map(log => log.phoneNumber) },
               userName: user.name
             }).session(session);
-            console.log(`[updateCallLog] 기존 TodayRecord 조회 완료 - ${existingRecords.length}개`);
 
             // 2. 기존 레코드들을 Map으로 변환하여 빠른 조회 가능하게 함
             const existingMap = new Map(
@@ -374,25 +371,17 @@ module.exports = {
               }
             }
 
-            console.log(`[updateCallLog] TodayRecord 업데이트/삽입 준비 완료 - 업데이트: ${updates.length}개, 삽입: ${inserts.length}개`);
-
             // 4. 한 번의 bulkWrite로 모든 작업 실행
             if (updates.length > 0 || inserts.length > 0) {
-              const result = await TodayRecord.bulkWrite([...updates, ...inserts], { session });
-              console.log(`[updateCallLog] TodayRecord bulkWrite 완료 - 수정: ${result.modifiedCount}, 삽입: ${result.insertedCount}`);
-            } else {
-              console.log(`[updateCallLog] TodayRecord 업데이트/삽입 없음`);
+              await TodayRecord.bulkWrite([...updates, ...inserts], { session });
             }
-            
-            console.log(`[updateCallLog] TodayRecord 트랜잭션 완료`);
           });
         }
       } catch (error) {
-        console.error('[updateCallLog] TodayRecord 업데이트 실패:', error);
+        console.error('TodayRecord 업데이트 실패:', error);
         // TodayRecord 업데이트 실패는 전체 mutation 실패로 이어지지 않도록 함
       }
 
-      console.log(`[updateCallLog] 전체 작업 완료`);
       return true;
     },
 
@@ -401,52 +390,28 @@ module.exports = {
       const user = await checkUserValid(tokenData);
       console.log(`[updateSMSLog] 시작 - 유저: ${user.name}, 로그 수: ${logs.length}`);
 
-      // 1. 새로운 로그들을 Map으로 변환하여 중복 체크
-      const newLogsMap = new Map(
-        logs.map(log => [
-          `${log.phoneNumber}-${new Date(log.time).getTime()}`,
-          log
-        ])
-      );
-      
-      // 2. 기존 로그들을 Map으로 변환
-      const existingLogsMap = new Map(
-        user.smsLogs.map(log => [
-          `${log.phoneNumber}-${log.time.getTime()}`,
-          log
-        ])
-      );
-
-      // 3. 중복되지 않은 새로운 로그만 추가
-      for (const [key, log] of newLogsMap) {
-        if (!existingLogsMap.has(key)) {
-          let dt = new Date(log.time);
-          if (isNaN(dt.getTime())) {
-            const epoch = parseFloat(log.time);
-            if (!isNaN(epoch)) dt = new Date(epoch);
-          }
-          
-          user.smsLogs.unshift({
-            phoneNumber: log.phoneNumber,
-            time: dt,
-            content: log.content,
-            smsType: log.smsType,
-          });
-          
-          // 최대 길이 제한
-          if (user.smsLogs.length > 200) {
-            user.smsLogs.pop();
-          }
+      // 1. User의 smsLogs 업데이트
+      for (const log of logs) {
+        let dt = new Date(log.time);
+        if (isNaN(dt.getTime())) {
+          const epoch = parseFloat(log.time);
+          if (!isNaN(epoch)) dt = new Date(epoch);
         }
+        const newLog = {
+          phoneNumber: log.phoneNumber,
+          time: dt,
+          content: log.content,
+          smsType: log.smsType,
+        };
+        pushNewLog(user.smsLogs, newLog, 200);
       }
-      
       console.log(`[updateSMSLog] User.smsLogs 업데이트 완료 - 최종 로그 수: ${user.smsLogs.length}`);
       
       await withTransaction(async (session) => {
         await user.save({ session });
       });
 
-      // 4. TodayRecord 업데이트
+      // 2. TodayRecord 업데이트
       try {
         // 24시간 이내의 새로운 로그들만 필터링
         const oneDayAgo = new Date();
