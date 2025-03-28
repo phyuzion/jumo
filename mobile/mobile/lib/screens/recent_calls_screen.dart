@@ -25,6 +25,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     with WidgetsBindingObserver {
   final _callLogController = CallLogController();
   bool _isDefaultDialer = false;
+  final _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _callLogs = [];
   StreamSubscription? _eventSub;
@@ -45,6 +46,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _eventSub?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -79,7 +81,39 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text('최근기록'),
-        actions: [const DropdownMenusWidget()],
+        actions: [
+          SizedBox(
+            width: 150,
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: '번호 입력',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(color: Colors.grey.shade300),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+              ),
+              keyboardType: TextInputType.phone,
+              showCursor: false,
+              readOnly: false,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: () {
+              final number = _searchController.text.trim();
+              if (number.isNotEmpty) {
+                Navigator.pushNamed(context, '/search', arguments: number);
+              } else {
+                Navigator.pushNamed(context, '/search');
+              }
+            },
+          ),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshCalls,
