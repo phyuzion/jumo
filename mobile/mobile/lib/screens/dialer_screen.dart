@@ -32,10 +32,6 @@ class _DialerScreenState extends State<DialerScreen> {
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
       await NativeMethods.makeCall(_number);
-
-      // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
-      //   Navigator.of(context).pushNamed('/onCall', arguments: _number);
-      // }
     }
   }
 
@@ -49,18 +45,7 @@ class _DialerScreenState extends State<DialerScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('다이얼러'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              Navigator.pushNamed(context, '/search', arguments: _number);
-            },
-          ),
-          const DropdownMenusWidget(),
-        ],
-      ),
+      appBar: AppBar(title: Text('다이얼러')),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
