@@ -4,7 +4,7 @@ const { gql } = require('apollo-server-express');
 module.exports = gql`
   type Record {
     userName: String
-    userType: Int
+    userType: String
     name: String
     memo: String
     type: Int
@@ -28,7 +28,7 @@ module.exports = gql`
   input PhoneRecordInput {
     phoneNumber: String!
     userName: String
-    userType: Int
+    userType: String
     name: String
     memo: String
     type: Int

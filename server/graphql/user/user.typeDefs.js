@@ -8,7 +8,7 @@ module.exports = gql`
     loginId: String!
     name: String
     phoneNumber: String
-    type: Int
+    userType: String
     createdAt: String
     validUntil: String
     region: String
@@ -110,7 +110,7 @@ module.exports = gql`
       loginId: String!
       phoneNumber: String!
       name: String!
-      type: Int
+      userType: String
       region: String
       grade: String
     ): CreateUserPayload
@@ -134,7 +134,7 @@ module.exports = gql`
       name: String
       phoneNumber: String
       validUntil: String
-      type: Int
+      userType: String
       region: String
       grade: String
     ): User

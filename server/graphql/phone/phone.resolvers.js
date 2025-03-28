@@ -25,7 +25,7 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
   const map = {};
   for (const r of existingRecords) {
     const uid = r.userId ? String(r.userId) : '';
-    const key = `${uid}#${r.userName||''}#${r.userType||0}`;
+    const key = `${uid}#${r.userName||''}#${r.userType||'일반'}`;
     map[key] = r;
   }
 
@@ -34,16 +34,16 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     // 최종 userId, userName, userType 결정
     let finalUserId = null;
     let finalUserName = '';
-    let finalUserType = 0;
+    let finalUserType = '일반';
 
     if (isAdmin) {
       finalUserName = nr.userName?.trim() || 'Admin';
-      finalUserType = nr.userType || 0;
+      finalUserType = nr.userType || '일반';
       // admin 일 때는 userId 별도 지정이 없으면 null로 둠
     } else {
       finalUserId = user._id;
       finalUserName = user.name || '';
-      finalUserType = user.type || 0;
+      finalUserType = user.userType || '일반';
     }
 
     const key = `${finalUserId || ''}#${finalUserName}#${finalUserType}`;

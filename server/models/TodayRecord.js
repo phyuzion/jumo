@@ -11,7 +11,7 @@ const todayRecordSchema = new mongoose.Schema(
       required: true,
     },
     userType: {
-      type: Number,
+      type: String,
       required: true,
     },
     callType: {

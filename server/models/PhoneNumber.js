@@ -9,7 +9,7 @@ const recordSchema = new mongoose.Schema({
     default: null,
   },
   userName: String,   // 유저의 이름
-  userType: Number,   // 유저의 type
+  userType: String,   // 유저의 type (String으로 변경)
   name: String,       // 이 레코드(전화번호부)에서 저장한 이름
   type: Number,       // 레코드 자체의 타입(예: 99라면 위험)
   memo: String,       // 메모

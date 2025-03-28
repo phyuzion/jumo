@@ -5,7 +5,7 @@ const typeDefs = gql`
     id: ID!
     phoneNumber: String!
     userName: String!
-    userType: Int!
+    userType: String!
     callType: String!
     createdAt: String!
   }

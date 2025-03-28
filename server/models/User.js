@@ -7,7 +7,7 @@ const userSchema = new mongoose.Schema({
   password: { type: String, required: true }, // bcrypt 해시
   name: { type: String },
   phoneNumber: { type: String },
-  type: { type: Number, default: 0 },
+  userType: { type: String, default: '일반' },
   createdAt: { type: Date, default: Date.now },
   validUntil: { type: Date }, 
   refreshToken: { type: String, default: '' },

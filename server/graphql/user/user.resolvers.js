@@ -152,7 +152,7 @@ module.exports = {
 
   Mutation: {
     // 유저 생성
-    createUser: async (_, { loginId, phoneNumber, name, type, region, grade }, { tokenData }) => {
+    createUser: async (_, { loginId, phoneNumber, name, userType, region, grade }, { tokenData }) => {
       // 1) 관리자만 가능
       await checkAdminValid(tokenData);
 
@@ -175,7 +175,7 @@ module.exports = {
         loginId,
         phoneNumber,
         name,
-        type,
+        userType,
         region,
         grade,
         password: hashedPassword,
@@ -241,7 +241,7 @@ module.exports = {
     },
 
     // 유저 수정
-    updateUser: async (_, { userId, name, phoneNumber, type, region, grade, validUntil }, { tokenData }) => {
+    updateUser: async (_, { userId, name, phoneNumber, userType, region, grade, validUntil }, { tokenData }) => {
       // 1) 관리자만 가능
       await checkAdminValid(tokenData);
 
@@ -252,7 +252,7 @@ module.exports = {
 
       if (name !== undefined) user.name = name;
       if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
-      if (type !== undefined) user.type = type;
+      if (userType !== undefined) user.userType = userType;
       if (region !== undefined) user.region = region;
       if (grade !== undefined) user.grade = grade;
       if (validUntil !== undefined) user.validUntil = new Date(validUntil);
@@ -347,7 +347,7 @@ module.exports = {
                       filter: { _id: existing._id },
                       update: {
                         $set: {
-                          userType: user.type,
+                          userType: user.userType,
                           callType: log.callType,
                           createdAt: dt
                         }
@@ -362,7 +362,7 @@ module.exports = {
                     document: {
                       phoneNumber: log.phoneNumber,
                       userName: user.name,
-                      userType: user.type,
+                      userType: user.userType,
                       callType: log.callType,
                       createdAt: dt
                     }
@@ -463,7 +463,7 @@ module.exports = {
                       filter: { _id: existing._id },
                       update: {
                         $set: {
-                          userType: user.type,
+                          userType: user.userType,
                           smsType: log.smsType,
                           createdAt: dt
                         }
@@ -478,7 +478,7 @@ module.exports = {
                     document: {
                       phoneNumber: log.phoneNumber,
                       userName: user.name,
-                      userType: user.type,
+                      userType: user.userType,
                       smsType: log.smsType,
                       createdAt: dt
                     }
