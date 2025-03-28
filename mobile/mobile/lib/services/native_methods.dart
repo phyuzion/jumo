@@ -21,6 +21,12 @@ class NativeMethods {
     })) {}
   }
 
+  static Future<void> openSmsApp(String phoneNumber) async {
+    if (await _channel.invokeMethod('openSmsApp', {
+      'phoneNumber': phoneNumber,
+    })) {}
+  }
+
   static Future<void> acceptCall() async {
     await _channel.invokeMethod('acceptCall');
   }

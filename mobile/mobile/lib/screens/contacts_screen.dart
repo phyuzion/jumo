@@ -5,6 +5,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/widgets/dropdown_menus_widet.dart';
 import 'package:provider/provider.dart';
@@ -19,6 +20,8 @@ class ContactsScreen extends StatefulWidget {
 class _ContactsScreenState extends State<ContactsScreen> {
   List<PhoneBookModel> _contacts = [];
   StreamSubscription? _eventSub;
+  int? _expandedIndex;
+  bool _isDefaultDialer = false;
 
   // 검색 모드 On/Off
   bool _isSearching = false;
@@ -29,6 +32,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   void initState() {
     super.initState();
     _loadContacts();
+    _checkDefaultDialer();
     _eventSub = appEventBus.on<ContactsUpdatedEvent>().listen((event) {
       _loadContacts();
     });
@@ -38,6 +42,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
   void dispose() {
     _eventSub?.cancel();
     super.dispose();
+  }
+
+  Future<void> _checkDefaultDialer() async {
+    final isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
+    if (!mounted) return;
+    setState(() => _isDefaultDialer = isDefault);
   }
 
   Future<void> _loadContacts() async {
@@ -80,16 +90,9 @@ class _ContactsScreenState extends State<ContactsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
-        child: ListView.separated(
+        child: ListView.builder(
+          key: Key(_expandedIndex?.toString() ?? ''),
           itemCount: data.length,
-          separatorBuilder:
-              (ctx, i) => const Divider(
-                color: Colors.grey,
-                thickness: 0.5,
-                indent: 16.0,
-                endIndent: 16.0,
-                height: 0,
-              ),
           itemBuilder: (ctx, i) {
             final c = data[i];
             final name = c.name;
@@ -97,50 +100,76 @@ class _ContactsScreenState extends State<ContactsScreen> {
             final memo = c.memo ?? '';
             final firstChar = name.isNotEmpty ? name.characters.first : '?';
 
-            return Slidable(
-              key: ValueKey(i),
-              endActionPane: ActionPane(
-                motion: const BehindMotion(),
-                children: [
-                  SlidableAction(
-                    onPressed: (_) => _onTapCall(phone),
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    icon: Icons.call,
+            return Column(
+              children: [
+                if (i > 0)
+                  const Divider(
+                    color: Colors.grey,
+                    thickness: 0.5,
+                    indent: 16.0,
+                    endIndent: 16.0,
+                    height: 0,
                   ),
-                  SlidableAction(
-                    onPressed: (_) => _onTapSearch(phone),
-                    backgroundColor: Colors.orange,
-                    foregroundColor: Colors.white,
-                    icon: Icons.search,
+                ExpansionTile(
+                  key: Key(i.toString()),
+                  initiallyExpanded: i == _expandedIndex,
+                  onExpansionChanged: (expanded) {
+                    setState(() {
+                      _expandedIndex = expanded ? i : null;
+                    });
+                  },
+                  leading: CircleAvatar(
+                    radius: 16,
+                    backgroundColor: _pickColorFromChar(firstChar),
+                    child: Text(
+                      firstChar,
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
-                  SlidableAction(
-                    onPressed: (_) => _onTapEdit(c),
-                    backgroundColor: Colors.blueGrey,
-                    foregroundColor: Colors.white,
-                    icon: Icons.edit,
+                  title: Text(
+                    name.isNotEmpty ? name : '이름 없음',
+                    style: const TextStyle(fontSize: 16),
                   ),
-                ],
-              ),
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-                leading: CircleAvatar(
-                  radius: 16,
-                  backgroundColor: _pickColorFromChar(firstChar),
-                  child: Text(
-                    firstChar,
-                    style: const TextStyle(color: Colors.white),
+                  subtitle: Text(
+                    phone + (memo.isNotEmpty ? ' / $memo' : ''),
+                    style: const TextStyle(fontSize: 14, color: Colors.grey),
                   ),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          if (_isDefaultDialer)
+                            _buildActionButton(
+                              icon: Icons.call,
+                              color: Colors.green,
+                              onPressed: () => _onTapCall(phone),
+                            ),
+                          _buildActionButton(
+                            icon: Icons.message,
+                            color: Colors.blue,
+                            onPressed: () => _onTapMessage(phone),
+                          ),
+                          _buildActionButton(
+                            icon: Icons.search,
+                            color: Colors.orange,
+                            onPressed: () => _onTapSearch(phone),
+                          ),
+                          _buildActionButton(
+                            icon: Icons.edit,
+                            color: Colors.blueGrey,
+                            onPressed: () => _onTapEdit(c),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                title: Text(
-                  name.isNotEmpty ? name : '이름 없음',
-                  style: const TextStyle(fontSize: 16),
-                ),
-                subtitle: Text(
-                  phone + (memo.isNotEmpty ? ' / $memo' : ''),
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
-                ),
-              ),
+              ],
             );
           },
         ),
@@ -209,6 +238,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
     }
   }
 
+  Future<void> _onTapMessage(String phoneNumber) async {
+    await NativeMethods.openSmsApp(phoneNumber);
+  }
+
   Future<void> _onTapCall(String phoneNumber) async {
     await NativeMethods.makeCall(phoneNumber);
     // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
@@ -250,5 +283,27 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final code = char.toUpperCase().codeUnitAt(0);
     final hue = (code * 5) % 360;
     return HSLColor.fromAHSL(1.0, hue.toDouble(), 0.6, 0.7).toColor();
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
+        ),
+      ),
+    );
   }
 }

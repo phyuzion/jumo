@@ -28,6 +28,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
   bool _showSearchField = false;
+  int? _expandedIndex;
 
   List<Map<String, dynamic>> _callLogs = [];
   StreamSubscription? _eventSub;
@@ -39,7 +40,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     _loadCalls();
     _checkDefaultDialer();
     _searchFocusNode.addListener(_onFocusChange);
-    // callLog이 변경될 때마다(예: refreshCallLogs) => _loadCalls
     _eventSub = appEventBus.on<CallLogUpdatedEvent>().listen((event) {
       _loadCalls();
     });
@@ -154,16 +154,9 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
         ),
         body: RefreshIndicator(
           onRefresh: _refreshCalls,
-          child: ListView.separated(
+          child: ListView.builder(
+            key: Key(_expandedIndex?.toString() ?? ''),
             itemCount: _callLogs.length,
-            separatorBuilder:
-                (context, index) => const Divider(
-                  color: Colors.grey,
-                  thickness: 0.5,
-                  indent: 16.0,
-                  endIndent: 16.0,
-                  height: 0,
-                ),
             itemBuilder: (context, index) {
               final call = _callLogs[index];
               final number = call['number'] as String? ?? '';
@@ -214,69 +207,77 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
               );
               final name = contact.name; // 없으면 ''
 
-              return Slidable(
-                key: ValueKey(index),
-                endActionPane: ActionPane(
-                  motion: const BehindMotion(),
+              return ExpansionTile(
+                key: Key(index.toString()),
+                initiallyExpanded: index == _expandedIndex,
+                onExpansionChanged: (expanded) {
+                  setState(() {
+                    _expandedIndex = expanded ? index : null;
+                  });
+                },
+                leading: Icon(iconData, color: iconColor, size: 28),
+                title: Text(
+                  name.isNotEmpty ? name : number,
+                  style: const TextStyle(fontSize: 16),
+                ),
+                subtitle:
+                    name.isNotEmpty
+                        ? Text(
+                          number,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                        )
+                        : null,
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    SlidableAction(
-                      onPressed: (_) => _onTapCall(number),
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      icon: Icons.call,
+                    Text(
+                      dateStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                    SlidableAction(
-                      onPressed: (_) => _onTapSearch(number),
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
-                      icon: Icons.search,
-                    ),
-                    SlidableAction(
-                      onPressed: (_) => _onTapEdit(number),
-                      backgroundColor: Colors.blueGrey,
-                      foregroundColor: Colors.white,
-                      icon: Icons.edit,
+                    Text(
+                      timeStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
                   ],
                 ),
-                child: ListTile(
-                  leading: Icon(iconData, color: iconColor, size: 28),
-                  // 만약 이름이 있으면 title=이름, subtitle=번호 / 없으면 title=번호
-                  title: Text(
-                    name.isNotEmpty ? name : number,
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  subtitle:
-                      name.isNotEmpty
-                          ? Text(
-                            number,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          )
-                          : null,
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        dateStr,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        if (_isDefaultDialer)
+                          _buildActionButton(
+                            icon: Icons.call,
+                            color: Colors.green,
+                            onPressed: () => _onTapCall(number),
+                          ),
+                        _buildActionButton(
+                          icon: Icons.message,
+                          color: Colors.blue,
+                          onPressed: () => _onTapMessage(number),
                         ),
-                      ),
-                      Text(
-                        timeStr,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
+                        _buildActionButton(
+                          icon: Icons.search,
+                          color: Colors.orange,
+                          onPressed: () => _onTapSearch(number),
                         ),
-                      ),
-                    ],
+                        _buildActionButton(
+                          icon: Icons.edit,
+                          color: Colors.blueGrey,
+                          onPressed: () => _onTapEdit(number),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               );
             },
           ),
@@ -297,6 +298,32 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                 : null,
       ),
     );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _onTapMessage(String number) async {
+    await NativeMethods.openSmsApp(number);
   }
 
   Future<void> _onTapCall(String number) async {

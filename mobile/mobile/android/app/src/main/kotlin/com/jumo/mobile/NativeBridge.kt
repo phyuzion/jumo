@@ -67,6 +67,23 @@ object NativeBridge {
                     val number = getMyPhoneNumberFromTelephony()
                     result.success(number) 
                 }
+                "openSmsApp" -> {
+                    val number = call.argument<String>("phoneNumber") ?: ""
+                    Log.d("NativeBridge", "openSmsApp($number)")
+                    
+                    try {
+                        val context = JumoApp.context
+                        val smsIntent = Intent(Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("smsto:$number")
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(smsIntent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        Log.e("NativeBridge", "openSmsApp error: $e")
+                        result.error("SMS_ERROR", "Failed to open SMS app", "$e")
+                    }
+                }
                 else -> {
                     result.notImplemented()
                 }

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/native_methods.dart';
-import 'package:mobile/widgets/dropdown_menus_widet.dart';
 
 class DialerScreen extends StatefulWidget {
   const DialerScreen({super.key});
