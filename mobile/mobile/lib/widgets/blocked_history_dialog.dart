@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/models/blocked_history.dart';
-import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
@@ -8,8 +7,7 @@ import 'package:provider/provider.dart';
 class BlockedHistoryDialog extends StatelessWidget {
   final List<BlockedHistory> history;
 
-  const BlockedHistoryDialog({Key? key, required this.history})
-    : super(key: key);
+  const BlockedHistoryDialog({super.key, required this.history});
 
   String _formatDate(DateTime dt) {
     return '${dt.month}/${dt.day}';
@@ -82,7 +80,7 @@ class BlockedHistoryDialog extends StatelessWidget {
                   // 연락처에서 이름 찾기
                   String? name;
                   for (final c in contacts) {
-                    if (normalizePhone(c.phoneNumber ?? '') ==
+                    if (normalizePhone(c.phoneNumber) ==
                         normalizePhone(item.phoneNumber)) {
                       name = c.name;
                       break;

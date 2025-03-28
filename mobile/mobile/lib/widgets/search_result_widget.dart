@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/models/phone_number_model.dart';
 import 'package:mobile/models/today_record.dart';
-import 'package:mobile/utils/constants.dart';
 
 class SearchResultWidget extends StatelessWidget {
   final SearchResultModel searchResult;
-  const SearchResultWidget({Key? key, required this.searchResult})
-    : super(key: key);
+  const SearchResultWidget({super.key, required this.searchResult});
 
   @override
   Widget build(BuildContext context) {

@@ -14,7 +14,7 @@ import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({Key? key}) : super(key: key);
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -37,6 +37,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   late String _userName; // 이름
   late String _userRegion;
   late String _validUntil; // 만료일(문자열)
+  late String _userGrade; // 등급
 
   // 업데이트 관련
   String _serverVersion = ''; // 서버에서 조회한 버전
@@ -62,6 +63,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     _loginId = box.read<String>('savedLoginId') ?? '(no id)';
     _userName = box.read<String>('userName') ?? '(no name)';
     _userRegion = box.read<String>('userRegion') ?? '(no region)';
+    _userGrade = box.read<String>('userGrade') ?? '일반';
 
     final rawValidUntil = box.read<String>(
       'userValidUntil',
@@ -289,6 +291,11 @@ class _SettingsScreenState extends State<SettingsScreen>
             leading: const Icon(Icons.person),
             title: const Text('내 이름'),
             subtitle: Text(_userName),
+          ),
+          ListTile(
+            leading: const Icon(Icons.star),
+            title: const Text('내 등급'),
+            subtitle: Text(_userGrade),
           ),
           ListTile(
             leading: const Icon(Icons.map),
