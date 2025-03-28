@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:provider/provider.dart';
-import 'dialer_screen.dart';
 import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
 import 'board_screen.dart';
@@ -20,7 +19,6 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final _screens = [
-    const DialerScreen(),
     const RecentCallsScreen(),
     const ContactsScreen(),
     const BoardScreen(),
@@ -60,7 +58,6 @@ class _HomeScreenState extends State<HomeScreen> {
         showSelectedLabels: true,
         showUnselectedLabels: true,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dialpad), label: '키패드'),
           BottomNavigationBarItem(icon: Icon(Icons.history), label: '최근기록'),
           BottomNavigationBarItem(icon: Icon(Icons.contacts), label: '연락처'),
           BottomNavigationBarItem(

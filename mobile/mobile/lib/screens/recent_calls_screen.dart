@@ -12,6 +12,7 @@ import 'package:provider/provider.dart'; // context.read()
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/screens/dialer_screen.dart';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -20,8 +21,10 @@ class RecentCallsScreen extends StatefulWidget {
   State<RecentCallsScreen> createState() => _RecentCallsScreenState();
 }
 
-class _RecentCallsScreenState extends State<RecentCallsScreen> {
+class _RecentCallsScreenState extends State<RecentCallsScreen>
+    with WidgetsBindingObserver {
   final _callLogController = CallLogController();
+  bool _isDefaultDialer = false;
 
   List<Map<String, dynamic>> _callLogs = [];
   StreamSubscription? _eventSub;
@@ -29,7 +32,9 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadCalls();
+    _checkDefaultDialer();
     // callLog이 변경될 때마다(예: refreshCallLogs) => _loadCalls
     _eventSub = appEventBus.on<CallLogUpdatedEvent>().listen((event) {
       _loadCalls();
@@ -38,8 +43,18 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _eventSub?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // 앱이 다시 전면으로 돌아왔을 때 기본 전화앱 상태 재확인
+      _checkDefaultDialer();
+    }
   }
 
   Future<void> _loadCalls() async {
@@ -51,6 +66,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
     await _callLogController.refreshCallLogs();
     // 로컬DB 반영 뒤 _loadCalls() 재호출
     await _loadCalls();
+  }
+
+  Future<void> _checkDefaultDialer() async {
+    final isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
+    if (!mounted) return;
+    setState(() => _isDefaultDialer = isDefault);
   }
 
   @override
@@ -183,6 +204,20 @@ class _RecentCallsScreenState extends State<RecentCallsScreen> {
           },
         ),
       ),
+      floatingActionButton:
+          _isDefaultDialer
+              ? FloatingActionButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DialerScreen(),
+                    ),
+                  );
+                },
+                child: const Icon(Icons.dialpad),
+              )
+              : null,
     );
   }
 
