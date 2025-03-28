@@ -21,7 +21,7 @@ export const CREATE_USER = gql`
     $loginId: String!
     $phoneNumber: String!
     $name: String!
-    $type: Int
+    $userType: String
     $region: String
     $grade: String
   ) {
@@ -29,7 +29,7 @@ export const CREATE_USER = gql`
       loginId: $loginId
       phoneNumber: $phoneNumber
       name: $name
-      type: $type
+      userType: $userType
       region: $region
       grade: $grade
     ) {
@@ -38,7 +38,7 @@ export const CREATE_USER = gql`
         loginId
         name
         phoneNumber
-        type
+        userType
         validUntil
         region
         grade
@@ -59,7 +59,7 @@ export const UPDATE_USER = gql`
     $name: String
     $phoneNumber: String
     $validUntil: String
-    $type: Int
+    $userType: String
     $region: String
     $grade: String
   ) {
@@ -68,7 +68,7 @@ export const UPDATE_USER = gql`
       name: $name
       phoneNumber: $phoneNumber
       validUntil: $validUntil
-      type: $type
+      userType: $userType
       region: $region
       grade: $grade
     ) {
@@ -76,7 +76,7 @@ export const UPDATE_USER = gql`
       loginId
       name
       phoneNumber
-      type
+      userType
       validUntil
       region
       grade

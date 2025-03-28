@@ -88,7 +88,7 @@ const Users = () => {
   const [formLoginId,  setFormLoginId]  = useState('');
   const [formPhone,    setFormPhone]    = useState('');
   const [formName,     setFormName]     = useState('');
-  const [formType,     setFormType]     = useState(0);
+  const [formUserType, setFormUserType] = useState('일반');
   const [formRegion,   setFormRegion]   = useState('');
   const [formGrade,    setFormGrade]    = useState('');
 
@@ -96,7 +96,7 @@ const Users = () => {
   const [editLoginId,      setEditLoginId]      = useState('');
   const [editPhone,        setEditPhone]        = useState('');
   const [editName,         setEditName]         = useState('');
-  const [editType,         setEditType]         = useState(0);
+  const [editUserType,     setEditUserType]     = useState('일반');
   const [editValidUntil,   setEditValidUntil]   = useState('');
   const [editRegion,       setEditRegion]       = useState('');
   const [editGrade,        setEditGrade]        = useState('');
@@ -207,7 +207,7 @@ const Users = () => {
     setFormLoginId('');
     setFormPhone('');
     setFormName('');
-    setFormType(0);
+    setFormUserType('일반');
     setFormRegion('');
     setFormGrade('');
     setShowCreateModal(true);
@@ -220,7 +220,7 @@ const Users = () => {
           loginId: formLoginId,
           phoneNumber: formPhone,
           name: formName,
-          type: parseInt(formType, 10),
+          userType: formUserType,
           region: formRegion,
           grade: formGrade,
         },
@@ -249,7 +249,7 @@ const Users = () => {
     setEditLoginId(u.loginId || '');
     setEditPhone(u.phoneNumber || '');
     setEditName(u.name || '');
-    setEditType(u.type || 0);
+    setEditUserType(u.userType || '일반');
     setEditRegion(u.region || '');
     setEditGrade(u.grade || '');
 
@@ -289,7 +289,7 @@ const Users = () => {
           userId: editUser.id,
           name: editName,
           phoneNumber: editPhone,
-          type: parseInt(editType, 10),
+          userType: editUserType,
           validUntil: validStr,
           region: editRegion,
           grade: editGrade,
@@ -392,7 +392,7 @@ const Users = () => {
             <ColumnDirective field="loginId"     headerText="아이디"    width="90" />
             <ColumnDirective field="name"        headerText="상호"      width="120" />
             <ColumnDirective field="phoneNumber" headerText="번호"      width="110" />
-            <ColumnDirective field="type"        headerText="타입"      width="60"  textAlign="Center" />
+            <ColumnDirective field="userType"     headerText="타입"      width="60"  textAlign="Center" />
             <ColumnDirective field="region"      headerText="지역"      width="80"  textAlign="Center" />
             <ColumnDirective field="grade"       headerText="등급"      width="80"  textAlign="Center" />
             <ColumnDirective
@@ -473,13 +473,15 @@ const Users = () => {
                 onChange={(e) => setFormName(e.target.value)}
                 className="border p-1"
               />
-              <input
-                type="number"
-                placeholder="타입"
-                value={formType}
-                onChange={(e) => setFormType(e.target.value)}
+              <select
+                value={formUserType}
+                onChange={(e) => setFormUserType(e.target.value)}
                 className="border p-1"
-              />
+              >
+                <option value="일반">일반</option>
+                <option value="중개">중개</option>
+                <option value="기타">기타</option>
+              </select>
               <select
                 value={formRegion}
                 onChange={(e) => setFormRegion(e.target.value)}
@@ -540,13 +542,15 @@ const Users = () => {
                 onChange={(e) => setEditName(e.target.value)}
                 className="border p-1"
               />
-              <input
-                type="number"
-                placeholder="타입"
-                value={editType}
-                onChange={(e) => setEditType(e.target.value)}
+              <select
+                value={editUserType}
+                onChange={(e) => setEditUserType(e.target.value)}
                 className="border p-1"
-              />
+              >
+                <option value="일반">일반</option>
+                <option value="중개">중개</option>
+                <option value="기타">기타</option>
+              </select>
               <select
                 value={editRegion}
                 onChange={(e) => setEditRegion(e.target.value)}
@@ -667,7 +671,7 @@ const Users = () => {
                     <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
                     <ColumnDirective field="name" headerText="이름" width="120" />
                     <ColumnDirective field="memo" headerText="메모" width="200" />
-                    <ColumnDirective field="type" headerText="타입" width="80" />
+                    <ColumnDirective field="userType" headerText="타입" width="80" />
                     <ColumnDirective field="createdAt" headerText="생성일" width="150" />
                   </ColumnsDirective>
                   <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />

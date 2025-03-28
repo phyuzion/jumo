@@ -24,7 +24,7 @@ export const GET_ALL_USERS = gql`
       loginId
       name
       phoneNumber
-      type
+      userType
       createdAt
       validUntil
       region
@@ -46,7 +46,7 @@ export const GET_USER_RECORDS = gql`
         loginId
         name
         phoneNumber
-        type
+        userType
         createdAt
         validUntil
         region

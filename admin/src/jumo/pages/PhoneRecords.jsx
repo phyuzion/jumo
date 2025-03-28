@@ -35,7 +35,7 @@ const PhoneRecords = () => {
   const [formMemo, setFormMemo] = useState('');
   const [formType, setFormType] = useState(0);
   const [formUserName, setFormUserName] = useState('');
-  const [formUserType, setFormUserType] = useState(0);
+  const [formUserType, setFormUserType] = useState('일반');
   const [formCreatedAt, setFormCreatedAt] = useState(''); // epoch or ISO
 
   // gql
@@ -76,7 +76,7 @@ const PhoneRecords = () => {
     setFormMemo('');
     setFormType(0);
     setFormUserName('');
-    setFormUserType(0);
+    setFormUserType('일반');
     const now = new Date();
     let year = now.getFullYear();
     let mon  = String(now.getMonth()).padStart(2, '0');
@@ -99,31 +99,32 @@ const PhoneRecords = () => {
     setFormMemo(rec.memo || '');
     setFormType(rec.type || 0);
     setFormUserName(rec.userName || '');
-    setFormUserType(rec.userType || 0);
+    setFormUserType(rec.userType || '일반');
 
     if (rec.createdAt) {
       // epoch or iso
-      const dt = new Date(parseInt(rec.createdAt));
-      if (!isNaN(dt)) {
-        let year = dt.getFullYear();
-        let mon  = String(dt.getMonth()).padStart(2, '0');
-        let day  = String(dt.getDate()).padStart(2, '0');
-        let hh   = String(dt.getHours()).padStart(2, '0');
-        let mm   = String(dt.getMinutes()).padStart(2, '0');
+      let dt = null;
+      // 시도1: epoch 파싱
+      const epoch = parseInt(rec.createdAt, 10);
+      if (!isNaN(epoch)) {
+        dt = new Date(epoch);
+      }
+      // 시도2: 만약 epoch 변환 실패 시 Date로 직접 파싱
+      if (!dt || isNaN(dt.getTime())) {
+        dt = new Date(rec.createdAt);
+      }
 
-        const localStr = `${year}-${mon}-${day}T${hh}:${mm}`;
-        setFormCreatedAt(localStr); // epoch
+      if (!isNaN(dt.getTime())) {
+        // UTC 시간을 그대로 사용
+        const isoStr = dt.toISOString().slice(0, 16);
+        setFormCreatedAt(isoStr);
       } else {
         setFormCreatedAt('');
       }
     } else {
-        const now = new Date();
-        let year = now.getFullYear();
-        let mon  = String(now.getMonth()).padStart(2, '0');
-        let day  = String(now.getDate()).padStart(2, '0');
-        let hh   = String(now.getHours()).padStart(2, '0');
-        let mm   = String(now.getMinutes()).padStart(2, '0');
-        setFormCreatedAt(`${year}-${mon}-${day}T${hh}:${mm}`);
+      const now = new Date();
+      const isoStr = now.toISOString().slice(0, 16);
+      setFormCreatedAt(isoStr);
     }
 
     setShowModal(true);
@@ -141,7 +142,7 @@ const PhoneRecords = () => {
       memo: formMemo,
       type: parseInt(formType, 10),
       userName: formUserName,
-      userType: parseInt(formUserType, 10),
+      userType: formUserType,
       createdAt: formCreatedAt, // 문자열이지만 서버에서 parse
     };
     try {
@@ -303,12 +304,15 @@ const PhoneRecords = () => {
               {/* userType */}
               <div className="flex gap-2">
                 <label className="w-24">상호타입</label>
-                <input
-                  type="number"
+                <select
                   className="border p-1 flex-1"
                   value={formUserType}
                   onChange={(e) => setFormUserType(e.target.value)}
-                />
+                >
+                  <option value="일반">일반</option>
+                  <option value="중개">중개</option>
+                  <option value="기타">기타</option>
+                </select>
               </div>
 
               {/* createdAt */}
