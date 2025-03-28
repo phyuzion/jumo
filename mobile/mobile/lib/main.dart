@@ -147,7 +147,14 @@ class MyApp extends StatelessWidget {
         '/decider': (_) => const DeciderScreen(),
         '/login': (_) => const LoginScreen(),
         '/home': (_) => const HomeScreen(),
-        '/search': (_) => const SearchScreen(),
+        '/search': (ctx) {
+          final args = ModalRoute.of(ctx)?.settings.arguments;
+          final isRequested =
+              args is Map<String, dynamic>
+                  ? args['isRequested'] as bool? ?? true
+                  : true;
+          return SearchScreen(isRequested: isRequested);
+        },
         '/settings': (_) => const SettingsScreen(),
         '/dialer': (_) => const DialerScreen(),
         '/incoming': (ctx) {

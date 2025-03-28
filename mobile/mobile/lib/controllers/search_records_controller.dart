@@ -8,10 +8,13 @@ import 'package:mobile/models/today_record.dart';
 
 class SearchRecordsController {
   /// 전화번호 검색 수행 → PhoneNumberModel 리턴
-  static Future<PhoneNumberModel?> searchPhone(String rawPhone) async {
+  static Future<PhoneNumberModel?> searchPhone(
+    String rawPhone, {
+    bool isRequested = false,
+  }) async {
     final norm = normalizePhone(rawPhone);
     // 실제 서버 호출
-    final data = await SearchApi.getPhoneNumber(norm);
+    final data = await SearchApi.getPhoneNumber(norm, isRequested: isRequested);
     return data; // null 이면 결과 없음
   }
 

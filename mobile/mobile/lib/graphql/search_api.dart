@@ -5,8 +5,8 @@ import 'package:mobile/models/phone_number_model.dart';
 
 class SearchApi {
   static const _getPhoneNumberQuery = r'''
-    query getPhoneNumber($phoneNumber: String!) {
-      getPhoneNumber(phoneNumber: $phoneNumber) {
+    query getPhoneNumber($phoneNumber: String!, $isRequested: Boolean) {
+      getPhoneNumber(phoneNumber: $phoneNumber, isRequested: $isRequested) {
         phoneNumber
         type
         records {
@@ -21,12 +21,15 @@ class SearchApi {
     }
   ''';
 
-  static Future<PhoneNumberModel?> getPhoneNumber(String phone) async {
+  static Future<PhoneNumberModel?> getPhoneNumber(
+    String phone, {
+    bool isRequested = false,
+  }) async {
     final client = GraphQLClientManager.client;
 
     final options = QueryOptions(
       document: gql(_getPhoneNumberQuery),
-      variables: {'phoneNumber': phone},
+      variables: {'phoneNumber': phone, 'isRequested': isRequested},
       fetchPolicy: FetchPolicy.networkOnly,
     );
 

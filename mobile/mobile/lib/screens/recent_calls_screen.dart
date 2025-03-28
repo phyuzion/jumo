@@ -95,7 +95,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
       // 검색 실행
       final number = _searchController.text.trim();
       if (number.isNotEmpty) {
-        Navigator.pushNamed(context, '/search', arguments: number);
+        // 액션바에서 직접 검색할 때는 isRequested: true
+        Navigator.pushNamed(
+          context,
+          '/search',
+          arguments: {'number': number, 'isRequested': true},
+        );
       } else {
         Navigator.pushNamed(context, '/search');
       }
@@ -331,7 +336,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   }
 
   void _onTapSearch(String number) {
-    Navigator.pushNamed(context, '/search', arguments: number);
+    // 리스트에서 검색 버튼 클릭시에는 isRequested: false
+    Navigator.pushNamed(
+      context,
+      '/search',
+      arguments: {'number': number, 'isRequested': false},
+    );
   }
 
   Future<void> _onTapEdit(String number) async {
