@@ -20,6 +20,7 @@ import {
   GET_USER_SMS_LOG,  // 문자로그
   GET_ALL_GRADES,
   GET_ALL_REGIONS,
+  GET_USER_TYPES,
 } from "../graphql/queries";
 import {
   CREATE_USER,
@@ -63,6 +64,10 @@ const Users = () => {
     fetchPolicy: 'no-cache',
     notifyOnNetworkStatusChange: true,
   });
+
+  // (6) 유저 타입 목록
+  const { data: userTypesData } = useQuery(GET_USER_TYPES);
+  const [userTypes, setUserTypes] = useState([]);
 
   // ========== State ==========
   const [users, setUsers] = useState([]);
@@ -155,6 +160,13 @@ const Users = () => {
       setSmsLogs(smsLogData.getUserSMSLog);
     }
   }, [smsLogData]);
+
+  // 유저 타입 데이터 설정
+  useEffect(() => {
+    if (userTypesData?.getUserTypes) {
+      setUserTypes(userTypesData.getUserTypes);
+    }
+  }, [userTypesData]);
 
   // users 바뀌면 syncfusion grid 갱신
   useEffect(() => {
@@ -478,9 +490,9 @@ const Users = () => {
                 onChange={(e) => setFormUserType(e.target.value)}
                 className="border p-1"
               >
-                <option value="일반">일반</option>
-                <option value="중개">중개</option>
-                <option value="기타">기타</option>
+                {userTypes.map((ut) => (
+                  <option key={ut.name} value={ut.name}>{ut.name}</option>
+                ))}
               </select>
               <select
                 value={formRegion}
@@ -547,9 +559,9 @@ const Users = () => {
                 onChange={(e) => setEditUserType(e.target.value)}
                 className="border p-1"
               >
-                <option value="일반">일반</option>
-                <option value="중개">중개</option>
-                <option value="기타">기타</option>
+                {userTypes.map((ut) => (
+                  <option key={ut.name} value={ut.name}>{ut.name}</option>
+                ))}
               </select>
               <select
                 value={editRegion}

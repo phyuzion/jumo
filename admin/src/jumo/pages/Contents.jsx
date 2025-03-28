@@ -435,21 +435,6 @@ function Contents() {
     <div className="m-2 md:m-2 p-2 md:p-5 bg-white rounded-2xl shadow-xl">
       <Header category="Page" title="게시판" />
 
-      {/* 이미지 업로드 테스트 */}
-      <div className="flex gap-2 mb-4 border p-2 rounded">
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setTestFile(e.target.files[0])}
-          className="border p-1"
-        />
-        <button
-          className="bg-green-500 text-white px-3 py-1 rounded"
-          onClick={handleTestUpload}
-        >
-          이미지 업로드 테스트
-        </button>
-      </div>
 
       {/* Filter */}
       <div className="flex gap-2 mb-4">

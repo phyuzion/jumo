@@ -193,3 +193,11 @@ export const CHECK_APK_VERSION = gql`
     checkAPKVersion
   }
 `;
+
+export const GET_USER_TYPES = gql`
+  query GetUserTypes {
+    getUserTypes {
+      name
+    }
+  }
+`;

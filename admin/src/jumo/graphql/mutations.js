@@ -262,3 +262,11 @@ export const UPLOAD_CONTENT_IMAGE = gql`
     uploadContentImage(file: $file)
   }
 `;
+
+export const ADD_USER_TYPE = gql`
+  mutation AddUserType($name: String!) {
+    addUserType(name: $name) {
+      name
+    }
+  }
+`;

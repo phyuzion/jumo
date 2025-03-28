@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery } from '@apollo/client';
-import { GET_ALL_GRADES, GET_ALL_REGIONS } from '../graphql/queries';
-import { ADD_GRADE, ADD_REGION } from '../graphql/mutations';
+import { GET_ALL_GRADES, GET_ALL_REGIONS, GET_USER_TYPES } from '../graphql/queries';
+import { ADD_GRADE, ADD_REGION, ADD_USER_TYPE } from '../graphql/mutations';
 import {
   GridComponent,
   ColumnsDirective,
@@ -32,6 +32,10 @@ const CommonSettings = () => {
   const [regions, setRegions] = useState([]);
   const [newRegionName, setNewRegionName] = useState('');
   const [regionStatus, setRegionStatus] = useState(null);
+
+  // UserType 관련 상태
+  const [userTypes, setUserTypes] = useState([]);
+  const [newUserType, setNewUserType] = useState('');
 
   // Grade 관련 쿼리/뮤테이션
   const { data: gradesData, loading: gradesLoading, error: gradesError, refetch: refetchGrades } = useQuery(GET_ALL_GRADES, {
@@ -82,6 +86,16 @@ const CommonSettings = () => {
     },
   });
 
+  // UserType 관련 쿼리/뮤테이션
+  const { data: userTypesData, refetch: refetchUserTypes } = useQuery(GET_USER_TYPES);
+  const [addUserTypeMut] = useMutation(ADD_USER_TYPE);
+
+  useEffect(() => {
+    if (userTypesData?.getUserTypes) {
+      setUserTypes(userTypesData.getUserTypes);
+    }
+  }, [userTypesData]);
+
   // Grade 추가 핸들러
   const handleAddGrade = async (e) => {
     e.preventDefault();
@@ -116,6 +130,19 @@ const CommonSettings = () => {
       console.error('Error adding region:', error);
       setRegionStatus('error');
       setTimeout(() => setRegionStatus(null), 2000);
+    }
+  };
+
+  const handleAddUserType = async () => {
+    if (!newUserType.trim()) return;
+    try {
+      await addUserTypeMut({
+        variables: { name: newUserType },
+      });
+      setNewUserType('');
+      refetchUserTypes();
+    } catch (err) {
+      alert(err.message);
     }
   };
 
@@ -217,6 +244,46 @@ const CommonSettings = () => {
           >
             <ColumnsDirective>
               <ColumnDirective field="name" headerText="지역" width="150" />
+            </ColumnsDirective>
+            <Inject services={[Resize, Sort, Page]} />
+          </GridComponent>
+        </div>
+      </div>
+
+      {/* UserType 섹션 */}
+      <div className="bg-white rounded-lg shadow-md p-6 mt-8">
+        <h2 className="text-xl font-semibold mb-4">유저 타입 관리</h2>
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          handleAddUserType();
+        }} className="mb-4 flex gap-4 items-center">
+          <input
+            type="text"
+            value={newUserType}
+            onChange={(e) => setNewUserType(e.target.value)}
+            placeholder="유저 타입 이름"
+            className="border p-2 rounded"
+          />
+          <button
+            type="submit"
+            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+          >
+            유저 타입 추가
+          </button>
+        </form>
+
+        <div className="rounded-lg overflow-hidden">
+          <GridComponent
+            dataSource={userTypes}
+            enableHover={true}
+            allowPaging={true}
+            pageSettings={{ pageSize: PAGE_SIZE }}
+            allowSorting={true}
+            allowResizing={true}
+            allowAdding={false}
+          >
+            <ColumnsDirective>
+              <ColumnDirective field="name" headerText="유저 타입" width="150" />
             </ColumnsDirective>
             <Inject services={[Resize, Sort, Page]} />
           </GridComponent>
