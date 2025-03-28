@@ -21,6 +21,22 @@ COMPANY_INFO_IDX = 6
 UPDATED_DATE_IDX = 7
 ACTION_TYPE_IDX = 8
 
+# 📌 userType 매핑
+USER_TYPE_MAPPING = {
+    256: "오피",
+    257: "1인샵",
+    258: "휴게텔",
+    260: "키스방",
+    261: "아로마",
+    262: "출장",
+    263: "1인샵",
+    264: "아로마",
+    265: "스웨디시",
+    266: "오피",
+    267: "노래방",
+    268: "키스방"
+}
+
 ### 1️⃣ 로그인해서 토큰 받아오기 ###
 def get_access_token():
     login_query = {
@@ -72,11 +88,12 @@ def parse_sql_file(sql_file_path):
             print(f"⚠️ 잘못된 데이터 스킵: {columns}")
             continue
 
-        # userType은 Int 변환
+        # userType 변환
         try:
-            user_type = int(columns[ACTION_TYPE_IDX]) if columns[ACTION_TYPE_IDX] not in ["-1", "", "null", None] else 0
+            user_type_num = int(columns[ACTION_TYPE_IDX]) if columns[ACTION_TYPE_IDX] not in ["-1", "", "null", None] else 0
+            user_type = USER_TYPE_MAPPING.get(user_type_num, "일반")
         except ValueError:
-            user_type = 0  
+            user_type = "일반"
 
         record = {
             "name": columns[MEMO_IDX] if columns[MEMO_IDX] != "-1" else None,
