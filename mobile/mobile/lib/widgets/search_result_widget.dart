@@ -149,7 +149,8 @@ class SearchResultWidget extends StatelessWidget {
   }
 
   Widget _buildPhoneRecordItem(PhoneRecordModel r) {
-    // createdAt이 epoch라 가정
+    final userTypeColor = _pickColorForUserType(r.userType);
+    final recordTypeColor = (r.type == 99) ? Colors.red : Colors.blueGrey;
     final epoch = int.tryParse(r.createdAt);
     DateTime? dt;
     if (epoch != null) {
@@ -162,88 +163,90 @@ class SearchResultWidget extends StatelessWidget {
             ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
             : '';
 
-    // userType / record type 컬러
-    final userTypeColor = _pickColorForUserType(r.userType);
-    final recordTypeColor = (r.type == 99) ? Colors.red : Colors.blueGrey;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 왼쪽 userType 서클
-          CircleAvatar(
-            backgroundColor: userTypeColor,
-            radius: 16,
-            child: Text(
-              r.userType.length > 2 ? r.userType.substring(0, 2) : r.userType,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // 가운데(이름, userName, 메모)
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r.name.isNotEmpty ? r.name : '(이름 없음)',
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (r.userName.isNotEmpty)
-                  Text(
-                    r.userName,
-                    style: const TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                if (r.memo.isNotEmpty)
-                  Text(
-                    r.memo,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 5),
-
-          // 오른쪽: record type 서클 + 날짜/시간
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                backgroundColor: recordTypeColor,
-                radius: 16,
-                child: Text(
-                  '${r.type}',
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
-                ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // 왼쪽 userType 서클
+            CircleAvatar(
+              backgroundColor: userTypeColor,
+              radius: 16,
+              child: Text(
+                r.userType.length > 2 ? r.userType.substring(0, 2) : r.userType,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
               ),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
+            ),
+            const SizedBox(width: 12),
+
+            // 가운데(이름, userName, 메모)
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    yearStr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    r.name.isNotEmpty ? r.name : '(이름 없음)',
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  Text(
-                    dateStr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                  Text(
-                    timeStr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
+                  if (r.userName.isNotEmpty)
+                    Text(
+                      r.userName,
+                      style: const TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  if (r.memo.isNotEmpty)
+                    Text(
+                      r.memo,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                 ],
               ),
-            ],
-          ),
-        ],
+            ),
+
+            const SizedBox(width: 12),
+
+            // 오른쪽: type 서클 + 시간
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                CircleAvatar(
+                  backgroundColor: recordTypeColor,
+                  radius: 16,
+                  child: Text(
+                    '${r.type}',
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 시간
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      yearStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    Text(
+                      dateStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    Text(
+                      timeStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
