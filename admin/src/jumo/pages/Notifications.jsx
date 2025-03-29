@@ -16,6 +16,7 @@ import {
 import { CREATE_NOTIFICATION } from '../graphql/mutations';
 import { GET_NOTIFICATIONS } from '../graphql/queries';
 import { Header } from '../components';
+import { localTimeToUTCString, parseServerTimeToLocal } from '../../utils/dateUtils';
 
 const PAGE_SIZE = 10;
 
@@ -68,13 +69,16 @@ export default function Notifications() {
     setTitle('');
     setMessage('');
 
+    // KST 기준으로 1일 후 설정
     const now = new Date();
-    let year = now.getFullYear();
-    let mon  = String(now.getMonth()).padStart(2, '0');
-    let day  = String(now.getDate()+1).padStart(2, '0');
-    let hh   = String(now.getHours()).padStart(2, '0');
-    let mm   = String(now.getMinutes()).padStart(2, '0');
-    setValidDate(`${year}-${mon}-${day}T${hh}:${mm}`);      // "" => "기본 1일" 서버 정책
+    now.setDate(now.getDate() + 1); // KST 기준 1일 후
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    setValidDate(`${year}-${month}-${day}T${hours}:${minutes}`);
+
     setTargetUserId('');
     setShowCreateModal(true);
   };
@@ -88,13 +92,9 @@ export default function Notifications() {
   const handleCreateSubmit = async () => {
     try {
       // validDate(로컬) -> ISO(UTC)
-      // 예) "2023-09-15T23:00" (KST) -> new Date("2023-09-15T23:00:00") -> .toISOString()
       let finalValidUntil = undefined;
       if (validDate) {
-        const localDT = new Date(validDate);
-        // HTML datetime-local은 로컬 타임존 기준
-        // .toISOString() => UTC
-        finalValidUntil = localDT.toISOString();
+        finalValidUntil = localTimeToUTCString(validDate);
       }
 
       const variables = {
@@ -165,7 +165,7 @@ export default function Notifications() {
             width="120"
             textAlign="Center"
             template={(rowData) => (
-              <span>{formatLocalDate(rowData.validUntil)}</span>
+              <span>{parseServerTimeToLocal(rowData.validUntil)}</span>
             )}
           />
           
@@ -176,7 +176,7 @@ export default function Notifications() {
             width="120"
             textAlign="Center"
             template={(rowData) => (
-              <span>{formatLocalDate(rowData.createdAt)}</span>
+              <span>{parseServerTimeToLocal(rowData.createdAt)}</span>
             )}
           />
         </ColumnsDirective>

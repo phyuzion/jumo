@@ -14,6 +14,7 @@ import {
 import { GET_PHONE_NUMBER } from '../graphql/queries';
 import { UPSERT_PHONE_RECORDS } from '../graphql/mutations';
 import { Header } from '../components';
+import { localTimeToUTCString, parseServerTimeToLocal } from '../../utils/dateUtils';
 
 const PAGE_SIZE = 10;
 
@@ -78,12 +79,7 @@ const PhoneRecords = () => {
     setFormUserName('');
     setFormUserType('일반');
     const now = new Date();
-    let year = now.getFullYear();
-    let mon  = String(now.getMonth()).padStart(2, '0');
-    let day  = String(now.getDate()).padStart(2, '0');
-    let hh   = String(now.getHours()).padStart(2, '0');
-    let mm   = String(now.getMinutes()).padStart(2, '0');
-    setFormCreatedAt(`${year}-${mon}-${day}T${hh}:${mm}`);
+    setFormCreatedAt(localTimeToUTCString(now));
     setShowModal(true);
   };
 
@@ -101,30 +97,21 @@ const PhoneRecords = () => {
     setFormUserName(rec.userName || '');
     setFormUserType(rec.userType || '일반');
 
+    // 생성일 설정 (UTC -> 로컬 시간으로 변환)
     if (rec.createdAt) {
-      // epoch or iso
-      let dt = null;
-      // 시도1: epoch 파싱
-      const epoch = parseInt(rec.createdAt, 10);
-      if (!isNaN(epoch)) {
-        dt = new Date(epoch);
-      }
-      // 시도2: 만약 epoch 변환 실패 시 Date로 직접 파싱
-      if (!dt || isNaN(dt.getTime())) {
-        dt = new Date(rec.createdAt);
-      }
-
-      if (!isNaN(dt.getTime())) {
-        // UTC 시간을 그대로 사용
-        const isoStr = dt.toISOString().slice(0, 16);
-        setFormCreatedAt(isoStr);
+      const d = new Date(parseInt(rec.createdAt));
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        setFormCreatedAt(`${year}-${month}-${day}T${hours}:${minutes}`);
       } else {
-        setFormCreatedAt('');
+        setFormCreatedAt(localTimeToUTCString(new Date()));
       }
     } else {
-      const now = new Date();
-      const isoStr = now.toISOString().slice(0, 16);
-      setFormCreatedAt(isoStr);
+      setFormCreatedAt(localTimeToUTCString(new Date()));
     }
 
     setShowModal(true);
@@ -143,7 +130,7 @@ const PhoneRecords = () => {
       type: parseInt(formType, 10),
       userName: formUserName,
       userType: formUserType,
-      createdAt: formCreatedAt, // 문자열이지만 서버에서 parse
+      createdAt: localTimeToUTCString(formCreatedAt), // 로컬 시간을 UTC로 변환
     };
     try {
       await upsertPhoneRecords({ variables: { records: [inputRec] } });
@@ -161,23 +148,7 @@ const PhoneRecords = () => {
   // 그리드 헬퍼
   const createdAtAccessor = (field, data) => {
     if (!data[field]) return '';
-    try {
-      const dt = new Date(data[field]);
-      if (isNaN(dt.getTime())) {
-        // 혹시 epoch string -> number parse
-        const epoch = parseFloat(data[field]);
-        if (!isNaN(epoch)) {
-          const dt2 = new Date(parseInt(epoch));
-          if (!isNaN(dt2.getTime())) {
-            return dt2.toISOString().slice(0, 16).replace('T', ' ');
-          }
-        }
-        return data[field];
-      }
-      return dt.toISOString().slice(0, 16).replace('T', ' ');
-    } catch (e) {
-      return data[field];
-    }
+    return parseServerTimeToLocal(data[field]);
   };
 
   return (

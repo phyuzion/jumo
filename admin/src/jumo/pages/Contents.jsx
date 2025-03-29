@@ -28,6 +28,7 @@ import {
   DELETE_REPLY,
   UPLOAD_CONTENT_IMAGE,
 } from '../graphql/mutations';
+import { localTimeToUTCString, parseServerTimeToLocal } from '../../utils/dateUtils';
 
 // 개발 환경에서 에러 메시지 로드
 if (process.env.NODE_ENV !== "production") {
@@ -83,15 +84,7 @@ function deltaToHtml(deltaObj) {
 /** 날짜 포맷 */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  let d = null;
-  const maybeEpoch = parseInt(dateStr, 10);
-  if (!isNaN(maybeEpoch)) {
-    d = new Date(maybeEpoch);
-  } else {
-    d = new Date(dateStr);
-  }
-  if (isNaN(d.getTime())) return dateStr;
-  return d.toLocaleString();
+  return parseServerTimeToLocal(dateStr);
 }
 
 function Contents() {
@@ -366,6 +359,7 @@ function Contents() {
         };
       }
 
+      // 서버로 전송
       const res = await updateContentMut({
         variables: {
           contentId: detailItem.id,

@@ -29,8 +29,17 @@ import {
 } from "../graphql/mutations";
 
 import { Header } from "../components";
+import { localTimeToUTCString, parseServerTimeToLocal } from '../../utils/dateUtils';
 
 const PAGE_SIZE = 10; // syncfusion paging size(예시)
+
+/** 날짜 포맷 (로컬 표시) */
+function formatLocalDate(str) {
+  if (!str) return '';
+  const d = new Date(parseInt(str));
+  if (isNaN(d.getTime())) return str;
+  return d.toLocaleString(); 
+}
 
 const Users = () => {
   const gridRef = useRef(null);
@@ -180,38 +189,13 @@ const Users = () => {
   // 유효기간
   const validUntilAccessor = (field, data) => {
     if (!data.validUntil) return '';
-    // validUntil이 epoch string인지, ISO string인지 상황에 따라 확인
-    let dt = null;
-    // 시도1: epoch 파싱
-    const epoch = parseInt(data.validUntil, 10);
-    if (!isNaN(epoch)) {
-      dt = new Date(epoch);
-    }
-    // 시도2: 만약 epoch 변환 실패 시 Date로 직접 파싱
-    if (!dt || isNaN(dt.getTime())) {
-      dt = new Date(data.validUntil);
-    }
-    if (isNaN(dt.getTime())) return data.validUntil; 
-    return dt.toISOString().slice(0, 10); // "YYYY-MM-DD"
+    return parseServerTimeToLocal(data.validUntil);
   };
 
   // 시간 변환 헬퍼
   const timeAccessor = (field, data) => {
     if (!data[field]) return '';
-    let dt = new Date(data[field]);
-    if (isNaN(dt.getTime())) return data[field];
-    
-    const koreanTime = new Date(dt.getTime());
-    
-    // YYYY-MM-DD HH:mm:ss 형식으로 변환
-    const year = koreanTime.getFullYear();
-    const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
-    const day = String(koreanTime.getDate()).padStart(2, '0');
-    const hours = String(koreanTime.getHours()).padStart(2, '0');
-    const minutes = String(koreanTime.getMinutes()).padStart(2, '0');
-    const seconds = String(koreanTime.getSeconds()).padStart(2, '0');
-    
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    return parseServerTimeToLocal(data[field]);
   };
 
   // ============= CREATE =============
@@ -258,58 +242,55 @@ const Users = () => {
   // ============= EDIT =============
   const handleEditClick = (u) => {
     setEditUser(u);
-    setEditLoginId(u.loginId || '');
-    setEditPhone(u.phoneNumber || '');
-    setEditName(u.name || '');
-    setEditUserType(u.userType || '일반');
-    setEditRegion(u.region || '');
-    setEditGrade(u.grade || '');
-
-    // validUntil => "YYYY-MM-DD"
-    let dtStr = '';
+    setEditLoginId(u.loginId);
+    setEditPhone(u.phoneNumber);
+    setEditName(u.name);
+    setEditUserType(u.userType);
+    
+    // UTC -> 로컬 시간으로 변환하여 표시
     if (u.validUntil) {
-      try {
-        const maybeEpoch = parseInt(u.validUntil, 10);
-        let dt = null;
-        if (!isNaN(maybeEpoch)) {
-          dt = new Date(maybeEpoch);
-        } else {
-          dt = new Date(u.validUntil);
-        }
-        if (!isNaN(dt.getTime())) {
-          dtStr = dt.toISOString().slice(0, 10);
-        }
-      } catch (err) {
-        // ignore
+      const d = new Date(parseInt(u.validUntil));
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        setEditValidUntil(`${year}-${month}-${day}`);
+      } else {
+        setEditValidUntil('');
       }
+    } else {
+      setEditValidUntil('');
     }
-    setEditValidUntil(dtStr);
-
+    
+    setEditRegion(u.region);
+    setEditGrade(u.grade);
     setShowEditModal(true);
   };
 
   const handleEditSubmit = async () => {
-    if (!editUser) return;
     try {
-      let validStr = null;
+      // 로컬 시간을 UTC로 변환
+      let validUntilUTC = null;
       if (editValidUntil) {
-        const dt = new Date(`${editValidUntil}T00:00:00`);
-        validStr = dt.toISOString();
+        // 입력된 날짜의 시작 시간(00:00:00)을 UTC로 변환
+        const localDate = new Date(editValidUntil + 'T00:00:00');
+        validUntilUTC = localTimeToUTCString(localDate);
       }
+
       await updateUserMutation({
         variables: {
           userId: editUser.id,
-          name: editName,
+          loginId: editLoginId,
           phoneNumber: editPhone,
+          name: editName,
           userType: editUserType,
-          validUntil: validStr,
+          validUntil: validUntilUTC,
           region: editRegion,
           grade: editGrade,
-        }
+        },
       });
-      alert('수정 완료!');
+      alert('수정 완료');
       setShowEditModal(false);
-      setEditUser(null);
       handleRefresh();
     } catch (err) {
       alert(err.message);
@@ -585,12 +566,18 @@ const Users = () => {
                   </option>
                 ))}
               </select>
-              <input
-                type="date"
-                value={editValidUntil}
-                onChange={(e) => setEditValidUntil(e.target.value)}
-                className="border p-1"
-              />
+              <div>
+                <label className="block text-sm text-gray-600 mb-1">유효기간 (KST)</label>
+                <input
+                  type="date"
+                  value={editValidUntil}
+                  onChange={(e) => setEditValidUntil(e.target.value)}
+                  className="border p-1 w-full"
+                />
+                <small className="text-gray-500">
+                  선택한 날짜의 00:00:00 KST가 서버에 저장됩니다.
+                </small>
+              </div>
             </div>
             <div className="mt-4 flex gap-2">
               <button
