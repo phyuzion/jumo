@@ -13,14 +13,8 @@ const recordSchema = new mongoose.Schema({
   name: String,       // 이 레코드(전화번호부)에서 저장한 이름
   type: Number,       // 레코드 자체의 타입(예: 99라면 위험)
   memo: String,       // 메모
-  createdAt: { 
-    type: Date, 
-    default: Date.now,
-    get: function(date) {
-      return date ? date.toISOString() : null;
-    }
-  },
-}, { timestamps: false });  // timestamps 비활성화
+  createdAt: { type: Date, default: Date.now },
+});
 
 // 최상위 PhoneNumber 스키마
 const phoneNumberSchema = new mongoose.Schema({
