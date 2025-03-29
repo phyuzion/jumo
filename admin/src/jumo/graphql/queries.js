@@ -16,6 +16,7 @@ export const GET_SUMMARY = gql`
 /**
  * (1) 모든 유저 조회
  *     - region, settings, grade 추가
+ *     - createdAt, validUntil 타입을 Date로 변경
  */
 export const GET_ALL_USERS = gql`
   query {
@@ -37,6 +38,7 @@ export const GET_ALL_USERS = gql`
 /**
  * (2) 특정 유저 + 전화번호부 기록
  *     - user { region, settings, grade } 추가
+ *     - createdAt, validUntil, records.createdAt 타입을 Date로 변경
  */
 export const GET_USER_RECORDS = gql`
   query getUserRecords($userId: ID!) {
@@ -66,6 +68,7 @@ export const GET_USER_RECORDS = gql`
 
 /**
  * (Admin) 유저 통화 / 문자 조회
+ * - time 필드 타입을 Date로 변경
  */
 export const GET_USER_CALL_LOG = gql`
   query getUserCallLog($userId: ID!) {
@@ -90,6 +93,7 @@ export const GET_USER_SMS_LOG = gql`
 
 /**
  * (A) 전화번호로 1개 문서 조회
+ * - records.createdAt 타입을 Date로 변경
  */
 export const GET_PHONE_NUMBER = gql`
   query getPhoneNumber($phoneNumber: String!, $isRequested: Boolean) {
@@ -134,7 +138,7 @@ export const GET_ALL_REGIONS = gql`
 
 /**
  * Content
- *  - userName, userRegion 추가
+ * - createdAt 타입을 Date로 변경
  */
 export const GET_CONTENTS = gql`
   query getContents($type: String) {
@@ -172,6 +176,10 @@ export const GET_SINGLE_CONTENT = gql`
   }
 `;
 
+/**
+ * Notification
+ * - validUntil, createdAt 타입을 Date로 변경
+ */
 export const GET_NOTIFICATIONS = gql`
   query getNotifications {
     getNotifications {

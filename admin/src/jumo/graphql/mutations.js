@@ -52,6 +52,7 @@ export const CREATE_USER = gql`
 /**
  * 3) 유저 정보 업데이트
  *    - region, grade 필드 추가
+ *    - validUntil: String 입력은 그대로 유지해야 함
  */
 export const UPDATE_USER = gql`
   mutation updateUser(
@@ -108,9 +109,9 @@ export const UPSERT_PHONE_RECORDS = gql`
  * - createContent / updateContent / deleteContent
  * - createReply / deleteReply
  * - uploadContentImage (Quill 에디터용)
- * 
- * 새로운 필드 userName / userRegion, 
- * 댓글(Comment)에도 userName / userRegion 추가
+ * - 새로운 필드 userName / userRegion 
+ * - 댓글(Comment)에도 userName / userRegion 추가
+ * - createdAt 필드는 Date 타입으로 반환됨
  */
 export const CREATE_CONTENT = gql`
   mutation createContent($type: String, $title: String, $content: JSON!) {
@@ -195,6 +196,7 @@ export const DELETE_REPLY = gql`
 
 /**
  * Notification 관련
+ * - validUntil 입력은 String으로 받지만 반환값은 Date 타입
  */
 export const CREATE_NOTIFICATION = gql`
   mutation createNotification(
@@ -251,12 +253,6 @@ export const ADD_REGION = gql`
   }
 `;
 
-/**
- * Content 관련
- * - createContent / updateContent / deleteContent
- * - createReply / deleteReply
- * - uploadContentImage (Quill 에디터용)
- */
 export const UPLOAD_CONTENT_IMAGE = gql`
   mutation uploadContentImage($file: Upload!) {
     uploadContentImage(file: $file)

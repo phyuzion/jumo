@@ -22,18 +22,16 @@ const PAGE_SIZE = 10;
 /** 날짜 포맷 (로컬 표시) */
 function formatLocalDate(str) {
   if (!str) return '';
-  // epoch 숫자를 Date 객체로 변환
-  const date = new Date(parseInt(str));
-  // YYYY-MM-DD HH:mm:ss 형식으로 변환
-  return date.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).replace(/\. /g, '-').replace('.', '');
+  try {
+    // ISO 문자열이면 포맷 변경
+    if (typeof str === 'string' && str.includes('T')) {
+      return str.replace('T', ' ').substring(0, 19); // "2023-04-28T14:30:45" -> "2023-04-28 14:30:45"
+    }
+    
+    return str;
+  } catch (e) {
+    return str;
+  }
 }
 
 export default function Notifications() {
