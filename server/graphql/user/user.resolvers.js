@@ -350,7 +350,7 @@ module.exports = {
                         $set: {
                           userType: user.userType,
                           callType: log.callType,
-                          createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                          createdAt: dt  // 원본 시간 그대로 저장
                         }
                       }
                     }
@@ -365,7 +365,7 @@ module.exports = {
                       userName: user.name,
                       userType: user.userType,
                       callType: log.callType,
-                      createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                      createdAt: dt  // 원본 시간 그대로 저장
                     }
                   }
                 });
@@ -466,7 +466,7 @@ module.exports = {
                         $set: {
                           userType: user.userType,
                           smsType: log.smsType,
-                          createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                          createdAt: dt  // 원본 시간 그대로 저장
                         }
                       }
                     }
@@ -481,7 +481,7 @@ module.exports = {
                       userName: user.name,
                       userType: user.userType,
                       smsType: log.smsType,
-                      createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                      createdAt: dt  // 원본 시간 그대로 저장
                     }
                   }
                 });
