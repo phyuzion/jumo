@@ -199,6 +199,8 @@ module.exports = {
         // 오늘 날짜의 시작 시간 (00:00:00)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
+        console.log('today=', today);
+        console.log('user.lastSearchTime=', user.lastSearchTime);
 
         // 마지막 검색 시간이 오늘이 아니면 카운트 리셋
         if (!user.lastSearchTime || user.lastSearchTime < today) {
