@@ -9,6 +9,7 @@ const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
 const Grade = require('../../models/Grade');
 const { withTransaction } = require('../../utils/transaction');
+const { kstToUtc, utcToKst, toKstISOString } = require('../../utils/date');
 
 const { checkUserOrAdmin } = require('../auth/utils');
 
@@ -58,7 +59,7 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         name: nr.name || '',
         memo: nr.memo || '',
         type: nr.type || 0,
-        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date(),
+        createdAt: nr.createdAt ? kstToUtc(nr.createdAt) : new Date(), // KST -> UTC
       };
       map[key] = exist;
     } else {
@@ -66,7 +67,7 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
       if (nr.name !== undefined) exist.name = nr.name;
       if (nr.memo !== undefined) exist.memo = nr.memo;
       if (nr.type !== undefined) exist.type = nr.type;
-      exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
+      exist.createdAt = nr.createdAt ? kstToUtc(nr.createdAt) : new Date(); // KST -> UTC
     }
   }
 
@@ -196,7 +197,7 @@ module.exports = {
           throw new UserInputError('유저를 찾을 수 없습니다.');
         }
 
-        // 오늘 날짜의 시작 시간 (00:00:00)
+        // 오늘 날짜의 시작 시간 (00:00:00) - KST 기준
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         console.log('today=', today);
@@ -224,12 +225,35 @@ module.exports = {
         await user.save();
       }
 
-      return PhoneNumber.findOne({ phoneNumber });
+      const phoneNumberDoc = await PhoneNumber.findOne({ phoneNumber });
+      if (!phoneNumberDoc) return null;
+
+      // createdAt을 KST로 변환
+      if (phoneNumberDoc.records) {
+        phoneNumberDoc.records = phoneNumberDoc.records.map(record => ({
+          ...record.toObject(),
+          createdAt: toKstISOString(record.createdAt)
+        }));
+      }
+
+      return phoneNumberDoc;
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {
       if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
-      return PhoneNumber.find({ type });
+      const docs = await PhoneNumber.find({ type });
+      
+      // createdAt을 KST로 변환
+      return docs.map(doc => {
+        const obj = doc.toObject();
+        if (obj.records) {
+          obj.records = obj.records.map(record => ({
+            ...record,
+            createdAt: toKstISOString(record.createdAt)
+          }));
+        }
+        return obj;
+      });
     },
 
     getMyRecords: async (_, __, { tokenData }) => {
@@ -256,7 +280,7 @@ module.exports = {
             name: r.name,
             memo: r.memo,
             type: r.type,
-            createdAt: r.createdAt,
+            createdAt: toKstISOString(r.createdAt), // UTC -> KST
           });
         }
       }

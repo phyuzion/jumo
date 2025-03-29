@@ -8,6 +8,7 @@ const {
 } = require('apollo-server-errors');
 const { GraphQLJSON } = require('graphql-type-json');
 const { withTransaction } = require('../../utils/transaction');
+const { kstToUtc, utcToKst, toKstISOString } = require('../../utils/date');
 
 const {
   generateAccessToken,
@@ -72,7 +73,7 @@ module.exports = {
 
       return user.callLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
-        time: log.time.toISOString(),
+        time: toKstISOString(log.time), // UTC -> KST
         callType: log.callType,
       }));
     },
@@ -85,7 +86,7 @@ module.exports = {
 
       return user.smsLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
-        time: log.time.toISOString(),
+        time: toKstISOString(log.time), // UTC -> KST
         content: log.content || '',
         smsType: log.smsType,
       }));
@@ -127,7 +128,7 @@ module.exports = {
             name: rec.name,
             memo: rec.memo,
             type: rec.type || 0,
-            createdAt: rec.createdAt,
+            createdAt: toKstISOString(rec.createdAt), // UTC -> KST
           });
         }
       }
@@ -290,7 +291,7 @@ module.exports = {
         }
         const newLog = {
           phoneNumber: log.phoneNumber,
-          time: dt,
+          time: kstToUtc(dt), // KST -> UTC
           callType: log.callType,
         };
         pushNewLog(user.callLogs, newLog, 200);
@@ -349,7 +350,7 @@ module.exports = {
                         $set: {
                           userType: user.userType,
                           callType: log.callType,
-                          createdAt: dt
+                          createdAt: dt  // 원본 시간 그대로 저장
                         }
                       }
                     }
@@ -364,7 +365,7 @@ module.exports = {
                       userName: user.name,
                       userType: user.userType,
                       callType: log.callType,
-                      createdAt: dt
+                      createdAt: dt  // 원본 시간 그대로 저장
                     }
                   }
                 });
@@ -399,7 +400,7 @@ module.exports = {
         }
         const newLog = {
           phoneNumber: log.phoneNumber,
-          time: dt,
+          time: kstToUtc(dt), // KST -> UTC
           content: log.content,
           smsType: log.smsType,
         };
@@ -465,7 +466,7 @@ module.exports = {
                         $set: {
                           userType: user.userType,
                           smsType: log.smsType,
-                          createdAt: dt
+                          createdAt: dt  // 원본 시간 그대로 저장
                         }
                       }
                     }
@@ -480,7 +481,7 @@ module.exports = {
                       userName: user.name,
                       userType: user.userType,
                       smsType: log.smsType,
-                      createdAt: dt
+                      createdAt: dt  // 원본 시간 그대로 저장
                     }
                   }
                 });
