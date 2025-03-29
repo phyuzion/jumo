@@ -7,6 +7,7 @@ import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/models/search_result_model.dart';
 
 class PhoneStateController {
   final GlobalKey<NavigatorState> navKey;
@@ -52,14 +53,20 @@ class PhoneStateController {
 
     if (!isDef && await FlutterOverlayWindow.isPermissionGranted()) {
       log('showOverlay');
-      final data = await SearchRecordsController.searchPhone(number!);
-      if (data != null) {
-        // 정상 결과
-        FlutterOverlayWindow.shareData(data.toJson());
-      } else {
-        // 데이터가 없는 경우 빈 데이터 전달
-        FlutterOverlayWindow.shareData({'phoneNumber': number});
-      }
+      final phoneData = await SearchRecordsController.searchPhone(number!);
+      final todayRecords = await SearchRecordsController.searchTodayRecord(
+        number!,
+      );
+
+      final searchResult = SearchResultModel(
+        phoneNumberModel: phoneData,
+        todayRecords: todayRecords,
+      );
+
+      final data = searchResult.toJson();
+      data['phoneNumber'] = number;
+
+      FlutterOverlayWindow.shareData(data);
       log('showOverlay done');
     }
     log('[PhoneState] not default => overlay shown for $number');
