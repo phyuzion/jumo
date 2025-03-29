@@ -19,20 +19,12 @@ function utcToKst(utcDate) {
 }
 
 /**
- * Date 객체를 KST ISO 문자열로 변환
+ * Date 객체를 ISO 문자열로 변환 (KST)
  * @param {Date} date Date 객체
- * @returns {string} KST ISO 문자열
+ * @returns {string} ISO 문자열 (KST)
  */
 function toKstISOString(date) {
-  const kst = utcToKst(date);
-  const year = kst.getFullYear();
-  const month = String(kst.getMonth() + 1).padStart(2, '0');
-  const day = String(kst.getDate()).padStart(2, '0');
-  const hours = String(kst.getHours()).padStart(2, '0');
-  const minutes = String(kst.getMinutes()).padStart(2, '0');
-  const seconds = String(kst.getSeconds()).padStart(2, '0');
-  const milliseconds = String(kst.getMilliseconds()).padStart(3, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
+  return utcToKst(date).toISOString();
 }
 
 module.exports = {
