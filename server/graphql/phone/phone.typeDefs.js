@@ -8,7 +8,7 @@ module.exports = gql`
     name: String
     memo: String
     type: Int
-    createdAt: Date
+    createdAt: String
   }
 
   type PhoneNumber {

@@ -10,7 +10,7 @@ module.exports = gql`
     userName: String
     userRegion: String
     comment: String
-    createdAt: Date
+    createdAt: String
   }
 
   type Content {
@@ -21,7 +21,7 @@ module.exports = gql`
     type: String!
     title: String!
     content: JSON!
-    createdAt: Date!
+    createdAt: String!
     comments: [Comment!]!
   }
 
