@@ -183,22 +183,25 @@ module.exports = {
   },
 
   Query: {
-    async getPhoneNumber(_, { phoneNumber, isRequested }, context) {
-      if (!context.tokenData) throw new AuthenticationError('로그인이 필요합니다.');
+    async getPhoneNumber(_, { phoneNumber, isRequested }, { tokenData }) {
+      if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
       if (!phoneNumber || phoneNumber.trim() === '') {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
 
-      const { isAdmin, user } = await checkUserOrAdmin(context.tokenData);
-
       // 유저이고 isRequested가 true일 때만 검색 횟수 체크
-      if (isRequested && user) {
+      if (isRequested && tokenData.userId) {
+        const user = await User.findById(tokenData.userId);
+        if (!user) {
+          throw new UserInputError('유저를 찾을 수 없습니다.');
+        }
+
         // 오늘 날짜의 시작 시간 (00:00:00)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
         // 마지막 검색 시간이 오늘이 아니면 카운트 리셋
-        if (!user.lastSearchTime || user.lastSearchTime.toLocal() < today.toLocal()) {
+        if (!user.lastSearchTime || user.lastSearchTime < today) {
           user.searchCount = 0;
         }
 
