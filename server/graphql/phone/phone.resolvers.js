@@ -219,7 +219,9 @@ module.exports = {
         await user.save();
       }
 
-      return PhoneNumber.findOne({ phoneNumber });
+      // lean()을 사용하여 일반 객체로 가져오되, 시간은 그대로 유지
+      const doc = await PhoneNumber.findOne({ phoneNumber }).lean();
+      return doc;
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {
