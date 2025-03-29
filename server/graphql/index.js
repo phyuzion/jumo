@@ -2,6 +2,7 @@
 
 const { mergeTypeDefs, mergeResolvers } = require('@graphql-tools/merge');
 const { GraphQLJSON } = require('graphql-type-json');
+const DateScalar = require('./scalars/date');
 
 // 도메인별 import
 const adminTypeDefs = require('./admin/admin.typeDefs');
@@ -32,6 +33,8 @@ const userTypeResolvers = require('./userType/userType.resolvers');
   이후 각 도메인에서 `extend type Query/Mutation` 형태로 확장
 */
 const rootTypeDefs = `
+  scalar Date
+
   type Query {
     _dummy: String
   }
@@ -71,6 +74,7 @@ const resolvers = mergeResolvers([
   phoneResolvers,
   {
     JSON: GraphQLJSON,
+    Date: DateScalar,
   },
   contentResolvers,
   notificationResolvers,

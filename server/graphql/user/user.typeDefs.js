@@ -9,8 +9,8 @@ module.exports = gql`
     name: String
     phoneNumber: String
     userType: String
-    createdAt: String
-    validUntil: String
+    createdAt: Date
+    validUntil: Date
     region: String
     grade: String
     settings: String
@@ -33,7 +33,7 @@ module.exports = gql`
     name: String
     memo: String
     type: Int
-    createdAt: String
+    createdAt: Date
   }
 
   # getUserRecords 쿼리의 반환 구조
@@ -44,13 +44,13 @@ module.exports = gql`
 
   type CallLog {
     phoneNumber: String!
-    time: String!
+    time: Date!
     callType: String!
   }
 
   type SMSLog {
     phoneNumber: String!
-    time: String!
+    time: Date!
     content: String
     smsType: String!
   }

@@ -1,5 +1,4 @@
 const TodayRecord = require('../../models/TodayRecord');
-const { toKstISOString } = require('../../utils/date');
 
 const resolvers = {
   Query: {
@@ -13,8 +12,8 @@ const resolvers = {
         userName: record.userName,
         userType: record.userType,
         callType: record.callType,
-        createdAt: toKstISOString(record.createdAt), // UTC -> KST
-        updatedAt: toKstISOString(record.updatedAt), // UTC -> KST
+        createdAt: record.createdAt, // Date 스칼라 타입이 자동 변환
+        updatedAt: record.updatedAt, // Date 스칼라 타입이 자동 변환
       }));
     },
   },

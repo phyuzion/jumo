@@ -232,7 +232,7 @@ module.exports = {
       if (phoneNumberDoc.records) {
         phoneNumberDoc.records = phoneNumberDoc.records.map(record => ({
           ...record.toObject(),
-          createdAt: toKstISOString(record.createdAt)
+          createdAt: record.createdAt // Date 스칼라 타입이 자동 변환
         }));
       }
 
@@ -249,7 +249,7 @@ module.exports = {
         if (obj.records) {
           obj.records = obj.records.map(record => ({
             ...record,
-            createdAt: toKstISOString(record.createdAt)
+            createdAt: record.createdAt // Date 스칼라 타입이 자동 변환
           }));
         }
         return obj;
@@ -280,7 +280,7 @@ module.exports = {
             name: r.name,
             memo: r.memo,
             type: r.type,
-            createdAt: toKstISOString(r.createdAt), // UTC -> KST
+            createdAt: r.createdAt, // Date 스칼라 타입이 자동 변환
           });
         }
       }

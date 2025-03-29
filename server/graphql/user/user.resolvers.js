@@ -73,7 +73,7 @@ module.exports = {
 
       return user.callLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
-        time: toKstISOString(log.time), // UTC -> KST
+        time: log.time, // Date 스칼라 타입이 자동 변환
         callType: log.callType,
       }));
     },
@@ -86,7 +86,7 @@ module.exports = {
 
       return user.smsLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
-        time: toKstISOString(log.time), // UTC -> KST
+        time: log.time, // Date 스칼라 타입이 자동 변환
         content: log.content || '',
         smsType: log.smsType,
       }));
@@ -128,7 +128,7 @@ module.exports = {
             name: rec.name,
             memo: rec.memo,
             type: rec.type || 0,
-            createdAt: toKstISOString(rec.createdAt), // UTC -> KST
+            createdAt: rec.createdAt, // Date 스칼라 타입이 자동 변환
           });
         }
       }

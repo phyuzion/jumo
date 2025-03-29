@@ -6,8 +6,8 @@ module.exports = gql`
     id: ID!
     title: String!
     message: String
-    validUntil: String
-    createdAt: String
+    validUntil: Date
+    createdAt: Date
     targetUserId: ID
   }
 
