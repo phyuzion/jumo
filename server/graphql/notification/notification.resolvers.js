@@ -7,7 +7,7 @@ const { checkAdminValid } = require('../auth/utils');
 module.exports = {
   Query: {
     getNotifications: async (_, __, { tokenData }) => {
-      const now = new Date(); // UTC 시간, DateScalar가 자동 변환
+      const now = new Date();
 
       if (tokenData?.adminId) {
         // 1) 어드민: 만료 여부 상관없이 전체
@@ -40,9 +40,9 @@ module.exports = {
       // 어드민 체크
       await checkAdminValid(tokenData);
 
-      let validDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 기본 1일 (UTC 시간)
+      let validDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 기본 1일
       if (validUntil) {
-        validDate = new Date(validUntil); // ISO 문자열을 UTC Date로 변환, DateScalar가 KST→UTC 자동 변환
+        validDate = new Date(validUntil);
       }
 
       let targetUser = null;
@@ -62,7 +62,7 @@ module.exports = {
         targetUserId: targetUser,
       });
       await noti.save();
-      return noti; // Date 필드는 DateScalar가 UTC→KST 자동 변환
+      return noti;
     },
   },
 };

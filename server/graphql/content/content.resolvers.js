@@ -33,14 +33,14 @@ module.exports = {
         userRegion: doc.userRegion,
         type: doc.type,
         title: doc.title,
-        createdAt: doc.createdAt, // DateScalar가 UTC→KST 자동 변환
+        createdAt: doc.createdAt,
       }));
     },
 
     getSingleContent: async (_, { contentId }) => {
       const doc = await Content.findById(contentId);
       if (!doc) throw new UserInputError('해당 글 없음');
-      return doc; // Date 필드는 DateScalar가 UTC→KST 자동 변환
+      return doc;
     },
   },
 
@@ -71,11 +71,11 @@ module.exports = {
         type: type || '',
         title: title || '',
         content: content,
-        createdAt: new Date(), // UTC 시간, DateScalar가 UTC→KST 자동 변환
+        createdAt: new Date(),
         comments: [],
       });
       await newDoc.save();
-      return newDoc; // Date 필드는 DateScalar가 UTC→KST 자동 변환
+      return newDoc;
     },
 
     // 글 수정
@@ -93,7 +93,7 @@ module.exports = {
       }
 
       await doc.save();
-      return doc; // Date 필드는 DateScalar가 UTC→KST 자동 변환
+      return doc;
     },
 
     // 글 삭제
@@ -135,11 +135,11 @@ module.exports = {
         userName,
         userRegion,
         comment,
-        createdAt: new Date(), // UTC 시간, DateScalar가 UTC→KST 자동 변환
+        createdAt: new Date(),
       });
 
       await found.save();
-      return found; // Date 필드는 DateScalar가 UTC→KST 자동 변환
+      return found;
     },
 
     // 댓글 삭제(index로 식별)

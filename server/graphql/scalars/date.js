@@ -1,55 +1,27 @@
 const { GraphQLScalarType, Kind } = require('graphql');
-
-/**
- * 시간 변환 유틸리티 함수
- */
-// KST 시간을 UTC로 변환
-function kstToUtc(kstDate) {
-  const date = kstDate instanceof Date ? kstDate : new Date(kstDate);
-  return new Date(date.getTime() - (9 * 60 * 60 * 1000)); // KST -> UTC
-}
-
-// UTC 시간을 KST로 변환
-function utcToKst(utcDate) {
-  const date = utcDate instanceof Date ? utcDate : new Date(utcDate);
-  return new Date(date.getTime() + (9 * 60 * 60 * 1000)); // UTC -> KST
-}
-
-// Date 객체를 KST ISO 문자열로 변환
-function toKstISOString(date) {
-  const kst = utcToKst(date);
-  const year = kst.getFullYear();
-  const month = String(kst.getMonth() + 1).padStart(2, '0');
-  const day = String(kst.getDate()).padStart(2, '0');
-  const hours = String(kst.getHours()).padStart(2, '0');
-  const minutes = String(kst.getMinutes()).padStart(2, '0');
-  const seconds = String(kst.getSeconds()).padStart(2, '0');
-  const milliseconds = String(kst.getMilliseconds()).padStart(3, '0');
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}.${milliseconds}`;
-}
+const { utcToKst, toKstISOString } = require('../../utils/date');
 
 /**
  * Date 객체를 ISO 문자열로 직렬화하는 스칼라 타입
- * 일관된 시간 변환 처리
+ * UTC 시간을 KST로 변환하여 ISO 문자열로 반환
  */
 const DateScalar = new GraphQLScalarType({
   name: 'Date',
-  description: 'Date custom scalar type with timezone conversion',
+  description: 'Date custom scalar type',
   
-  // 값을 클라이언트에 보낼 때 (UTC Date -> KST ISO String)
+  // 값을 클라이언트에 보낼 때 (UTC Date -> ISO String)
   serialize(value) {
     if (value instanceof Date) {
-      // UTC Date 객체를 KST로 변환하여 ISO 문자열로 반환
+      // Date 객체를 KST로 변환하여 ISO 문자열로 반환
       return toKstISOString(value);
     }
     return value;
   },
   
-  // 클라이언트에서 받은 값을 파싱할 때 (ISO String -> UTC Date)
+  // 클라이언트에서 받은 값을 파싱할 때 (ISO String -> Date)
   parseValue(value) {
     if (typeof value === 'string') {
-      // KST 시간으로 입력된 문자열을 UTC Date로 변환
-      return kstToUtc(new Date(value));
+      return new Date(value);
     }
     return null;
   },
@@ -57,17 +29,10 @@ const DateScalar = new GraphQLScalarType({
   // 쿼리에서 리터럴 값을 파싱할 때
   parseLiteral(ast) {
     if (ast.kind === Kind.STRING) {
-      // KST 시간으로 입력된 문자열을 UTC Date로 변환
-      return kstToUtc(new Date(ast.value));
+      return new Date(ast.value);
     }
     return null;
   }
 });
 
-// DateScalar와 함께 유틸리티 함수도 내보냄
-module.exports = {
-  DateScalar,
-  kstToUtc,
-  utcToKst,
-  toKstISOString
-}; 
+module.exports = DateScalar; 
