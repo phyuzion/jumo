@@ -180,31 +180,31 @@ const Users = () => {
   // 유효기간
   const validUntilAccessor = (field, data) => {
     if (!data.validUntil) return '';
-    try {
-      // ISO 문자열이면 날짜 부분만 추출
-      if (typeof data.validUntil === 'string' && data.validUntil.includes('T')) {
-        return data.validUntil.split('T')[0]; // YYYY-MM-DD 부분만 추출
-      } 
-      
-      return data.validUntil;
-    } catch (e) {
-      return data.validUntil;
-    }
+    // epoch 숫자를 Date 객체로 변환
+    const date = new Date(parseInt(data.validUntil));
+    // YYYY-MM-DD 형식으로 변환
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\. /g, '-').replace('.', '');
   };
 
   // 시간 변환 헬퍼
   const timeAccessor = (field, data) => {
     if (!data[field]) return '';
-    try {
-      // ISO 문자열이면 포맷 변경
-      if (typeof data[field] === 'string' && data[field].includes('T')) {
-        return data[field].replace('T', ' ').substring(0, 19); // "2023-04-28T14:30:45" -> "2023-04-28 14:30:45"
-      }
-      
-      return data[field];
-    } catch (e) {
-      return data[field];
-    }
+    // epoch 숫자를 Date 객체로 변환
+    const date = new Date(parseInt(data[field]));
+    // YYYY-MM-DD HH:mm:ss 형식으로 변환
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/\. /g, '-').replace('.', '');
   };
 
   // ============= CREATE =============
@@ -267,7 +267,6 @@ const Users = () => {
     try {
       let validStr = null;
       if (editValidUntil) {
-        // 날짜 형식만 있는 경우 시간을 추가
         const dt = new Date(`${editValidUntil}T00:00:00`);
         validStr = dt.toISOString();
       }

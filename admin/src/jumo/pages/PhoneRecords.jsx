@@ -94,7 +94,7 @@ const PhoneRecords = () => {
     setFormUserType(rec.userType || '일반');
 
     if (rec.createdAt) {
-      // ISO 문자열을 datetime-local 형식으로 변환
+      // KST ISO 문자열을 datetime-local 형식으로 변환
       setFormCreatedAt(rec.createdAt.slice(0, 16));
     } else {
       const now = new Date();
@@ -137,12 +137,18 @@ const PhoneRecords = () => {
   const createdAtAccessor = (field, data) => {
     if (!data[field]) return '';
     try {
-      // ISO 문자열이면 포맷 변경
-      if (typeof data[field] === 'string' && data[field].includes('T')) {
-        return data[field].replace('T', ' ').substring(0, 19); // "2023-04-28T14:30:45" -> "2023-04-28 14:30:45"
-      }
-      
-      return data[field];
+      // epoch 숫자를 Date 객체로 변환
+      const date = new Date(parseInt(data[field]));
+      // YYYY-MM-DD HH:mm:ss 형식으로 변환
+      return date.toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }).replace(/\. /g, '-').replace('.', '');
     } catch (e) {
       return data[field];
     }
@@ -291,7 +297,10 @@ const PhoneRecords = () => {
                   className="border p-1 flex-1"
                   value={formCreatedAt}
                   onChange={(e) => setFormCreatedAt(e.target.value)}
+
+                  valueAccessor={createdAtAccessor}
                 />
+                {/* epoch or ISO string */}
               </div>
             </div>
 
