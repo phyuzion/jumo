@@ -7,8 +7,7 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
-      dbName: 'jumo',
-      timezone: 'Asia/Seoul'  // KST 시간대 설정
+      dbName: 'jumo'
     });
     console.log('✅ MongoDB connected');
   } catch (err) {
