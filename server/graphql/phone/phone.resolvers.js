@@ -9,7 +9,7 @@ const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
 const Grade = require('../../models/Grade');
 const { withTransaction } = require('../../utils/transaction');
-const { kstToUtc, utcToKst, toKstISOString } = require('../../utils/date');
+const { kstToUtc, utcToKst, toKstISOString } = require('../scalars/date');
 
 const { checkUserOrAdmin } = require('../auth/utils');
 
@@ -59,7 +59,7 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         name: nr.name || '',
         memo: nr.memo || '',
         type: nr.type || 0,
-        createdAt: nr.createdAt ? kstToUtc(new Date(nr.createdAt)) : new Date(), // KST -> UTC 변환
+        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date(), // DateScalar가 자동 변환
       };
       map[key] = exist;
     } else {
@@ -67,7 +67,7 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
       if (nr.name !== undefined) exist.name = nr.name;
       if (nr.memo !== undefined) exist.memo = nr.memo;
       if (nr.type !== undefined) exist.type = nr.type;
-      exist.createdAt = nr.createdAt ? kstToUtc(new Date(nr.createdAt)) : new Date(); // KST -> UTC 변환
+      exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date(); // DateScalar가 자동 변환
     }
   }
 

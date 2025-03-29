@@ -8,7 +8,7 @@ const {
 } = require('apollo-server-errors');
 const { GraphQLJSON } = require('graphql-type-json');
 const { withTransaction } = require('../../utils/transaction');
-const { kstToUtc, utcToKst, toKstISOString } = require('../../utils/date');
+const { kstToUtc, utcToKst, toKstISOString } = require('../scalars/date');
 
 const {
   generateAccessToken,
@@ -291,7 +291,7 @@ module.exports = {
         }
         const newLog = {
           phoneNumber: log.phoneNumber,
-          time: kstToUtc(dt), // KST -> UTC
+          time: dt, // DateScalar가 자동 변환
           callType: log.callType,
         };
         pushNewLog(user.callLogs, newLog, 200);
@@ -350,7 +350,7 @@ module.exports = {
                         $set: {
                           userType: user.userType,
                           callType: log.callType,
-                          createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                          createdAt: dt  // DateScalar가 자동 변환
                         }
                       }
                     }
@@ -365,7 +365,7 @@ module.exports = {
                       userName: user.name,
                       userType: user.userType,
                       callType: log.callType,
-                      createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                      createdAt: dt  // DateScalar가 자동 변환
                     }
                   }
                 });
@@ -400,7 +400,7 @@ module.exports = {
         }
         const newLog = {
           phoneNumber: log.phoneNumber,
-          time: kstToUtc(dt), // KST -> UTC
+          time: dt, // DateScalar가 자동 변환
           content: log.content,
           smsType: log.smsType,
         };
@@ -466,7 +466,7 @@ module.exports = {
                         $set: {
                           userType: user.userType,
                           smsType: log.smsType,
-                          createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                          createdAt: dt  // DateScalar가 자동 변환
                         }
                       }
                     }
@@ -481,7 +481,7 @@ module.exports = {
                       userName: user.name,
                       userType: user.userType,
                       smsType: log.smsType,
-                      createdAt: kstToUtc(dt)  // KST -> UTC 변환
+                      createdAt: dt  // DateScalar가 자동 변환
                     }
                   }
                 });

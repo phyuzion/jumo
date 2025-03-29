@@ -2,7 +2,7 @@
 
 const { mergeTypeDefs, mergeResolvers } = require('@graphql-tools/merge');
 const { GraphQLJSON } = require('graphql-type-json');
-const DateScalar = require('./scalars/date');
+const { DateScalar } = require('./scalars/date');
 
 // 도메인별 import
 const adminTypeDefs = require('./admin/admin.typeDefs');
