@@ -180,38 +180,31 @@ const Users = () => {
   // 유효기간
   const validUntilAccessor = (field, data) => {
     if (!data.validUntil) return '';
-    // validUntil이 epoch string인지, ISO string인지 상황에 따라 확인
-    let dt = null;
-    // 시도1: epoch 파싱
-    const epoch = parseInt(data.validUntil, 10);
-    if (!isNaN(epoch)) {
-      dt = new Date(epoch);
-    }
-    // 시도2: 만약 epoch 변환 실패 시 Date로 직접 파싱
-    if (!dt || isNaN(dt.getTime())) {
-      dt = new Date(data.validUntil);
-    }
-    if (isNaN(dt.getTime())) return data.validUntil; 
-    return dt.toISOString().slice(0, 10); // "YYYY-MM-DD"
+    // epoch 숫자를 Date 객체로 변환
+    const date = new Date(parseInt(data.validUntil));
+    // YYYY-MM-DD 형식으로 변환
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    }).replace(/\. /g, '-').replace('.', '');
   };
 
   // 시간 변환 헬퍼
   const timeAccessor = (field, data) => {
     if (!data[field]) return '';
-    let dt = new Date(data[field]);
-    if (isNaN(dt.getTime())) return data[field];
-    
-    const koreanTime = new Date(dt.getTime());
-    
+    // epoch 숫자를 Date 객체로 변환
+    const date = new Date(parseInt(data[field]));
     // YYYY-MM-DD HH:mm:ss 형식으로 변환
-    const year = koreanTime.getFullYear();
-    const month = String(koreanTime.getMonth() + 1).padStart(2, '0');
-    const day = String(koreanTime.getDate()).padStart(2, '0');
-    const hours = String(koreanTime.getHours()).padStart(2, '0');
-    const minutes = String(koreanTime.getMinutes()).padStart(2, '0');
-    const seconds = String(koreanTime.getSeconds()).padStart(2, '0');
-    
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    return date.toLocaleString('ko-KR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).replace(/\. /g, '-').replace('.', '');
   };
 
   // ============= CREATE =============
@@ -258,33 +251,14 @@ const Users = () => {
   // ============= EDIT =============
   const handleEditClick = (u) => {
     setEditUser(u);
-    setEditLoginId(u.loginId || '');
-    setEditPhone(u.phoneNumber || '');
-    setEditName(u.name || '');
-    setEditUserType(u.userType || '일반');
-    setEditRegion(u.region || '');
-    setEditGrade(u.grade || '');
-
-    // validUntil => "YYYY-MM-DD"
-    let dtStr = '';
-    if (u.validUntil) {
-      try {
-        const maybeEpoch = parseInt(u.validUntil, 10);
-        let dt = null;
-        if (!isNaN(maybeEpoch)) {
-          dt = new Date(maybeEpoch);
-        } else {
-          dt = new Date(u.validUntil);
-        }
-        if (!isNaN(dt.getTime())) {
-          dtStr = dt.toISOString().slice(0, 10);
-        }
-      } catch (err) {
-        // ignore
-      }
-    }
-    setEditValidUntil(dtStr);
-
+    setEditLoginId(u.loginId);
+    setEditPhone(u.phoneNumber);
+    setEditName(u.name);
+    setEditUserType(u.userType);
+    setEditRegion(u.region);
+    setEditGrade(u.grade);
+    // KST ISO 문자열에서 날짜만 추출
+    setEditValidUntil(u.validUntil ? u.validUntil.slice(0, 10) : '');
     setShowEditModal(true);
   };
 

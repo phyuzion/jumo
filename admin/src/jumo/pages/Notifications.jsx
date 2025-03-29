@@ -22,9 +22,18 @@ const PAGE_SIZE = 10;
 /** 날짜 포맷 (로컬 표시) */
 function formatLocalDate(str) {
   if (!str) return '';
-  const d = new Date(parseInt(str));
-  if (isNaN(d.getTime())) return str;
-  return d.toLocaleString(); 
+  // epoch 숫자를 Date 객체로 변환
+  const date = new Date(parseInt(str));
+  // YYYY-MM-DD HH:mm:ss 형식으로 변환
+  return date.toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).replace(/\. /g, '-').replace('.', '');
 }
 
 export default function Notifications() {
@@ -69,12 +78,8 @@ export default function Notifications() {
     setMessage('');
 
     const now = new Date();
-    let year = now.getFullYear();
-    let mon  = String(now.getMonth()).padStart(2, '0');
-    let day  = String(now.getDate()+1).padStart(2, '0');
-    let hh   = String(now.getHours()).padStart(2, '0');
-    let mm   = String(now.getMinutes()).padStart(2, '0');
-    setValidDate(`${year}-${mon}-${day}T${hh}:${mm}`);      // "" => "기본 1일" 서버 정책
+    const isoStr = now.toISOString().slice(0, 16);
+    setValidDate(isoStr);
     setTargetUserId('');
     setShowCreateModal(true);
   };
@@ -87,20 +92,11 @@ export default function Notifications() {
   // ====== 새 알림 생성 ======
   const handleCreateSubmit = async () => {
     try {
-      // validDate(로컬) -> ISO(UTC)
-      // 예) "2023-09-15T23:00" (KST) -> new Date("2023-09-15T23:00:00") -> .toISOString()
-      let finalValidUntil = undefined;
-      if (validDate) {
-        const localDT = new Date(validDate);
-        // HTML datetime-local은 로컬 타임존 기준
-        // .toISOString() => UTC
-        finalValidUntil = localDT.toISOString();
-      }
-
+      // 서버에서 자동으로 KST -> UTC 변환
       const variables = {
         title,
         message,
-        validUntil: finalValidUntil,
+        validUntil: validDate,
       };
       if (targetUserId.trim()) {
         variables.userId = targetUserId.trim();
