@@ -44,7 +44,6 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
       width: WindowSize.matchParent,
       overlayTitle: title,
       overlayContent: "전화가 왔습니다", // 알림 표기용
-
       flag: OverlayFlag.defaultFlag,
       visibility: NotificationVisibility.visibilityPublic,
       positionGravity: PositionGravity.auto,
@@ -56,13 +55,35 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
     // 가로/세로에 따라 높이 지정
     final size = MediaQuery.of(context).size;
 
+    // 데이터 길이에 따른 높이 계산
+    final todayRecordsCount = _result?.todayRecords?.length ?? 0;
+    final phoneRecordsCount = _result?.phoneNumberModel?.records?.length ?? 0;
+
+    // 기본 높이 (헤더 + 여백)
+    double baseHeight = 0.1; // 기본 40% 높이
+
+    // todayRecords가 있는 경우
+    if (todayRecordsCount > 0) {
+      // todayRecords 섹션 헤더 + 아이템들
+      baseHeight += 0.1 + (todayRecordsCount * 0.08);
+    }
+
+    // phoneRecords가 있는 경우
+    if (phoneRecordsCount > 0) {
+      // phoneRecords 섹션 헤더 + 아이템들
+      baseHeight += 0.1 + (phoneRecordsCount * 0.08);
+    }
+
+    // 최대 높이 제한 (화면의 80%로)
+    baseHeight = baseHeight.clamp(0.1, 0.8);
+
     return Material(
       color: Colors.transparent,
       child: Center(
         child: Container(
           // 가로는 full, 세로는 위에서 계산
           width: size.width,
-          height: size.height * 0.4,
+          height: size.height * baseHeight,
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border.all(color: Colors.transparent),
