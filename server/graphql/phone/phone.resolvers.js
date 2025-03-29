@@ -219,15 +219,7 @@ module.exports = {
         await user.save();
       }
 
-      // lean()을 사용하여 일반 객체로 가져오고, 시간을 원본 그대로 유지
-      const doc = await PhoneNumber.findOne({ phoneNumber }).lean();
-      if (doc && doc.records) {
-        doc.records = doc.records.map(record => ({
-          ...record,
-          createdAt: record.createdAt ? record.createdAt.toISOString() : null
-        }));
-      }
-      return doc;
+      return PhoneNumber.findOne({ phoneNumber });
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {
