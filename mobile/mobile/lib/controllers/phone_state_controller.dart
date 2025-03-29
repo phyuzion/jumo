@@ -55,12 +55,10 @@ class PhoneStateController {
       final data = await SearchRecordsController.searchPhone(number!);
       if (data != null) {
         // 정상 결과
-        final dataMap = data.toJson();
-        dataMap['isNew'] = false;
-        FlutterOverlayWindow.shareData(dataMap);
+        FlutterOverlayWindow.shareData(data.toJson());
       } else {
-        final fakeMap = {'isNew': true, 'phoneNumber': number};
-        FlutterOverlayWindow.shareData(fakeMap);
+        // 데이터가 없는 경우 빈 데이터 전달
+        FlutterOverlayWindow.shareData({'phoneNumber': number});
       }
       log('showOverlay done');
     }

@@ -71,7 +71,6 @@ class _SearchScreenState extends State<SearchScreen> {
         _result = SearchResultModel(
           phoneNumberModel: phoneData,
           todayRecords: todayRecords,
-          isNew: phoneData == null,
         );
       });
     } catch (e) {

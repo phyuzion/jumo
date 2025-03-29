@@ -51,10 +51,7 @@ String formatDateString(String? dateStr) {
     return dateStr;
   }
 
-  // 로컬 시간대
-  dt = dt.toLocal();
-
-  // 원하는 포맷(예: yyyy-MM-dd HH:mm)
+  // UTC 시간 그대로 사용
   final formatter = DateFormat('yyyy-MM-dd HH:mm');
   return formatter.format(dt);
 }

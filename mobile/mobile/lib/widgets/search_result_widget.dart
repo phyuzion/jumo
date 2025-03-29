@@ -9,22 +9,15 @@ class SearchResultWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (searchResult.isNew) {
-      return const Center(
-        child: Text('신규 번호입니다.', style: TextStyle(color: Colors.grey)),
-      );
-    }
-
     // 타입 컬러
     final typeColor = _pickColorForType(
       searchResult.phoneNumberModel?.type ?? 0,
     );
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // -----------------------------
-        // (1) 상단 헤더부: phoneNumber + type
+        // (1) 상단 헤더부: phoneNumber + type 또는 신규 번호 메시지
         // -----------------------------
         Container(
           padding: const EdgeInsets.all(16),
@@ -32,32 +25,55 @@ class SearchResultWidget extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Type 서클
-              CircleAvatar(
-                backgroundColor: typeColor,
-                radius: 20,
-                child: Text(
-                  '${searchResult.phoneNumberModel?.type ?? 0}',
-                  style: const TextStyle(color: Colors.white, fontSize: 18),
-                ),
-              ),
-              const SizedBox(width: 20),
-              // 전화번호 (굵게)
-              Expanded(
-                child: Text(
-                  searchResult.phoneNumberModel?.phoneNumber ?? '',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+              if (searchResult.phoneNumberModel != null) ...[
+                // Type 서클
+                CircleAvatar(
+                  backgroundColor: typeColor,
+                  radius: 20,
+                  child: Text(
+                    '${searchResult.phoneNumberModel?.type ?? 0}',
+                    style: const TextStyle(color: Colors.white, fontSize: 18),
                   ),
                 ),
-              ),
+                const SizedBox(width: 20),
+                // 전화번호 (굵게)
+                Expanded(
+                  child: Text(
+                    searchResult.phoneNumberModel?.phoneNumber ?? '',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ] else ...[
+                // 신규 번호 메시지
+                Expanded(
+                  child: Center(
+                    child: Text(
+                      '신규 번호입니다',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
-
+        // 구분선
+        const Divider(
+          color: Colors.grey,
+          thickness: 0.5,
+          indent: 16.0,
+          endIndent: 16.0,
+          height: 0,
+        ),
         // -----------------------------
-        // (2) 레코드 목록
+        // (2) 하단 리스트부: todayRecords + phoneRecords
         // -----------------------------
         Expanded(child: _buildRecordsList()),
       ],
@@ -68,20 +84,13 @@ class SearchResultWidget extends StatelessWidget {
     final phoneRecords = searchResult.phoneNumberModel?.records ?? [];
     final todayRecords = searchResult.todayRecords ?? [];
 
-    if (phoneRecords.isEmpty && todayRecords.isEmpty) {
-      return const Center(
-        child: Text('레코드가 없습니다.', style: TextStyle(color: Colors.grey)),
-      );
-    }
-
     return ListView.separated(
       itemCount:
           (todayRecords.isNotEmpty ? 1 : 0) + // TodayRecord 섹션
           todayRecords.length + // TodayRecord 아이템들
           (todayRecords.length > 3 ? 1 : 0) + // 더보기 버튼
           (phoneRecords.isNotEmpty ? 1 : 0) + // PhoneRecord 섹션
-          phoneRecords.length + // PhoneRecord 아이템들
-          (phoneRecords.isNotEmpty ? 1 : 0), // 마지막 아이템을 위한 추가 공간
+          phoneRecords.length, // PhoneRecord 아이템들
       separatorBuilder: (context, index) {
         return const Divider(
           color: Colors.grey,
@@ -93,7 +102,7 @@ class SearchResultWidget extends StatelessWidget {
       },
       itemBuilder: (context, index) {
         // TodayRecord 섹션 헤더
-        if (index == 0 && todayRecords.isNotEmpty) {
+        if (index == 0) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -103,8 +112,22 @@ class SearchResultWidget extends StatelessWidget {
           );
         }
 
-        // TodayRecord 아이템들
-        if (index > 0 && index <= todayRecords.length) {
+        // TodayRecord 아이템들 또는 빈 상태 메시지
+        if (index == 1) {
+          if (todayRecords.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                '최근 통화기록이 없습니다.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            );
+          }
+          return _buildTodayRecordItem(todayRecords[0]);
+        }
+
+        // TodayRecord 아이템들 (index > 1)
+        if (index > 1 && index <= todayRecords.length) {
           return _buildTodayRecordItem(todayRecords[index - 1]);
         }
 
@@ -119,8 +142,9 @@ class SearchResultWidget extends StatelessWidget {
         }
 
         // PhoneRecord 섹션 헤더
-        if (index == todayRecords.length + (todayRecords.length > 3 ? 2 : 1) &&
-            phoneRecords.isNotEmpty) {
+        final phoneSectionStart =
+            todayRecords.length + (todayRecords.length > 3 ? 2 : 1);
+        if (index == phoneSectionStart) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -130,18 +154,24 @@ class SearchResultWidget extends StatelessWidget {
           );
         }
 
-        // PhoneRecord 아이템들
-        final headerOffset =
-            todayRecords.length + (todayRecords.length > 3 ? 2 : 1);
-        final phoneRecordIndex =
-            index - headerOffset - (phoneRecords.isNotEmpty ? 1 : 0);
-
-        // 음수 인덱스 체크
-        if (phoneRecordIndex < 0 || phoneRecordIndex >= phoneRecords.length) {
-          return const SizedBox.shrink();
+        // PhoneRecord 아이템들 또는 빈 상태 메시지
+        if (index == phoneSectionStart + 1) {
+          if (phoneRecords.isEmpty) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text('신규 번호입니다.', style: TextStyle(color: Colors.grey)),
+            );
+          }
+          return _buildPhoneRecordItem(phoneRecords[0]);
         }
 
-        return _buildPhoneRecordItem(phoneRecords[phoneRecordIndex]);
+        // PhoneRecord 아이템들 (index > phoneSectionStart + 1)
+        final phoneRecordIndex = index - phoneSectionStart - 1;
+        if (phoneRecordIndex > 0 && phoneRecordIndex < phoneRecords.length) {
+          return _buildPhoneRecordItem(phoneRecords[phoneRecordIndex]);
+        }
+
+        return const SizedBox.shrink();
       },
     );
   }
