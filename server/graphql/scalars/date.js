@@ -38,10 +38,30 @@ const DateScalar = new GraphQLScalarType({
   
   // 값을 클라이언트에 보낼 때 (UTC Date -> KST ISO String)
   serialize(value) {
+    // null/undefined 처리
+    if (value == null) {
+      return value;
+    }
+    
+    // Date 객체 처리
     if (value instanceof Date) {
       // UTC Date 객체를 KST로 변환하여 ISO 문자열로 반환
       return toKstISOString(value);
     }
+    
+    // 문자열이면 ISO 형식인지 확인하고 UTC로 가정하여 KST로 변환
+    if (typeof value === 'string' && value.includes('T')) {
+      try {
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) {
+          return toKstISOString(date);
+        }
+      } catch (e) {
+        // 파싱 오류 시 원본 그대로 반환
+      }
+    }
+    
+    // 그 외 값은 그대로 반환
     return value;
   },
   
