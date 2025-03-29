@@ -3,10 +3,12 @@ import requests
 import json
 import time
 import os
+import pytz
+from datetime import datetime
 
 # 📌 설정값
 SQL_FILE_PATH = "./faker20241122.sql"  # SQL 파일 경로
-BATCH_SIZE = 1000  # 한 번에 보낼 레코드 개수 (조절 가능)
+BATCH_SIZE = 500  # 한 번에 보낼 레코드 개수 (조절 가능)
 GRAPHQL_ENDPOINT = "https://jumo-vs8e.onrender.com/graphql"
 ADMIN_CREDENTIALS = {
     "username": "admin",
@@ -95,12 +97,29 @@ def parse_sql_file(sql_file_path):
         except ValueError:
             user_type = "일반"
 
+        # 시간 처리
+        try:
+            # 시간 형식이 맞는 경우 UTC로 변환
+            if re.match(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', columns[UPDATED_DATE_IDX]):
+                kst = pytz.timezone('Asia/Seoul')
+                utc = pytz.UTC
+                kst_time = datetime.strptime(columns[UPDATED_DATE_IDX], '%Y-%m-%d %H:%M:%S')
+                kst_time = kst.localize(kst_time)
+                utc_time = kst_time.astimezone(utc)
+                created_at = utc_time.isoformat()
+            else:
+                # 형식이 맞지 않는 경우 기본값 사용
+                created_at = "2020-01-01T00:00:00+00:00"
+        except Exception as e:
+            print(f"⚠️ 시간 처리 실패: {e}")
+            created_at = "2020-01-01T00:00:00+00:00"
+
         record = {
             "name": columns[MEMO_IDX] if columns[MEMO_IDX] != "-1" else None,
             "phoneNumber": columns[PHONE_IDX],
             "userName": columns[COMPANY_INFO_IDX] if columns[COMPANY_INFO_IDX] != "-1" else None,
             "userType": user_type,
-            "createdAt": columns[UPDATED_DATE_IDX]
+            "createdAt": created_at
         }
         records.append(record)
 
