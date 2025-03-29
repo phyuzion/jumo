@@ -11,6 +11,7 @@ const connectDB = async () => {
     await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
+      dbName: 'jumo'
     });
     
     console.log('✅ MongoDB connected');
