@@ -78,15 +78,23 @@ const PhoneRecords = () => {
     setFormUserName('');
     setFormUserType('일반');
     const now = new Date();
-    const isoStr = now.toISOString().slice(0, 16);
-    setFormCreatedAt(isoStr);
+    let year = now.getFullYear();
+    let mon  = String(now.getMonth()).padStart(2, '0');
+    let day  = String(now.getDate()).padStart(2, '0');
+    let hh   = String(now.getHours()).padStart(2, '0');
+    let mm   = String(now.getMinutes()).padStart(2, '0');
+    setFormCreatedAt(`${year}-${mon}-${day}T${hh}:${mm}`);
     setShowModal(true);
   };
 
   // 수정
   const handleEditClick = (rec) => {
     setEditRecord(rec);
+
+    // formPhoneNumber => 이미 검색한 번호일 수도, 
+    // 혹은 rec마다 다른 phoneNumber를 허용한다면 rec.phoneNumber가 있어야
     setFormPhoneNumber(searchPhone);
+
     setFormName(rec.name || '');
     setFormMemo(rec.memo || '');
     setFormType(rec.type || 0);
@@ -94,8 +102,25 @@ const PhoneRecords = () => {
     setFormUserType(rec.userType || '일반');
 
     if (rec.createdAt) {
-      // KST ISO 문자열을 datetime-local 형식으로 변환
-      setFormCreatedAt(rec.createdAt.slice(0, 16));
+      // epoch or iso
+      let dt = null;
+      // 시도1: epoch 파싱
+      const epoch = parseInt(rec.createdAt, 10);
+      if (!isNaN(epoch)) {
+        dt = new Date(epoch);
+      }
+      // 시도2: 만약 epoch 변환 실패 시 Date로 직접 파싱
+      if (!dt || isNaN(dt.getTime())) {
+        dt = new Date(rec.createdAt);
+      }
+
+      if (!isNaN(dt.getTime())) {
+        // UTC 시간을 그대로 사용
+        const isoStr = dt.toISOString().slice(0, 16);
+        setFormCreatedAt(isoStr);
+      } else {
+        setFormCreatedAt('');
+      }
     } else {
       const now = new Date();
       const isoStr = now.toISOString().slice(0, 16);
@@ -137,18 +162,19 @@ const PhoneRecords = () => {
   const createdAtAccessor = (field, data) => {
     if (!data[field]) return '';
     try {
-      // epoch 숫자를 Date 객체로 변환
-      const date = new Date(parseInt(data[field]));
-      // YYYY-MM-DD HH:mm:ss 형식으로 변환
-      return date.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      }).replace(/\. /g, '-').replace('.', '');
+      const dt = new Date(data[field]);
+      if (isNaN(dt.getTime())) {
+        // 혹시 epoch string -> number parse
+        const epoch = parseFloat(data[field]);
+        if (!isNaN(epoch)) {
+          const dt2 = new Date(parseInt(epoch));
+          if (!isNaN(dt2.getTime())) {
+            return dt2.toISOString().slice(0, 16).replace('T', ' ');
+          }
+        }
+        return data[field];
+      }
+      return dt.toISOString().slice(0, 16).replace('T', ' ');
     } catch (e) {
       return data[field];
     }

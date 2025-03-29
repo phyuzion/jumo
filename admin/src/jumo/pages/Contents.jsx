@@ -83,18 +83,15 @@ function deltaToHtml(deltaObj) {
 /** 날짜 포맷 */
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  // epoch 숫자를 Date 객체로 변환
-  const date = new Date(parseInt(dateStr));
-  // YYYY-MM-DD HH:mm:ss 형식으로 변환
-  return date.toLocaleString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  }).replace(/\. /g, '-').replace('.', '');
+  let d = null;
+  const maybeEpoch = parseInt(dateStr, 10);
+  if (!isNaN(maybeEpoch)) {
+    d = new Date(maybeEpoch);
+  } else {
+    d = new Date(dateStr);
+  }
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleString();
 }
 
 function Contents() {
@@ -211,7 +208,7 @@ function Contents() {
     // File 객체를 생성할 때 필요한 속성들을 포함
     return new File([u8arr], filename, {
       type: mime,
-      lastModified: Date.now(), // UTC timestamp
+      lastModified: new Date().getTime(),
       name: filename
     });
   };
