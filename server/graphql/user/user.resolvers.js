@@ -8,6 +8,7 @@ const {
 } = require('apollo-server-errors');
 const { GraphQLJSON } = require('graphql-type-json');
 const { withTransaction } = require('../../utils/transaction');
+const mongoose = require('mongoose');
 
 const {
   generateAccessToken,
@@ -113,13 +114,16 @@ module.exports = {
         throw new UserInputError('해당 유저가 존재하지 않습니다.');
       }
 
+      // userId를 ObjectId로 변환
+      const userObjectId = new mongoose.Types.ObjectId(userId);
+
       // phoneNumber 컬렉션에서 records.userId == userId 인 문서들 찾기
-      const phoneDocs = await PhoneNumber.find({ 'records.userId': userId });
+      const phoneDocs = await PhoneNumber.find({ 'records.userId': userObjectId });
 
       let recordList = [];
       for (const doc of phoneDocs) {
         const matchedRecords = doc.records.filter(
-          (r) => r.userId.toString() === userId
+          (r) => r.userId && r.userId.toString() === userObjectId.toString()
         );
         for (const rec of matchedRecords) {
           recordList.push({
