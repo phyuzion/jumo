@@ -113,6 +113,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     if (state == AppLifecycleState.resumed) {
       // 앱이 다시 전면으로 돌아왔을 때 오버레이 권한 재확인
       _checkStatus();
+
+      // 차단 리스트 업데이트
+      _blockedNumbersController.initialize().then((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
   }
 
@@ -530,8 +537,8 @@ class _SettingsScreenState extends State<SettingsScreen>
             // 오버레이 권한 (기본 전화앱이 아닐 때만 표시)
             SwitchListTile(
               secondary: const Icon(Icons.window),
-              title: const Text('오버레이 권한'),
-              subtitle: Text(_overlayGranted ? '허용됨' : '미허용 (수신전화 팝업용)'),
+              title: const Text('팝업으로 보기'),
+              subtitle: Text(_overlayGranted ? '허용됨' : '미허용'),
               value: _overlayGranted,
               onChanged: (val) {
                 _onRequestOverlayPermission();
