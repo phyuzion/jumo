@@ -4,11 +4,9 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/graphql/notification_api.dart';
 import 'package:mobile/services/local_notification_service.dart';
-import 'package:path_provider/path_provider.dart';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
