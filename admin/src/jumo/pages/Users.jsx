@@ -127,11 +127,13 @@ const Users = () => {
   // 등급/지역 데이터 설정
   useEffect(() => {
     if (gradesData?.getGrades) {
-      setGrades(gradesData.getGrades);
+      // limit 값이 작은 순서대로 정렬
+      const sortedGrades = [...gradesData.getGrades].sort((a, b) => a.limit - b.limit);
+      setGrades(sortedGrades);
       // 첫 번째 등급을 기본값으로 설정
-      if (gradesData.getGrades.length > 0) {
-        setFormGrade(gradesData.getGrades[0].name);
-        setEditGrade(gradesData.getGrades[0].name);
+      if (sortedGrades.length > 0) {
+        setFormGrade(sortedGrades[0].name);
+        setEditGrade(sortedGrades[0].name);
       }
     }
     if (regionsData?.getRegions) {
@@ -174,6 +176,11 @@ const Users = () => {
   useEffect(() => {
     if (userTypesData?.getUserTypes) {
       setUserTypes(userTypesData.getUserTypes);
+      // 첫 번째 유저 타입을 기본값으로 설정
+      if (userTypesData.getUserTypes.length > 0) {
+        setFormUserType(userTypesData.getUserTypes[0].name);
+        setEditUserType(userTypesData.getUserTypes[0].name);
+      }
     }
   }, [userTypesData]);
 
@@ -203,9 +210,16 @@ const Users = () => {
     setFormLoginId('');
     setFormPhone('');
     setFormName('');
-    setFormUserType('일반');
-    setFormRegion('');
-    setFormGrade('');
+    // 첫 번째 값으로 초기화
+    if (userTypes.length > 0) {
+      setFormUserType(userTypes[0].name);
+    }
+    if (regions.length > 0) {
+      setFormRegion(regions[0].name);
+    }
+    if (grades.length > 0) {
+      setFormGrade(grades[0].name);
+    }
     setShowCreateModal(true);
   };
 
