@@ -21,26 +21,27 @@ export function localTimeToUTCString(localDateOrString) {
 export function parseServerTimeToLocal(serverTime) {
   if (!serverTime) return '';
 
-  // 1) epoch인지 판별
+  // ISO 문자열인지 먼저 확인
+  if (typeof serverTime === 'string' && serverTime.includes('T')) {
+    const dtObj = new Date(serverTime);
+    if (!isNaN(dtObj.getTime())) {
+      return dtObj.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    }
+  }
+
+  // epoch인지 판별
   let milli = parseInt(serverTime, 10);
-  if (!isNaN(milli) && serverTime.length >= 10) {
-    // 13자리 이상이면 밀리초 epoch으로 간주
-    const isMilli = serverTime.length >= 13;
-    if (!isMilli) {
-      // 10자리라면 초 단위이므로 밀리초로 환산
+  if (!isNaN(milli)) {
+    // 10자리라면 초 단위이므로 밀리초로 환산
+    if (serverTime.length === 10) {
       milli = milli * 1000;
     }
     const dateObj = new Date(milli);
-    return dateObj.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    if (!isNaN(dateObj.getTime())) {
+      return dateObj.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+    }
   }
 
-  // 2) 아니면 ISO-8601(UTC) 문자열로 가정
-  const dtObj = new Date(serverTime);
-  if (isNaN(dtObj)) {
-    // 파싱 실패하면 원본 그대로
-    return serverTime;
-  }
-
-  // 한국 시간 표시
-  return dtObj.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
+  // 파싱 실패하면 원본 그대로
+  return serverTime;
 } 

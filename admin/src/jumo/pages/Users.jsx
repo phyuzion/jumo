@@ -671,7 +671,8 @@ const Users = () => {
                     <ColumnDirective field="name" headerText="이름" width="120" />
                     <ColumnDirective field="memo" headerText="메모" width="200" />
                     <ColumnDirective field="userType" headerText="타입" width="80" />
-                    <ColumnDirective field="createdAt" headerText="생성일" width="150" />
+                    <ColumnDirective field="createdAt" headerText="생성일" width="150" 
+                      valueAccessor={timeAccessor}/>
                   </ColumnsDirective>
                   <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
                 </GridComponent>
