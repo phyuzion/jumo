@@ -285,13 +285,22 @@ module.exports = {
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
-      // 1. User의 callLogs 업데이트
-      for (const log of logs) {
-        let dt = new Date(log.time);
+      // 시간 파싱 함수 추가
+      function parseDateTime(time) {
+        let dt = new Date(time);
         if (isNaN(dt.getTime())) {
-          const epoch = parseFloat(log.time);
+          const epoch = parseFloat(time);
           if (!isNaN(epoch)) dt = new Date(epoch);
         }
+        if (isNaN(dt.getTime())) {
+          dt = new Date(); // 현재 시간으로 대체
+        }
+        return dt;
+      }
+
+      // 1. User의 callLogs 업데이트
+      for (const log of logs) {
+        const dt = parseDateTime(log.time);
         const newLog = {
           phoneNumber: log.phoneNumber,
           time: dt,
@@ -310,11 +319,7 @@ module.exports = {
         oneDayAgo.setDate(oneDayAgo.getDate() - 1);
         
         const recentLogs = logs.filter(log => {
-          let dt = new Date(log.time);
-          if (isNaN(dt.getTime())) {
-            const epoch = parseFloat(log.time);
-            if (!isNaN(epoch)) dt = new Date(epoch);
-          }
+          const dt = parseDateTime(log.time);
           return dt >= oneDayAgo;
         });
 
@@ -336,29 +341,23 @@ module.exports = {
             const inserts = [];
 
             for (const log of recentLogs) {
-              let dt = new Date(log.time);
-              if (isNaN(dt.getTime())) {
-                const epoch = parseFloat(log.time);
-                if (!isNaN(epoch)) dt = new Date(epoch);
-              }
+              const dt = parseDateTime(log.time);
 
               const existing = existingMap.get(log.phoneNumber);
               if (existing) {
-                // 기존 레코드가 있고 새로운 통화가 더 최신인 경우만 업데이트
-                if (dt > existing.createdAt) {
-                  updates.push({
-                    updateOne: {
-                      filter: { _id: existing._id },
-                      update: {
-                        $set: {
-                          userType: user.userType,
-                          callType: log.callType,
-                          createdAt: dt
-                        }
+                // 기존 레코드가 있으면 항상 업데이트하되, 시간이 더 최신인 경우에만 시간 업데이트
+                updates.push({
+                  updateOne: {
+                    filter: { _id: existing._id },
+                    update: {
+                      $set: {
+                        userType: user.userType,
+                        callType: log.callType,
+                        ...(dt > existing.createdAt ? { createdAt: dt } : {})
                       }
                     }
-                  });
-                }
+                  }
+                });
               } else {
                 // 새 레코드 생성
                 inserts.push({
@@ -383,7 +382,7 @@ module.exports = {
         }
       } catch (error) {
         console.error('TodayRecord 업데이트 실패:', error);
-        // TodayRecord 업데이트 실패는 전체 mutation 실패로 이어지지 않도록 함
+        throw new Error('통화 기록 업데이트 중 오류가 발생했습니다.');
       }
 
       return true;
