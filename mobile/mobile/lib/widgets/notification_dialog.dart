@@ -7,8 +7,8 @@ class NotificationDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final box = GetStorage();
-    final displayedNotiIds = List<String>.from(
-      box.read('displayedNotiIds') ?? [],
+    final notifications = List<Map<String, dynamic>>.from(
+      box.read('notifications') ?? [],
     );
 
     return Dialog(
@@ -53,7 +53,7 @@ class NotificationDialog extends StatelessWidget {
             // 내용
             Flexible(
               child:
-                  displayedNotiIds.isEmpty
+                  notifications.isEmpty
                       ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(16.0),
@@ -65,14 +65,27 @@ class NotificationDialog extends StatelessWidget {
                       )
                       : ListView.builder(
                         shrinkWrap: true,
-                        itemCount: displayedNotiIds.length,
+                        itemCount: notifications.length,
                         itemBuilder: (context, index) {
-                          final noti = box.read('notifications')?[index];
-                          if (noti == null) return const SizedBox.shrink();
-
+                          final noti = notifications[index];
                           return ListTile(
                             title: Text(noti['title'] ?? ''),
-                            subtitle: Text(noti['message'] ?? ''),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(noti['message'] ?? ''),
+                                if (noti['timestamp'] != null)
+                                  Text(
+                                    DateTime.parse(
+                                      noti['timestamp'],
+                                    ).toLocal().toString().split('.')[0],
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                              ],
+                            ),
                             leading: const Icon(Icons.notifications),
                             onTap: () {
                               // 알림 클릭 시 처리

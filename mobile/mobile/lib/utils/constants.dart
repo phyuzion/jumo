@@ -18,43 +18,109 @@ String normalizePhone(String raw) {
   return replaced;
 }
 
-// 이건 상단에 만들거나 utils에 둔 후 import
-String shortDateTime(String input) {
-  DateTime? dt = DateTime.tryParse(input);
-  if (dt == null) return input;
-  final mmdd =
-      '${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-  final hhmm =
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  return '$mmdd $hhmm'; // 2줄
-}
-
-/// 서버에서 받은 dateStr(=epoch string or ISO string)을
-/// "yyyy-MM-dd HH:mm" 형태로 변환
-String formatDateString(String? dateStr) {
-  if (dateStr == null || dateStr.isEmpty) return '';
-
-  DateTime? dt;
+/// 서버에서 받은 dateStr(=epoch string or ISO string)을 DateTime으로 변환
+DateTime? parseServerTime(String? dateStr) {
+  if (dateStr == null || dateStr.isEmpty) return null;
 
   // 1) epoch 정수로 파싱 시도
   final maybeEpoch = int.tryParse(dateStr);
   if (maybeEpoch != null) {
     // epoch (ms)
-    dt = DateTime.fromMillisecondsSinceEpoch(maybeEpoch);
+    return DateTime.fromMillisecondsSinceEpoch(maybeEpoch);
   } else {
     // 2) ISO-8601 등 문자열 파싱
-    dt = DateTime.tryParse(dateStr);
+    return DateTime.tryParse(dateStr);
   }
+}
 
-  if (dt == null) {
-    // 파싱 불가 -> 원본 반환 or 빈 문자열
-    return dateStr;
-  }
+/// 서버에서 받은 dateStr을 "yyyy-MM-dd HH:mm" 형태로 변환
+String formatDateString(String? dateStr) {
+  final dt = parseServerTime(dateStr);
+  if (dt == null) return dateStr ?? '';
 
   // 로컬 시간대
-  dt = dt.toLocal();
+  final localDt = dt.toLocal();
 
   // 원하는 포맷(예: yyyy-MM-dd HH:mm)
   final formatter = DateFormat('yyyy-MM-dd HH:mm');
-  return formatter.format(dt);
+  return formatter.format(localDt);
+}
+
+/// 서버에서 받은 dateStr을 "MM-DD HH:mm" 형태로 변환
+String shortDateTime(String? dateStr) {
+  final dt = parseServerTime(dateStr);
+  if (dt == null) return dateStr ?? '';
+
+  // 로컬 시간대
+  final localDt = dt.toLocal();
+
+  // 원하는 포맷(예: MM-DD HH:mm)
+  final formatter = DateFormat('MM-dd HH:mm');
+  return formatter.format(localDt);
+}
+
+/// 서버에서 받은 dateStr을 "MM/DD" 형태로 변환
+String formatDateOnly(String? dateStr) {
+  final dt = parseServerTime(dateStr);
+  if (dt == null) return dateStr ?? '';
+
+  // 로컬 시간대
+  final localDt = dt.toLocal();
+
+  // 원하는 포맷(예: MM/DD)
+  final formatter = DateFormat('MM/dd');
+  return formatter.format(localDt);
+}
+
+/// 서버에서 받은 dateStr을 "HH:mm" 형태로 변환
+String formatTimeOnly(String? dateStr) {
+  final dt = parseServerTime(dateStr);
+  if (dt == null) return dateStr ?? '';
+
+  // 로컬 시간대
+  final localDt = dt.toLocal();
+
+  // 원하는 포맷(예: HH:mm)
+  final formatter = DateFormat('HH:mm');
+  return formatter.format(localDt);
+}
+
+/// 서버에서 받은 dateStr을 "yyyy년 MM월 DD일" 형태로 변환
+String formatKoreanDate(String? dateStr) {
+  final dt = parseServerTime(dateStr);
+  if (dt == null) return dateStr ?? '';
+
+  // 로컬 시간대
+  final localDt = dt.toLocal();
+
+  // 원하는 포맷(예: yyyy년 MM월 DD일)
+  final formatter = DateFormat('yyyy년 MM월 dd일');
+  return formatter.format(localDt);
+}
+
+/// 서버에서 받은 dateStr을 "yyyy년 MM월 DD일 HH:mm" 형태로 변환
+String formatKoreanDateTime(String? dateStr) {
+  final dt = parseServerTime(dateStr);
+  if (dt == null) return dateStr ?? '';
+
+  // 로컬 시간대
+  final localDt = dt.toLocal();
+
+  // 원하는 포맷(예: yyyy년 MM월 DD일 HH:mm)
+  final formatter = DateFormat('yyyy년 MM월 dd일 HH:mm');
+  return formatter.format(localDt);
+}
+
+/// 로컬 epoch milliseconds를 UTC epoch milliseconds로 변환
+int localEpochToUtcEpoch(int localEpochMs) {
+  final localDt = DateTime.fromMillisecondsSinceEpoch(localEpochMs);
+  final utcDt = localDt.toUtc();
+  return utcDt.millisecondsSinceEpoch;
+}
+
+/// UTC epoch milliseconds를 로컬 epoch milliseconds로 변환
+int utcEpochToLocalEpoch(int utcEpochMs) {
+  final utcDt = DateTime.fromMillisecondsSinceEpoch(utcEpochMs);
+  final localDt = utcDt.toLocal();
+  return localDt.millisecondsSinceEpoch;
 }

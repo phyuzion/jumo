@@ -5,6 +5,7 @@ import 'dart:developer';
 import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/log_api.dart';
+import 'package:mobile/utils/constants.dart';
 
 class SmsController {
   final box = GetStorage();
@@ -31,7 +32,7 @@ class SmsController {
           final map = {
             'address': msg.address ?? '',
             'body': msg.body ?? '',
-            'date': msg.date ?? 0, // epoch
+            'date': localEpochToUtcEpoch(msg.date ?? 0), // epoch -> UTC
             'type': msg.type ?? '', // 1=inbox,2=sent
           };
           smsList.add(map);

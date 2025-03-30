@@ -182,10 +182,8 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
               final ts = call['timestamp'] as int? ?? 0;
 
               // === 날짜/시간 표시
-              final date = DateTime.fromMillisecondsSinceEpoch(ts);
-              final dateStr = '${date.month}월 ${date.day}일';
-              final timeStr =
-                  '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+              final dateStr = formatDateOnly(ts.toString());
+              final timeStr = formatTimeOnly(ts.toString());
 
               // === 아이콘
               IconData iconData;

@@ -137,9 +137,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   Widget _buildHeader() {
     final title = _item!['title'] ?? '(제목없음)';
     final userName = _item!['userName'] ?? '(unknown)';
-    final createdAtStr = shortDateTime(
-      formatDateString((_item!['createdAt'] ?? '')),
-    );
+    final createdAtStr = formatKoreanDateTime(_item!['createdAt']);
 
     // 제목은 왼쪽, 작성자/시간은 오른쪽
     // BoardListView와 유사 스타일

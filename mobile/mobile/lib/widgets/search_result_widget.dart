@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/models/phone_number_model.dart';
 import 'package:mobile/models/today_record.dart';
+import 'package:mobile/utils/constants.dart';
 
 class SearchResultWidget extends StatelessWidget {
   final SearchResultModel searchResult;
@@ -155,11 +156,8 @@ class SearchResultWidget extends StatelessWidget {
       dt = DateTime.fromMillisecondsSinceEpoch(epoch);
     }
     final yearStr = (dt != null) ? '${dt.year}' : '';
-    final dateStr = (dt != null) ? '${dt.month}/${dt.day}' : '';
-    final timeStr =
-        (dt != null)
-            ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
-            : '';
+    final dateStr = formatDateOnly(r.createdAt);
+    final timeStr = formatTimeOnly(r.createdAt);
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -256,11 +254,8 @@ class SearchResultWidget extends StatelessWidget {
       dt = DateTime.fromMillisecondsSinceEpoch(epoch);
     }
     final yearStr = (dt != null) ? '${dt.year}' : '';
-    final dateStr = (dt != null) ? '${dt.month}/${dt.day}' : '';
-    final timeStr =
-        (dt != null)
-            ? '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}'
-            : '';
+    final dateStr = formatDateOnly(r.createdAt);
+    final timeStr = formatTimeOnly(r.createdAt);
 
     // userType 컬러
     final userTypeColor = _pickColorForUserType(r.userType);

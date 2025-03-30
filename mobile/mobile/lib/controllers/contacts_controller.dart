@@ -203,7 +203,7 @@ class ContactsController {
             phoneNumber: phone,
             memo: null,
             type: null,
-            updatedAt: DateTime.now().toIso8601String(),
+            updatedAt: DateTime.now().toUtc().toIso8601String(),
           ),
         );
       }
@@ -260,7 +260,8 @@ class ContactsController {
             'name': m.name,
             'memo': m.memo ?? '',
             'type': m.type ?? 0,
-            'createdAt': m.updatedAt ?? DateTime.now().toIso8601String(),
+            'createdAt':
+                m.updatedAt ?? DateTime.now().toUtc().toIso8601String(),
           };
         }).toList();
 

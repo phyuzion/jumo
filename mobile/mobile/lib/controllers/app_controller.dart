@@ -11,6 +11,7 @@ import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:get_storage/get_storage.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
@@ -18,6 +19,7 @@ class AppController {
   final CallLogController callLogController;
   final SmsController smsController;
   final BlockedNumbersController blockedNumbersController;
+  final box = GetStorage();
 
   AppController(
     this.phoneStateController,
@@ -68,10 +70,21 @@ class AppController {
   Future<void> configureBackgroundService() async {
     final service = FlutterBackgroundService();
 
+    // 알림 저장 이벤트 처리
+    service.on('saveNotification').listen((event) async {
+      final id = event?['id'] as String? ?? '';
+      final title = event?['title'] as String? ?? '';
+      final message = event?['message'] as String? ?? '';
+
+      if (id.isNotEmpty) {
+        await saveNotification(id: id, title: title, message: message);
+      }
+    });
+
     // 예시: 안드로이드 config
     await service.configure(
       androidConfiguration: AndroidConfiguration(
-        onStart: onStart, // top-level function from app_background_service.dart
+        onStart: onStart,
         autoStartOnBoot: false,
         autoStart: false,
         isForegroundMode: false,
@@ -80,11 +93,42 @@ class AppController {
         initialNotificationContent: 'Initializing...',
       ),
       iosConfiguration: IosConfiguration(
-        // iOS는 제한적
         onForeground: onStart,
         autoStart: false,
       ),
     );
+  }
+
+  List<Map<String, dynamic>> getNotifications() {
+    return List<Map<String, dynamic>>.from(box.read('notifications') ?? []);
+  }
+
+  Set<String> getDisplayedNotiIds() {
+    final displayedStrList = box.read<List<dynamic>>('displayedNotiIds') ?? [];
+    return displayedStrList.map((e) => e.toString()).toSet();
+  }
+
+  Future<void> saveNotification({
+    required String id,
+    required String title,
+    required String message,
+  }) async {
+    final notifications = getNotifications();
+    final displayedNotiIds = getDisplayedNotiIds();
+
+    if (!displayedNotiIds.contains(id)) {
+      notifications.insert(0, {
+        'id': id,
+        'title': title,
+        'message': message,
+        'timestamp': DateTime.now().toIso8601String(),
+      });
+
+      displayedNotiIds.add(id);
+
+      await box.write('notifications', notifications);
+      await box.write('displayedNotiIds', displayedNotiIds.toList());
+    }
   }
 
   Future<void> startBackgroundService() async {

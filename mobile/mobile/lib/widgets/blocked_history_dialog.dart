@@ -9,14 +9,6 @@ class BlockedHistoryDialog extends StatelessWidget {
 
   const BlockedHistoryDialog({super.key, required this.history});
 
-  String _formatDate(DateTime dt) {
-    return '${dt.month}/${dt.day}';
-  }
-
-  String _formatTime(DateTime dt) {
-    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-  }
-
   String _getTypeText(String type) {
     switch (type) {
       case 'danger':
@@ -127,14 +119,14 @@ class BlockedHistoryDialog extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
-                              _formatDate(item.blockedAt),
+                              formatDateOnly(item.blockedAt.toIso8601String()),
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.black87,
                               ),
                             ),
                             Text(
-                              _formatTime(item.blockedAt),
+                              formatTimeOnly(item.blockedAt.toIso8601String()),
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Colors.grey.shade600,

@@ -6,6 +6,7 @@ import 'package:call_e_log/call_log.dart'; // 예: call_e_log 패키지
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/graphql/log_api.dart';
+import 'package:mobile/utils/constants.dart';
 
 class CallLogController {
   final box = GetStorage();
@@ -29,7 +30,9 @@ class CallLogController {
             'number': e.number ?? '',
             'callType':
                 e.callType?.name ?? '', // 'incoming','outgoing','missed' 등
-            'timestamp': e.timestamp ?? 0, // epoch ms
+            'timestamp': localEpochToUtcEpoch(
+              e.timestamp ?? 0,
+            ), // epoch ms -> UTC
             // 'name': e.name ?? '',  // <-- 이전에는 여기서 name을 저장했지만 제거
           };
           newList.add(map);
