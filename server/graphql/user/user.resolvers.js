@@ -325,58 +325,27 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            // 1. 기존 레코드들을 한 번에 조회
-            const existingRecords = await TodayRecord.find({
-              phoneNumber: { $in: recentLogs.map(log => log.phoneNumber) },
-              userName: user.name
-            }).session(session);
-
-            // 2. 기존 레코드들을 Map으로 변환하여 빠른 조회 가능하게 함
-            const existingMap = new Map(
-              existingRecords.map(record => [record.phoneNumber, record])
-            );
-
-            // 3. 업데이트할 레코드와 새로 생성할 레코드를 분리
-            const updates = [];
-            const inserts = [];
-
+            // 각 로그에 대해 upsert 수행
             for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
-
-              const existing = existingMap.get(log.phoneNumber);
-              if (existing) {
-                // 기존 레코드가 있으면 항상 업데이트하되, 시간이 더 최신인 경우에만 시간 업데이트
-                updates.push({
-                  updateOne: {
-                    filter: { _id: existing._id },
-                    update: {
-                      $set: {
-                        userType: user.userType,
-                        callType: log.callType,
-                        ...(dt > existing.createdAt ? { createdAt: dt } : {})
-                      }
-                    }
+              
+              await TodayRecord.findOneAndUpdate(
+                {
+                  phoneNumber: log.phoneNumber,
+                  userName: user.name
+                },
+                {
+                  $set: {
+                    userType: user.userType,
+                    callType: log.callType,
+                    createdAt: dt
                   }
-                });
-              } else {
-                // 새 레코드 생성
-                inserts.push({
-                  insertOne: {
-                    document: {
-                      phoneNumber: log.phoneNumber,
-                      userName: user.name,
-                      userType: user.userType,
-                      callType: log.callType,
-                      createdAt: dt
-                    }
-                  }
-                });
-              }
-            }
-
-            // 4. 한 번의 bulkWrite로 모든 작업 실행
-            if (updates.length > 0 || inserts.length > 0) {
-              await TodayRecord.bulkWrite([...updates, ...inserts], { session });
+                },
+                {
+                  upsert: true,
+                  session
+                }
+              );
             }
           });
         }
