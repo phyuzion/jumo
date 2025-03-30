@@ -74,20 +74,27 @@ def parse_sql_file(sql_file_path):
     with open(sql_file_path, 'r', encoding='utf-8') as f:
         data = f.read()
 
+    # 모든 괄호 안의 데이터를 찾기
     pattern = re.compile(r"\((.*?)\)", re.DOTALL)
     matches = pattern.findall(data)
 
     records = []
     for match in matches:
+        # 쉼표로 분리하되, 따옴표 안의 쉼표는 무시
         columns = re.split(r",(?=(?:[^']*'[^']*')*[^']*$)", match)
         columns = [col.strip().strip("'") for col in columns]
         
+        # 컬럼 수가 맞지 않으면 스킵
         if len(columns) < 10:
             continue
 
-        # 컬럼명이 들어간 잘못된 데이터 제거
-        if columns[PHONE_IDX].lower() in ["phonenumber", "phone_number"] or columns[UPDATED_DATE_IDX].lower() in ["updateddate", "updated_date"]:
-            print(f"⚠️ 잘못된 데이터 스킵: {columns}")
+        # 전화번호 형식 검증
+        phone_number = columns[PHONE_IDX]
+        if not re.match(r'^01([0|1|6|7|8|9])-?([0-9]{3,4})-?([0-9]{4})$', phone_number):
+            continue
+
+        # 필수 필드 검증
+        if not phone_number or phone_number == "-1":
             continue
 
         # userType 변환
@@ -111,16 +118,20 @@ def parse_sql_file(sql_file_path):
                 # 형식이 맞지 않는 경우 기본값 사용
                 created_at = "2020-01-01T00:00:00+00:00"
         except Exception as e:
-            print(f"⚠️ 시간 처리 실패: {e}")
             created_at = "2020-01-01T00:00:00+00:00"
 
         record = {
             "name": columns[MEMO_IDX] if columns[MEMO_IDX] != "-1" else None,
-            "phoneNumber": columns[PHONE_IDX],
+            "phoneNumber": phone_number,
             "userName": columns[COMPANY_INFO_IDX] if columns[COMPANY_INFO_IDX] != "-1" else None,
             "userType": user_type,
             "createdAt": created_at
         }
+        
+        # 빈 레코드 필터링
+        if all(value is None or value == "" for value in [record["name"], record["phoneNumber"], record["userName"]]):
+            continue
+            
         records.append(record)
 
     return records
