@@ -55,7 +55,7 @@ class PhoneStateController {
       log('showOverlay');
       final phoneData = await SearchRecordsController.searchPhone(number!);
       final todayRecords = await SearchRecordsController.searchTodayRecord(
-        number!,
+        number,
       );
 
       final searchResult = SearchResultModel(
