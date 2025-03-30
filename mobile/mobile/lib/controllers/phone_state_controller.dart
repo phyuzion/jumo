@@ -53,16 +53,20 @@ class PhoneStateController {
 
     if (!isDef && await FlutterOverlayWindow.isPermissionGranted()) {
       log('showOverlay');
-      final data = await SearchRecordsController.searchPhone(number!);
-      if (data != null) {
-        // 정상 결과
-        final dataMap = data.toJson();
-        dataMap['isNew'] = false;
-        FlutterOverlayWindow.shareData(dataMap);
-      } else {
-        final fakeMap = {'isNew': true, 'phoneNumber': number};
-        FlutterOverlayWindow.shareData(fakeMap);
-      }
+      final phoneData = await SearchRecordsController.searchPhone(number!);
+      final todayRecords = await SearchRecordsController.searchTodayRecord(
+        number!,
+      );
+
+      final searchResult = SearchResultModel(
+        phoneNumberModel: phoneData,
+        todayRecords: todayRecords,
+      );
+
+      final data = searchResult.toJson();
+      data['phoneNumber'] = number;
+
+      FlutterOverlayWindow.shareData(data);
       log('showOverlay done');
     }
     log('[PhoneState] not default => overlay shown for $number');

@@ -52,12 +52,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         widget.incomingNumber,
       );
 
+      final searchResult = SearchResultModel(
+        phoneNumberModel: phoneData,
+        todayRecords: todayRecords,
+      );
+
       setState(() {
-        _result = SearchResultModel(
-          phoneNumberModel: phoneData,
-          todayRecords: todayRecords,
-          isNew: phoneData == null,
-        );
+        _result = searchResult;
       });
     } catch (e) {
       setState(() => _error = '$e');
