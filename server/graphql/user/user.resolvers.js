@@ -325,28 +325,32 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            // 각 로그에 대해 upsert 수행
-            for (const log of recentLogs) {
+            // 각 로그에 대해 upsert 작업 생성
+            const operations = recentLogs.map(log => {
               const dt = parseDateTime(log.time);
-              
-              await TodayRecord.findOneAndUpdate(
-                {
-                  phoneNumber: log.phoneNumber,
-                  userName: user.name
-                },
-                {
-                  $set: {
-                    userType: user.userType,
-                    callType: log.callType,
-                    createdAt: dt
-                  }
-                },
-                {
-                  upsert: true,
-                  session
+              return {
+                updateOne: {
+                  filter: {
+                    phoneNumber: log.phoneNumber,
+                    userName: user.name
+                  },
+                  update: {
+                    $set: {
+                      userType: user.userType,
+                      callType: log.callType,
+                      createdAt: dt
+                    }
+                  },
+                  upsert: true
                 }
-              );
-            }
+              };
+            });
+
+            // 한 번의 bulkWrite로 모든 작업 실행
+            await TodayRecord.bulkWrite(operations, { 
+              session,
+              ordered: false  // 순서 없이 병렬로 처리
+            });
           });
         }
       } catch (error) {
