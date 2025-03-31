@@ -3,15 +3,12 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/graphql/notification_api.dart';
 import 'package:mobile/services/local_notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
-  final box = GetStorage();
-  int lastNotificationId = 0;
   final smsController = SmsController();
 
   // -----------------------------------------------
@@ -25,40 +22,21 @@ Future<void> onStart(ServiceInstance service) async {
     final notiList = await NotificationApi.getNotifications();
     if (notiList.isEmpty) return;
 
-    final displayedStrList = box.read<List<dynamic>>('displayedNotiIds') ?? [];
-    final displayedNotiIds = displayedStrList.map((e) => e.toString()).toSet();
+    // 만료된 알림 제거
+    service.invoke('removeExpiredNotifications');
 
     for (final n in notiList) {
       final sid = (n['id'] ?? '').toString();
       if (sid.isEmpty) continue;
 
-      final title = n['title'] as String? ?? 'No Title';
-      final message = n['message'] as String? ?? '...';
-
-      // 이미 보여준 알림이 아니면 로컬 알림 표시
-      if (!displayedNotiIds.contains(sid)) {
-        log('[BackgroundService] show local noti => $title / $message');
-        int idInt = lastNotificationId++;
-        await LocalNotificationService.showNotification(
-          id: idInt,
-          title: title,
-          body: message,
-        );
-      }
-
-      // 알림 데이터 저장을 AppController에 요청 (이미 보여준 알림도 저장)
+      // 알림 데이터 저장을 AppController에 요청
       service.invoke('saveNotification', {
         'id': sid,
-        'title': title,
-        'message': message,
+        'title': n['title'] as String? ?? 'No Title',
+        'message': n['message'] as String? ?? '...',
         'validUntil': n['validUntil'],
       });
-
-      displayedNotiIds.add(sid);
     }
-
-    // displayedNotiIds 저장
-    await box.write('displayedNotiIds', displayedNotiIds.toList());
   });
 
   // -----------------------------------------------

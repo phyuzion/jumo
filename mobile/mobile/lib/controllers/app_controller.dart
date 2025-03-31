@@ -89,6 +89,11 @@ class AppController {
       }
     });
 
+    // 만료된 알림 제거 이벤트 처리
+    service.on('removeExpiredNotifications').listen((event) async {
+      await removeExpiredNotifications();
+    });
+
     // 예시: 안드로이드 config
     await service.configure(
       androidConfiguration: AndroidConfiguration(
@@ -111,43 +116,67 @@ class AppController {
     return List<Map<String, dynamic>>.from(box.read('notifications') ?? []);
   }
 
+  // 만료된 알림 제거
+  Future<void> removeExpiredNotifications() async {
+    final notifications = getNotifications();
+    final now = DateTime.now().toUtc(); // UTC로 변환
+
+    final validNotifications =
+        notifications.where((notification) {
+          final validUntilStr = notification['validUntil'] as String?;
+          if (validUntilStr == null) return true;
+          final validUntil = parseServerTime(validUntilStr);
+          return validUntil?.isAfter(now) ?? true;
+        }).toList();
+
+    if (validNotifications.length != notifications.length) {
+      await box.write('notifications', validNotifications);
+      appEventBus.fire(NotificationCountUpdatedEvent());
+    }
+  }
+
   Future<void> saveNotification({
     required String id,
     required String title,
     required String message,
     String? validUntil,
   }) async {
+    // 이미 표시된 알림인지 확인 (타이틀과 메시지로 체크)
+    final displayedNotiIds = box.read<List<dynamic>>('displayedNotiIds') ?? [];
+    final isDisplayed = displayedNotiIds.any(
+      (noti) => noti['title'] == title && noti['message'] == message,
+    );
+
+    // 이미 저장된 알림인지 확인
     final notifications = getNotifications();
+    final isDuplicate = notifications.any(
+      (noti) => noti['title'] == title && noti['message'] == message,
+    );
 
-    notifications.insert(0, {
-      'id': id,
-      'title': title,
-      'message': message,
-      'timestamp': DateTime.now().toIso8601String(),
-      'validUntil': validUntil,
-    });
+    if (!isDuplicate) {
+      notifications.insert(0, {
+        'id': id,
+        'title': title,
+        'message': message,
+        'timestamp': DateTime.now().toIso8601String(),
+        'validUntil': validUntil,
+      });
 
-    await box.write('notifications', notifications);
+      await box.write('notifications', notifications);
 
-    // 알림 저장 후 이벤트 발생
-    appEventBus.fire(NotificationCountUpdatedEvent());
-  }
-
-  // 만료된 알림 제거
-  Future<void> removeExpiredNotifications() async {
-    final notifications = getNotifications();
-    final now = DateTime.now();
-
-    final validNotifications =
-        notifications.where((notification) {
-          final validUntil = notification['validUntil'] as String?;
-          if (validUntil == null) return true;
-          return DateTime.parse(validUntil).isAfter(now);
-        }).toList();
-
-    if (validNotifications.length != notifications.length) {
-      await box.write('notifications', validNotifications);
+      // 알림 저장 후 이벤트 발생
       appEventBus.fire(NotificationCountUpdatedEvent());
+    }
+
+    // 표시되지 않은 알림만 로컬 알림으로 표시
+    if (!isDisplayed) {
+      await LocalNotificationService.showNotification(
+        id: notifications.length,
+        title: title,
+        body: message,
+      );
+      displayedNotiIds.add({'title': title, 'message': message});
+      await box.write('displayedNotiIds', displayedNotiIds);
     }
   }
 

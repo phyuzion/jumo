@@ -364,7 +364,6 @@ module.exports = {
     // 문자내역 upsert
     updateSMSLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-      console.log(`[updateSMSLog] 시작 - 유저: ${user.name}, 로그 수: ${logs.length}`);
 
       // 1. User의 smsLogs 업데이트
       for (const log of logs) {
@@ -381,13 +380,11 @@ module.exports = {
         };
         pushNewLog(user.smsLogs, newLog, 200);
       }
-      console.log(`[updateSMSLog] User.smsLogs 업데이트 완료 - 최종 로그 수: ${user.smsLogs.length}`);
       
       await withTransaction(async (session) => {
         await user.save({ session });
       });
 
-      console.log(`[updateSMSLog] 전체 작업 완료`);
       return true;
     },
 
