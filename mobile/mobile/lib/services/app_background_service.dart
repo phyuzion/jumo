@@ -32,26 +32,26 @@ Future<void> onStart(ServiceInstance service) async {
       final sid = (n['id'] ?? '').toString();
       if (sid.isEmpty) continue;
 
-      if (displayedNotiIds.contains(sid)) {
-        continue;
-      }
-
       final title = n['title'] as String? ?? 'No Title';
       final message = n['message'] as String? ?? '...';
-      log('[BackgroundService] show local noti => $title / $message');
 
-      int idInt = lastNotificationId++;
-      await LocalNotificationService.showNotification(
-        id: idInt,
-        title: title,
-        body: message,
-      );
+      // 이미 보여준 알림이 아니면 로컬 알림 표시
+      if (!displayedNotiIds.contains(sid)) {
+        log('[BackgroundService] show local noti => $title / $message');
+        int idInt = lastNotificationId++;
+        await LocalNotificationService.showNotification(
+          id: idInt,
+          title: title,
+          body: message,
+        );
+      }
 
-      // 알림 데이터 저장을 AppController에 요청
+      // 알림 데이터 저장을 AppController에 요청 (이미 보여준 알림도 저장)
       service.invoke('saveNotification', {
         'id': sid,
         'title': title,
         'message': message,
+        'validUntil': n['validUntil'],
       });
 
       displayedNotiIds.add(sid);
