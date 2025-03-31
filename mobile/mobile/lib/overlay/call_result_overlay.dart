@@ -87,29 +87,40 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
           // 가로는 full, 세로는 위에서 계산
           width: size.width,
           height: size.height * baseHeight,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border.all(color: Colors.transparent),
-            borderRadius: BorderRadius.circular(5),
-          ),
-          child: Stack(
-            children: [
-              if (_result == null)
-                const Center(child: CircularProgressIndicator())
-              else
-                Positioned.fill(
-                  child: SearchResultWidget(searchResult: _result!),
-                ),
-              // (2) 닫기 버튼
-              Positioned(
-                top: 0,
-                right: 0,
-                child: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => FlutterOverlayWindow.closeOverlay(),
-                ),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
               ),
             ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Stack(
+              children: [
+                if (_result == null)
+                  const Center(child: CircularProgressIndicator())
+                else
+                  Positioned.fill(
+                    child: SearchResultWidget(searchResult: _result!),
+                  ),
+                // (2) 닫기 버튼
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => FlutterOverlayWindow.closeOverlay(),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

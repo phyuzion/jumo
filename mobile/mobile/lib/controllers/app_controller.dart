@@ -12,6 +12,7 @@ import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/utils/app_event_bus.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
@@ -128,6 +129,9 @@ class AppController {
 
       await box.write('notifications', notifications);
       await box.write('displayedNotiIds', displayedNotiIds.toList());
+
+      // 알림 저장 후 이벤트 발생
+      appEventBus.fire(NotificationCountUpdatedEvent());
     }
   }
 

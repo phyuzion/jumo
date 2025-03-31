@@ -10,3 +10,5 @@ class CallLogUpdatedEvent {}
 class ContactsUpdatedEvent {}
 
 class SmsUpdatedEvent {}
+
+class NotificationCountUpdatedEvent {}

@@ -1,10 +1,12 @@
 // lib/screens/home_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/widgets/notification_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:get_storage/get_storage.dart';
+import 'package:mobile/utils/app_event_bus.dart';
 import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
 import 'board_screen.dart';
@@ -21,6 +23,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   final _box = GetStorage();
   int _notificationCount = 0;
+  StreamSubscription? _notificationSub;
 
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
@@ -45,10 +48,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     NativeDefaultDialerMethods.notifyNativeAppInitialized();
 
     _loadNotificationCount();
+    _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((
+      _,
+    ) {
+      if (mounted) {
+        _loadNotificationCount();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _notificationSub?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
@@ -63,9 +74,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _loadNotificationCount() {
-    final count = _box.read<int>('notificationCount') ?? 0;
+    final notifications = List<Map<String, dynamic>>.from(
+      _box.read('notifications') ?? [],
+    );
     setState(() {
-      _notificationCount = count;
+      _notificationCount = notifications.length;
     });
   }
 
