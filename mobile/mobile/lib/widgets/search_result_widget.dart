@@ -88,8 +88,12 @@ class SearchResultWidget extends StatelessWidget {
     return ListView.separated(
       itemCount:
           (todayRecords.isNotEmpty ? 1 : 0) + // TodayRecord 섹션
-          todayRecords.length + // TodayRecord 아이템들
-          (todayRecords.length > 3 ? 1 : 0) + // 더보기 버튼
+          (todayRecords.isNotEmpty
+              ? todayRecords.length
+              : 0) + // TodayRecord 아이템들
+          (todayRecords.isNotEmpty && todayRecords.length > 3
+              ? 1
+              : 0) + // 더보기 버튼
           (phoneRecords.isNotEmpty ? 1 : 0) + // PhoneRecord 섹션
           phoneRecords.length, // PhoneRecord 아이템들
       separatorBuilder: (context, index) {
@@ -103,7 +107,7 @@ class SearchResultWidget extends StatelessWidget {
       },
       itemBuilder: (context, index) {
         // TodayRecord 섹션 헤더
-        if (index == 0) {
+        if (todayRecords.isNotEmpty && index == 0) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
@@ -114,26 +118,21 @@ class SearchResultWidget extends StatelessWidget {
         }
 
         // TodayRecord 아이템들 또는 빈 상태 메시지
-        if (index == 1) {
-          if (todayRecords.isEmpty) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                '최근 통화기록이 없습니다.',
-                style: TextStyle(color: Colors.grey),
-              ),
-            );
-          }
+        if (todayRecords.isNotEmpty && index == 1) {
           return _buildTodayRecordItem(todayRecords[0]);
         }
 
         // TodayRecord 아이템들 (index > 1)
-        if (index > 1 && index <= todayRecords.length) {
+        if (todayRecords.isNotEmpty &&
+            index > 1 &&
+            index <= todayRecords.length) {
           return _buildTodayRecordItem(todayRecords[index - 1]);
         }
 
         // 더보기 버튼
-        if (index == todayRecords.length + 1 && todayRecords.length > 3) {
+        if (todayRecords.isNotEmpty &&
+            index == todayRecords.length + 1 &&
+            todayRecords.length > 3) {
           return TextButton(
             onPressed: () {
               // TODO: 더보기 기능 구현
@@ -144,7 +143,10 @@ class SearchResultWidget extends StatelessWidget {
 
         // PhoneRecord 섹션 헤더
         final phoneSectionStart =
-            todayRecords.length + (todayRecords.length > 3 ? 2 : 1);
+            todayRecords.isNotEmpty
+                ? (todayRecords.length + (todayRecords.length > 3 ? 2 : 1))
+                : 0;
+
         if (index == phoneSectionStart) {
           return const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),

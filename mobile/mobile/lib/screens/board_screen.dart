@@ -29,6 +29,8 @@ class _BoardScreenState extends State<BoardScreen> {
     try {
       final regions = await CommonApi.getRegions();
 
+      if (!mounted) return; // mounted 체크 추가
+
       setState(() {
         // 공지사항을 첫 번째 아이템으로 추가
         _dropdownItems = [
@@ -76,20 +78,27 @@ class _BoardScreenState extends State<BoardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: DropdownButton<String>(
-          value: _selectedType,
-          items: _dropdownItems,
-          onChanged: _onTypeChanged,
-          underline: const SizedBox(), // 밑줄 제거
-          isExpanded: true, // 가로로 꽉 차게
-          style: const TextStyle(fontSize: 20, color: Colors.black),
-          icon: const Icon(
-            Icons.arrow_drop_down,
-            color: Colors.black,
-            size: 40,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(40),
+        child: AppBar(
+          title: DropdownButton<String>(
+            value: _selectedType,
+            items: _dropdownItems,
+            onChanged: _onTypeChanged,
+            underline: const SizedBox(),
+            isExpanded: true,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.black,
+            ),
+            icon: const Icon(
+              Icons.arrow_drop_down,
+              color: Colors.black,
+              size: 24,
+            ),
+            dropdownColor: Colors.white,
           ),
-          dropdownColor: Colors.white,
         ),
       ),
       // (1) BoardListView에 GlobalKey 전달

@@ -36,8 +36,10 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
 
   Future<void> _showOverlay() async {
     log('show Overlay : $_result');
-    await FlutterOverlayWindow.closeOverlay();
     String title = _phoneNumber!;
+    if (await FlutterOverlayWindow.isActive()) {
+      await FlutterOverlayWindow.closeOverlay();
+    }
     await FlutterOverlayWindow.showOverlay(
       enableDrag: true,
       alignment: OverlayAlignment.center,

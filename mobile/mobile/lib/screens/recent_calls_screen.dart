@@ -24,10 +24,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     with WidgetsBindingObserver {
   final _callLogController = CallLogController();
   bool _isDefaultDialer = false;
-  final _searchController = TextEditingController();
-  final _searchFocusNode = FocusNode();
   final _scrollController = ScrollController();
-  bool _showSearchField = false;
   int? _expandedIndex;
   double _scrollPosition = 0.0;
 
@@ -40,7 +37,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadCalls();
     _checkDefaultDialer();
-    _searchFocusNode.addListener(_onFocusChange);
     _scrollController.addListener(() {
       _scrollPosition = _scrollController.position.pixels;
     });
@@ -53,9 +49,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _eventSub?.cancel();
-    _searchController.dispose();
-    _searchFocusNode.removeListener(_onFocusChange);
-    _searchFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -66,15 +59,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     if (state == AppLifecycleState.resumed) {
       // 앱이 다시 전면으로 돌아왔을 때 기본 전화앱 상태 재확인
       _checkDefaultDialer();
-    }
-  }
-
-  void _onFocusChange() {
-    if (!_searchFocusNode.hasFocus && mounted) {
-      setState(() {
-        _showSearchField = false;
-        _searchController.clear();
-      });
     }
   }
 
@@ -101,209 +85,145 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     setState(() => _isDefaultDialer = isDefault);
   }
 
-  void _toggleSearch() {
-    if (_showSearchField) {
-      // 검색 실행
-      final number = _searchController.text.trim();
-      if (number.isNotEmpty) {
-        // 액션바에서 직접 검색할 때는 isRequested: true
-        Navigator.pushNamed(
-          context,
-          '/search',
-          arguments: {'number': number, 'isRequested': true},
-        );
-      } else {
-        Navigator.pushNamed(context, '/search');
-      }
-      _searchController.clear();
-    }
-    setState(() {
-      _showSearchField = !_showSearchField;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('최근기록'),
-        actions: [
-          if (_showSearchField)
-            SizedBox(
-              width: 150,
-              child: TextField(
-                controller: _searchController,
-                focusNode: _searchFocusNode,
-                decoration: InputDecoration(
-                  hintText: '번호 입력',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                    borderSide: BorderSide(
-                      color: Colors.grey.shade300,
-                      width: 1,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(40),
+        child: AppBar(
+          title: Text(
+            '최근기록',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 24),
+              onPressed: _refreshCalls,
+            ),
+          ],
+        ),
+      ),
+      body: ListView.builder(
+        controller: _scrollController,
+        itemCount: _callLogs.length,
+        itemBuilder: (context, index) {
+          final call = _callLogs[index];
+          final number = call['number'] as String? ?? '';
+          final callType = call['callType'] as String? ?? '';
+          final ts = call['timestamp'] as int? ?? 0;
+
+          // === 날짜/시간 표시
+          final dateStr = formatDateOnly(ts.toString());
+          final timeStr = formatTimeOnly(ts.toString());
+
+          // === 아이콘
+          IconData iconData;
+          Color iconColor;
+          switch (callType.toLowerCase()) {
+            case 'incoming':
+              iconData = Icons.call_received;
+              iconColor = Colors.green;
+              break;
+            case 'outgoing':
+              iconData = Icons.call_made;
+              iconColor = Colors.blue;
+              break;
+            case 'missed':
+              iconData = Icons.call_missed;
+              iconColor = Colors.red;
+              break;
+            default:
+              iconData = Icons.phone;
+              iconColor = Colors.grey;
+          }
+
+          // === 이름 lookup
+          final contactsCtrl = context.read<ContactsController>();
+          final phoneNormalized = normalizePhone(number);
+          final contact = contactsCtrl.getSavedContacts().firstWhere(
+            (c) => c.phoneNumber == phoneNormalized,
+            orElse:
+                () => PhoneBookModel(
+                  contactId: '',
+                  name: '',
+                  phoneNumber: phoneNormalized,
+                  memo: null,
+                  type: null,
+                  updatedAt: null,
+                ),
+          );
+          final name = contact.name; // 없으면 ''
+
+          return Column(
+            children: [
+              if (index > 0)
+                const Divider(
+                  color: Colors.grey,
+                  thickness: 0.5,
+                  indent: 16.0,
+                  endIndent: 16.0,
+                  height: 0,
+                ),
+              CustomExpansionTile(
+                key: ValueKey('${number}_$ts'),
+                isExpanded: index == _expandedIndex,
+                onTap: () {
+                  setState(() {
+                    _expandedIndex = index == _expandedIndex ? null : index;
+                  });
+                },
+                leading: Icon(iconData, color: iconColor),
+                title: Text(name.isNotEmpty ? name : number),
+                trailing: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      dateStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
+                    Text(
+                      timeStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 8,
                   ),
-                ),
-                keyboardType: TextInputType.phone,
-                showCursor: true,
-                readOnly: false,
-                autofocus: true,
-                onSubmitted: (_) => _toggleSearch(),
-              ),
-            ),
-          IconButton(
-            icon: Icon(_showSearchField ? Icons.search : Icons.search_outlined),
-            onPressed: _toggleSearch,
-          ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshCalls,
-        child: NotificationListener<ScrollNotification>(
-          onNotification: (notification) {
-            if (notification is ScrollStartNotification) {
-              if (_showSearchField) {
-                _searchFocusNode.unfocus();
-              }
-            }
-            return false;
-          },
-          child: ListView.builder(
-            controller: _scrollController,
-            itemCount: _callLogs.length,
-            itemBuilder: (context, index) {
-              final call = _callLogs[index];
-              final number = call['number'] as String? ?? '';
-              final callType = call['callType'] as String? ?? '';
-              final ts = call['timestamp'] as int? ?? 0;
-
-              // === 날짜/시간 표시
-              final dateStr = formatDateOnly(ts.toString());
-              final timeStr = formatTimeOnly(ts.toString());
-
-              // === 아이콘
-              IconData iconData;
-              Color iconColor;
-              switch (callType.toLowerCase()) {
-                case 'incoming':
-                  iconData = Icons.call_received;
-                  iconColor = Colors.green;
-                  break;
-                case 'outgoing':
-                  iconData = Icons.call_made;
-                  iconColor = Colors.blue;
-                  break;
-                case 'missed':
-                  iconData = Icons.call_missed;
-                  iconColor = Colors.red;
-                  break;
-                default:
-                  iconData = Icons.phone;
-                  iconColor = Colors.grey;
-              }
-
-              // === 이름 lookup
-              final contactsCtrl = context.read<ContactsController>();
-              final phoneNormalized = normalizePhone(number);
-              final contact = contactsCtrl.getSavedContacts().firstWhere(
-                (c) => c.phoneNumber == phoneNormalized,
-                orElse:
-                    () => PhoneBookModel(
-                      contactId: '',
-                      name: '',
-                      phoneNumber: phoneNormalized,
-                      memo: null,
-                      type: null,
-                      updatedAt: null,
-                    ),
-              );
-              final name = contact.name; // 없으면 ''
-
-              return Column(
-                children: [
-                  if (index > 0)
-                    const Divider(
-                      color: Colors.grey,
-                      thickness: 0.5,
-                      indent: 16.0,
-                      endIndent: 16.0,
-                      height: 0,
-                    ),
-                  CustomExpansionTile(
-                    key: ValueKey('${number}_$ts'),
-                    isExpanded: index == _expandedIndex,
-                    onTap: () {
-                      if (_showSearchField) {
-                        _searchFocusNode.unfocus();
-                      }
-                      setState(() {
-                        _expandedIndex = index == _expandedIndex ? null : index;
-                      });
-                    },
-                    leading: Icon(iconData, color: iconColor),
-                    title: Text(name.isNotEmpty ? name : number),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          dateStr,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      if (_isDefaultDialer)
+                        _buildActionButton(
+                          icon: Icons.call,
+                          color: Colors.green,
+                          onPressed: () => _onTapCall(number),
                         ),
-                        Text(
-                          timeStr,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ],
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
+                      _buildActionButton(
+                        icon: Icons.message,
+                        color: Colors.blue,
+                        onPressed: () => _onTapMessage(number),
                       ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          if (_isDefaultDialer)
-                            _buildActionButton(
-                              icon: Icons.call,
-                              color: Colors.green,
-                              onPressed: () => _onTapCall(number),
-                            ),
-                          _buildActionButton(
-                            icon: Icons.message,
-                            color: Colors.blue,
-                            onPressed: () => _onTapMessage(number),
-                          ),
-                          _buildActionButton(
-                            icon: Icons.search,
-                            color: Colors.orange,
-                            onPressed: () => _onTapSearch(number),
-                          ),
-                          _buildActionButton(
-                            icon: Icons.edit,
-                            color: Colors.blueGrey,
-                            onPressed: () => _onTapEdit(number),
-                          ),
-                        ],
+                      _buildActionButton(
+                        icon: Icons.search,
+                        color: Colors.orange,
+                        onPressed: () => _onTapSearch(number),
                       ),
-                    ),
+                      _buildActionButton(
+                        icon: Icons.edit,
+                        color: Colors.blueGrey,
+                        onPressed: () => _onTapEdit(number),
+                      ),
+                    ],
                   ),
-                ],
-              );
-            },
-          ),
-        ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
       floatingActionButton:
           _isDefaultDialer

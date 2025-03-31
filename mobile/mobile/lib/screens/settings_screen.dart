@@ -265,7 +265,16 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text('설정'), actions: [const DropdownMenusWidget()]),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(40),
+        child: AppBar(
+          title: Text(
+            '설정',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          ),
+          actions: [const DropdownMenusWidget()],
+        ),
+      ),
       body: ListView(
         children: [
           // (1) 만약 서버 버전이 내 버전과 다르면 => "업데이트가 있습니다." 버튼

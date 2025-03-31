@@ -83,9 +83,42 @@ class _ContactsScreenState extends State<ContactsScreen> {
     final data = _filteredContacts;
 
     return Scaffold(
-      appBar: AppBar(
-        title: _buildAppBarTitle(),
-        actions: _buildAppBarActions(),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(40),
+        child: AppBar(
+          title:
+              _isSearching
+                  ? TextField(
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: '검색어 입력',
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (value) {
+                      setState(() => _searchQuery = value);
+                    },
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  )
+                  : Text(
+                    '연락처',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+          actions: [
+            IconButton(
+              icon: Icon(_isSearching ? Icons.close : Icons.search, size: 24),
+              onPressed: () {
+                setState(() {
+                  _isSearching = !_isSearching;
+                  if (!_isSearching) _searchQuery = '';
+                });
+              },
+            ),
+          ],
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
@@ -175,59 +208,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
         child: const Icon(Icons.add),
       ),
     );
-  }
-
-  /// ===============================
-  /// AppBar Title 영역
-  /// ===============================
-  Widget _buildAppBarTitle() {
-    if (_isSearching) {
-      // 검색 모드일 때 -> TextField 보여줌
-      return TextField(
-        autofocus: true, // AppBar 열리면 자동 포커스
-        decoration: const InputDecoration(
-          hintText: '검색어 입력',
-          border: InputBorder.none,
-        ),
-        onChanged: (value) {
-          setState(() => _searchQuery = value);
-        },
-        style: const TextStyle(color: Colors.black, fontSize: 22),
-      );
-    } else {
-      // 일반 모드일 때 -> 제목
-      return const Text('연락처');
-    }
-  }
-
-  /// ===============================
-  /// AppBar Actions
-  /// ===============================
-  List<Widget> _buildAppBarActions() {
-    if (_isSearching) {
-      // 검색 모드일 때 => "닫기" 아이콘
-      return [
-        IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () {
-            setState(() {
-              _isSearching = false;
-              _searchQuery = '';
-            });
-          },
-        ),
-      ];
-    } else {
-      // 일반 모드 => "검색" 아이콘
-      return [
-        IconButton(
-          icon: const Icon(Icons.search),
-          onPressed: () {
-            setState(() => _isSearching = true);
-          },
-        ),
-      ];
-    }
   }
 
   Future<void> _onTapMessage(String phoneNumber) async {
