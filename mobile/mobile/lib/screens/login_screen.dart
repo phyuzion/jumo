@@ -44,6 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// 로그인 버튼 or Enter key
   Future<void> _onLoginPressed() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final loginId = _loginIdCtrl.text.trim();

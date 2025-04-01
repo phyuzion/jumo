@@ -15,6 +15,7 @@ class _DialerScreenState extends State<DialerScreen> {
   /// 숫자 클릭
   void _onDigit(String d) {
     if (_number.length < _maxDigits) {
+      if (!mounted) return;
       setState(() => _number += d);
     }
   }
@@ -22,6 +23,7 @@ class _DialerScreenState extends State<DialerScreen> {
   /// 백스페이스
   void _onBackspace() {
     if (_number.isNotEmpty) {
+      if (!mounted) return;
       setState(() => _number = _number.substring(0, _number.length - 1));
     }
   }
@@ -29,6 +31,7 @@ class _DialerScreenState extends State<DialerScreen> {
   /// 전화걸기
   Future<void> _makeCall() async {
     if (_number.isNotEmpty) {
+      if (!mounted) return;
       await NativeMethods.makeCall(_number);
     }
   }

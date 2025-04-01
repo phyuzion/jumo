@@ -68,10 +68,10 @@ class _OnCallScreenState extends State<OnCallScreen> {
       final phoneStr = c.phoneNumber ?? '';
       final normPhone = normalizePhone(phoneStr);
       if (normPhone == normalizePhone(widget.phoneNumber)) {
-        setState(() {
-          _displayName = c.name;
-          _phones = normPhone;
-        });
+        _displayName = c.name;
+        _phones = normPhone;
+        if (!mounted) return;
+        setState(() {});
         break;
       }
     }
@@ -80,10 +80,13 @@ class _OnCallScreenState extends State<OnCallScreen> {
   /// 통화 종료
   Future<void> _hangUp() async {
     await NativeMethods.hangUpCall();
-
-    // 백그라운드 서비스 타이머 중지
-    final service = FlutterBackgroundService();
-    service.invoke('stopCallTimer');
+    if (widget.connected) {
+      // 백그라운드 서비스 타이머 중지
+      final service = FlutterBackgroundService();
+      service.invoke('stopCallTimer');
+    } else {
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    }
 
     if (!mounted) return;
   }

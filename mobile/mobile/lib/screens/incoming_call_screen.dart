@@ -40,6 +40,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _loadSearchData() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       // 전화번호 검색
@@ -74,6 +75,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     for (final c in contacts) {
       final phoneStr = c.phoneNumber ?? '';
       if (phoneStr.contains(widget.incomingNumber)) {
+        if (!mounted) return;
         setState(() {
           _displayName = c.name;
           _phones = phoneStr;

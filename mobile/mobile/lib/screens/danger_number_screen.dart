@@ -22,6 +22,7 @@ class _DangerNumbersScreenState extends State<DangerNumbersScreen> {
   }
 
   Future<void> _fetchDangerNumbers() async {
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;

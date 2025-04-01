@@ -64,8 +64,10 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   Future<void> _loadCalls() async {
     final logs = _callLogController.getSavedCallLogs();
+
+    _callLogs = logs;
+    if (!mounted) return;
     setState(() {
-      _callLogs = logs;
       // 스크롤 위치 복원
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollController.jumpTo(_scrollPosition);

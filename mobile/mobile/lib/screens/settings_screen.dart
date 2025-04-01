@@ -357,6 +357,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               value: _blockedNumbersController.isTodayBlocked,
               onChanged: (value) async {
                 await _blockedNumbersController.setTodayBlocked(value);
+                if (!mounted) return;
                 setState(() {});
               },
             ),
@@ -368,6 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               value: _blockedNumbersController.isUnknownBlocked,
               onChanged: (value) async {
                 await _blockedNumbersController.setUnknownBlocked(value);
+                if (!mounted) return;
                 setState(() {});
               },
             ),
@@ -377,15 +379,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                 child: const Text('위험번호 자동 차단'),
               ),
               value: _blockedNumbersController.isAutoBlockDanger,
-              onChanged: (value) {
-                setState(() {
-                  _blockedNumbersController.setAutoBlockDanger(value);
-                });
-                _blockedNumbersController.setAutoBlockDanger(value).then((_) {
-                  if (mounted) {
-                    setState(() {});
-                  }
-                });
+              onChanged: (value) async {
+                await _blockedNumbersController.setAutoBlockDanger(value);
+                if (!mounted) return;
+                setState(() {});
               },
             ),
             ListTile(
@@ -475,32 +472,22 @@ class _SettingsScreenState extends State<SettingsScreen>
                             ),
                       );
                       if (count != null) {
-                        setState(() {
-                          _blockedNumbersController.setBombCallsCount(count);
-                        });
-                        _blockedNumbersController.setBombCallsCount(count).then(
-                          (_) {
-                            if (mounted) {
-                              setState(() {});
-                            }
-                          },
+                        await _blockedNumbersController.setBombCallsCount(
+                          count,
                         );
+                        if (!mounted) return;
+                        setState(() {});
                       }
                     },
                   ),
                   Switch(
                     value: _blockedNumbersController.isBombCallsBlocked,
-                    onChanged: (value) {
-                      setState(() {
-                        _blockedNumbersController.setBombCallsBlocked(value);
-                      });
-                      _blockedNumbersController.setBombCallsBlocked(value).then(
-                        (_) {
-                          if (mounted) {
-                            setState(() {});
-                          }
-                        },
+                    onChanged: (value) async {
+                      await _blockedNumbersController.setBombCallsBlocked(
+                        value,
                       );
+                      if (!mounted) return;
+                      setState(() {});
                     },
                   ),
                 ],

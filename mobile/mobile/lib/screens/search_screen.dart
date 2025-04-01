@@ -34,11 +34,13 @@ class _SearchScreenState extends State<SearchScreen> {
         _searchPhone = normalizePhone(args['number'] as String);
         _textCtrl.text = _searchPhone;
         _onSubmit(_searchPhone);
+        if (!mounted) return;
         setState(() {});
       } else if (args is String) {
         _searchPhone = normalizePhone(args);
         _textCtrl.text = _searchPhone;
         _onSubmit(_searchPhone);
+        if (!mounted) return;
         setState(() {});
       }
       _focusNode.requestFocus();
@@ -49,6 +51,7 @@ class _SearchScreenState extends State<SearchScreen> {
     final numResult = num.trim();
     if (numResult.isEmpty) return;
 
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;

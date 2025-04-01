@@ -34,6 +34,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   }
 
   Future<void> _fetchDetail() async {
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final data = await ContentsApi.getSingleContent(widget.contentId);
@@ -373,6 +374,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
         comment: comment,
       );
       if (updatedContent != null) {
+        if (!mounted) return;
         setState(() => _item = updatedContent);
       }
       _replyCtrl.clear();
@@ -411,6 +413,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       if (success) {
         final arr = List<Map<String, dynamic>>.from(_item!['comments'] as List);
         arr.removeAt(index);
+        if (!mounted) return;
         setState(() => _item!['comments'] = arr);
       }
     } catch (e) {

@@ -48,6 +48,7 @@ class _BoardScreenState extends State<BoardScreen> {
       });
     } catch (e) {
       // 에러 발생시 기본 아이템으로 설정
+      if (!mounted) return;
       setState(() {
         _dropdownItems = [
           const DropdownMenuItem(value: '공지사항', child: Text('공지사항')),
@@ -72,6 +73,7 @@ class _BoardScreenState extends State<BoardScreen> {
   // 드롭다운 변경
   void _onTypeChanged(String? newVal) {
     if (newVal == null) return;
+    if (!mounted) return;
     setState(() => _selectedType = newVal);
   }
 

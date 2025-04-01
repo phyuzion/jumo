@@ -74,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   void _loadNotificationCount() {
+    if (!mounted) return;
+
     final notifications = List<Map<String, dynamic>>.from(
       _box.read('notifications') ?? [],
     );

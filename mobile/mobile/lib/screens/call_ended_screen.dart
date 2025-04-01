@@ -76,10 +76,10 @@ class _CallEndedScreen extends State<CallEndedScreen> {
       final normPhone = normalizePhone(phoneStr);
 
       if (normPhone == normalizePhone(widget.callEndedNumber)) {
-        setState(() {
-          _displayName = c.name;
-          _phones = normPhone;
-        });
+        _displayName = c.name;
+        _phones = normPhone;
+        if (!mounted) return;
+        setState(() {});
         break;
       }
     }

@@ -30,6 +30,7 @@ class _DeciderScreenState extends State<DeciderScreen> {
 
   Future<void> _checkPermissions() async {
     final appController = context.read<AppController>();
+    if (!mounted) return;
     setState(() => _checking = true);
     final ok = await appController.checkEssentialPermissions();
 
@@ -49,6 +50,7 @@ class _DeciderScreenState extends State<DeciderScreen> {
       }
     } else {
       // 권한 거부
+      if (!mounted) return;
       setState(() {
         _checking = false;
         _allPermsGranted = false;
