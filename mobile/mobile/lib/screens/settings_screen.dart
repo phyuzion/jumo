@@ -245,7 +245,10 @@ class _SettingsScreenState extends State<SettingsScreen>
     showDialog(
       context: context,
       builder: (context) => const BlockedNumbersDialog(),
-    );
+    ).then((_) {
+      if (!mounted) return;
+      setState(() {});
+    });
   }
 
   void _showBlockedHistoryDialog(
@@ -519,15 +522,11 @@ class _SettingsScreenState extends State<SettingsScreen>
                 ),
               ),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                showDialog(
-                  context: context,
-                  builder:
-                      (context) => BlockedHistoryDialog(
-                        history: _blockedNumbersController.blockedHistory,
-                      ),
-                );
-              },
+              onTap:
+                  () => _showBlockedHistoryDialog(
+                    context,
+                    _blockedNumbersController.blockedHistory,
+                  ),
             ),
           ] else ...[
             // 오버레이 권한 (기본 전화앱이 아닐 때만 표시)

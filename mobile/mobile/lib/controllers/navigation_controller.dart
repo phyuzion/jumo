@@ -18,7 +18,10 @@ class NavigationController {
         case 'onIncomingNumber':
           final number = call.arguments as String;
           // 차단된 번호인지 확인
-          if (blockedNumbersController.isNumberBlocked(number)) {
+          if (blockedNumbersController.isNumberBlocked(
+            number,
+            addHistory: true,
+          )) {
             // 차단된 번호면 전화 거절
             await NativeMethods.rejectCall();
             return;
@@ -41,7 +44,10 @@ class NavigationController {
             final reason = map['reason'] as String? ?? '';
 
             // 차단된 번호인 경우 call_ended_screen으로 이동하지 않고 콜로그만 업데이트
-            if (blockedNumbersController.isNumberBlocked(endedNumber)) {
+            if (blockedNumbersController.isNumberBlocked(
+              endedNumber,
+              addHistory: false,
+            )) {
               final ctx = navKey.currentContext;
               if (ctx != null) {
                 final callLogController = ctx.read<CallLogController>();

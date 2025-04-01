@@ -97,6 +97,14 @@ class GraphQLClientManager {
   ///  - 서버 GraphQLError가 있을 경우, 메시지 추출
   static void handleExceptions(QueryResult result) {
     if (result.hasException) {
+      // 타임아웃 에러는 무시
+      if (result.exception?.linkException.toString().contains(
+            'TimeoutException',
+          ) ==
+          true) {
+        return;
+      }
+
       if (result.exception?.graphqlErrors.isNotEmpty == true) {
         final msg = result.exception!.graphqlErrors.first.message;
         if (msg.contains('로그인이 필요합니다')) {

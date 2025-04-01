@@ -270,7 +270,7 @@ class BlockedNumbersController {
     }
   }
 
-  bool isNumberBlocked(String phoneNumber) {
+  bool isNumberBlocked(String phoneNumber, {bool addHistory = false}) {
     String? blockType;
 
     // 위험번호 자동 차단 체크
@@ -312,7 +312,10 @@ class BlockedNumbersController {
     }
 
     if (blockType != null) {
-      _addBlockedHistory(phoneNumber, blockType);
+      // 인커밍일 때만 차단 이력 추가
+      if (addHistory) {
+        _addBlockedHistory(phoneNumber, blockType);
+      }
       return true;
     }
 
