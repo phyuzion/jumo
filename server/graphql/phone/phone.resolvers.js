@@ -182,7 +182,10 @@ module.exports = {
               const doc = phoneDocMap[phone];
               if (!doc) return acc;
               
-              const userRecord = doc.records.find(r => r.userId?.toString() === user._id.toString());
+              // 병합된 레코드에서 현재 유저의 레코드 찾기
+              const merged = mergeRecords(doc.records || [], mapByPhone[phone], isAdmin, user);
+              const userRecord = merged.find(r => r.userId?.toString() === user._id.toString());
+              
               if (userRecord) {
                 acc[phone] = {
                   phoneNumber: phone,
