@@ -237,7 +237,7 @@ module.exports = {
             console.log('업데이트된 레코드 Map:', Object.fromEntries(existingRecordsMap));
 
             // 5) Map을 다시 배열로 변환하여 저장
-            user.myRecords = Array.from(existingRecordsMap.values());
+            user.myRecords = Object.values(Object.fromEntries(existingRecordsMap));
             console.log('변환된 myRecords 배열:', user.myRecords);
             
             // 6) mongoose 스키마에 맞게 데이터 정리
