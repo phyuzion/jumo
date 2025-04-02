@@ -177,81 +177,45 @@ module.exports = {
 
           // User의 myRecords 업데이트
           if (!isAdmin) {
-            console.log('=== User myRecords 업데이트 시작 ===');
-            console.log('현재 유저:', {
-              id: user._id,
-              name: user.name,
-              userType: user.userType
-            });
-
             // 1) 현재 업데이트할 전화번호들의 레코드를 한번에 추출
             const userRecords = phoneNumbers.reduce((acc, phone) => {
               const doc = phoneDocMap[phone];
-              if (!doc) {
-                console.log(`[${phone}] 문서 없음`);
-                return acc;
-              }
+              if (!doc) return acc;
               
               // 병합된 레코드에서 현재 유저의 레코드 찾기
               const merged = mergeRecords(doc.records || [], mapByPhone[phone], isAdmin, user);
-              console.log(`[${phone}] 병합된 레코드:`, merged);
-              
               const userRecord = merged.find(r => r.userId?.toString() === user._id.toString());
-              console.log(`[${phone}] 유저 레코드 찾음:`, userRecord);
               
               if (userRecord) {
                 acc[phone] = {
                   phoneNumber: phone,
-                  name: userRecord.name || '',
-                  memo: userRecord.memo || '',
-                  type: userRecord.type || 0,
-                  createdAt: userRecord.createdAt || new Date()
+                  name: userRecord.name,
+                  memo: userRecord.memo,
+                  type: userRecord.type,
+                  createdAt: userRecord.createdAt
                 };
-                console.log(`[${phone}] 레코드 추가됨:`, acc[phone]);
-              } else {
-                console.log(`[${phone}] 유저 레코드 없음`);
               }
               return acc;
             }, {});
 
-            console.log('추출된 유저 레코드:', userRecords);
-
             // 2) 기존 myRecords가 없으면 빈 배열로 초기화
             if (!user.myRecords) {
-              console.log('기존 myRecords 없음, 빈 배열로 초기화');
               user.myRecords = [];
-            } else {
-              console.log('기존 myRecords:', user.myRecords);
             }
 
             // 3) 기존 myRecords를 Map으로 변환하여 빠른 검색 가능하게 함
             const existingRecordsMap = new Map(
               user.myRecords.map(record => [record.phoneNumber, record])
             );
-            console.log('기존 레코드 Map:', Object.fromEntries(existingRecordsMap));
 
             // 4) 업데이트할 레코드들로 Map 업데이트
             Object.values(userRecords).forEach(record => {
               existingRecordsMap.set(record.phoneNumber, record);
             });
-            console.log('업데이트된 레코드 Map:', Object.fromEntries(existingRecordsMap));
 
             // 5) Map을 다시 배열로 변환하여 저장
             user.myRecords = Array.from(existingRecordsMap.values());
-            console.log('변환된 myRecords 배열:', user.myRecords);
-            
-            // 6) mongoose 스키마에 맞게 데이터 정리
-            user.myRecords = user.myRecords.map(record => ({
-              phoneNumber: record.phoneNumber || '',
-              name: record.name || '',
-              memo: record.memo || '',
-              type: Number(record.type) || 0,
-              createdAt: record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt)
-            }));
-            console.log('스키마에 맞게 정리된 myRecords:', user.myRecords);
-
             await user.save({ session });
-            console.log('=== User myRecords 업데이트 완료 ===');
           }
         });
       }
