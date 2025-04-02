@@ -197,8 +197,14 @@ module.exports = {
               const doc = phoneDocMap[phone];
               if (!doc) continue;
 
-              const userRecord = doc.records.find(r => r.userId?.toString() === user._id.toString());
-              if (!userRecord) continue;
+              // 병합된 레코드에서 현재 유저의 레코드 찾기
+              const merged = mergeRecords(doc.records || [], mapByPhone[phone], isAdmin, user);
+              const userRecord = merged.find(r => r.userId?.toString() === user._id.toString());
+              
+              if (!userRecord) {
+                console.log(`[${phone}] 유저 레코드 없음`);
+                continue;
+              }
 
               // 기존 레코드 찾기
               const existingIndex = user.myRecords.findIndex(r => r.phoneNumber === phone);
