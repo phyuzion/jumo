@@ -15,6 +15,10 @@ import 'package:mobile/utils/constants.dart';
 class ContactsController {
   final _box = GetStorage();
   static const storageKey = 'phonebook';
+  static List<PhoneBookModel> _savedContacts = [];
+  static Map<String, PhoneBookModel> _contactIndex = {};
+  static DateTime? _lastSyncTime;
+  static const _cacheValidityDuration = Duration(minutes: 5);
 
   // (A) 작업 큐
   final Queue<Function> _taskQueue = Queue();
@@ -96,9 +100,9 @@ class ContactsController {
     final startTime = DateTime.now();
     final contacts = await FlutterContacts.getContacts(
       withProperties: true,
-      withAccounts: true,
-      withPhoto: true,
-      withThumbnail: true,
+      withAccounts: false,
+      withPhoto: false,
+      withThumbnail: false,
       withGroups: false,
     );
 
@@ -556,6 +560,44 @@ class ContactsController {
     return deviceList;
   }
 
+  /// 캐시가 유효한지 확인
+  bool get _isCacheValid {
+    if (_lastSyncTime == null) return false;
+    return DateTime.now().difference(_lastSyncTime!) < _cacheValidityDuration;
+  }
+
+  // 연락처 데이터 가져오기 (캐시 사용)
+  List<PhoneBookModel> _getCachedContacts() {
+    if (!_isCacheValid) {
+      final jsonList = _box.read<List>(storageKey) ?? [];
+      _savedContacts =
+          jsonList
+              .map(
+                (json) => PhoneBookModel.fromJson(json as Map<String, dynamic>),
+              )
+              .toList();
+      _updateContactIndex(_savedContacts);
+    }
+    return _savedContacts;
+  }
+
+  // 연락처 저장 및 캐시 업데이트
+  Future<void> _saveAndUpdateCache(List<PhoneBookModel> contacts) async {
+    final jsonList = contacts.map((c) => c.toJson()).toList();
+    await _box.write(storageKey, jsonList);
+    _savedContacts = contacts;
+    _updateContactIndex(contacts);
+    _lastSyncTime = DateTime.now();
+  }
+
+  // 연락처 인덱스 업데이트
+  void _updateContactIndex(List<PhoneBookModel> contacts) {
+    _contactIndex = {
+      for (var contact in contacts)
+        normalizePhone(contact.phoneNumber): contact,
+    };
+  }
+
   /// 여러 전화번호에 대한 연락처를 한 번에 조회
   Map<String, PhoneBookModel> getContactsByPhones(List<String> phoneNumbers) {
     final stopwatch = Stopwatch()..start();
@@ -575,7 +617,7 @@ class ContactsController {
 
     // 연락처 처리
     for (final contact in contacts) {
-      final phoneStr = contact.phoneNumber ?? '';
+      final phoneStr = contact.phoneNumber;
       final normPhone = contactNormalizedCache.putIfAbsent(
         phoneStr,
         () => normalizePhone(phoneStr),
@@ -591,7 +633,7 @@ class ContactsController {
     }
 
     stopwatch.stop();
-    debugPrint(
+    log(
       '[ContactsController] Batch contact lookup took: ${stopwatch.elapsedMilliseconds}ms for ${phoneNumbers.length} numbers (${result.length} found)',
     );
 

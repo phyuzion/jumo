@@ -97,6 +97,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     setState(() {
       // 스크롤 위치 복원
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         _scrollController.jumpTo(_scrollPosition);
       });
     });
