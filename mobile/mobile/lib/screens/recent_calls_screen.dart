@@ -12,6 +12,7 @@ import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
+import 'dart:developer';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -140,20 +141,26 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
           }
 
           // === 이름 lookup
-          final contactsCtrl = context.read<ContactsController>();
           final phoneNormalized = normalizePhone(number);
-          final contact = contactsCtrl.getSavedContacts().firstWhere(
-            (c) => c.phoneNumber == phoneNormalized,
-            orElse:
-                () => PhoneBookModel(
-                  contactId: '',
-                  name: '',
-                  phoneNumber: phoneNormalized,
-                  memo: null,
-                  type: null,
-                  updatedAt: null,
-                ),
+          final contactsCtrl = context.read<ContactsController>();
+
+          // 성능 측정을 위한 로그
+          final searchStartTime = DateTime.now();
+          final contact =
+              contactsCtrl.getContactByPhone(phoneNormalized) ??
+              PhoneBookModel(
+                contactId: '',
+                name: '',
+                phoneNumber: phoneNormalized,
+                memo: null,
+                type: null,
+                updatedAt: null,
+              );
+          final searchEndTime = DateTime.now();
+          log(
+            '[RecentCallsScreen] Contact search for $phoneNormalized took: ${searchEndTime.difference(searchStartTime).inMilliseconds}ms',
           );
+
           final name = contact.name; // 없으면 ''
 
           return Column(
