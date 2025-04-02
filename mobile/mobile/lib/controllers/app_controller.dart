@@ -36,11 +36,13 @@ class AppController {
   }
 
   Future<void> initializeApp() async {
-    await checkUpdate();
-    await initializeData();
-    await LocalNotificationService.initialize();
-
     phoneStateController.startListening();
+    await contactsController.syncContactsAll();
+    await blockedNumbersController.initialize();
+    await callLogController.refreshCallLogs();
+    await LocalNotificationService.initialize();
+    await smsController.refreshSms();
+    await checkUpdate();
   }
 
   Future<void> checkUpdate() async {
@@ -54,20 +56,6 @@ class AppController {
     }
   }
 
-  Future<void> initializeData() async {
-    // 컨트롤러들(실제 diff 로직)
-
-    await blockedNumbersController.initialize();
-    await contactsController.syncContactsAll();
-    await callLogController.refreshCallLogs();
-    await smsController.refreshSms();
-  }
-
-  Future<void> stopApp() async {
-    phoneStateController.stopListening();
-    stopBackgroundService();
-  }
-
   Future<void> cleanupOnLogout() async {
     // 백그라운드 서비스 정지
     await stopBackgroundService();
@@ -77,9 +65,6 @@ class AppController {
 
     // 로컬 알림 정리
     await LocalNotificationService.cancelAllNotifications();
-
-    // 이벤트 구독 해제
-    appEventBus.destroy();
   }
 
   /// flutter_background_service config
