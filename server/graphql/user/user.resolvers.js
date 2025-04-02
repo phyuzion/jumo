@@ -392,12 +392,11 @@ module.exports = {
             throw new UserInputError('필수 필드 누락');
           }
 
-          // epoch timestamp를 Date 객체로 변환
-          const timestamp = parseInt(log.time);
-          if (isNaN(timestamp)) {
+          // 시간을 Date 객체로 변환
+          const time = new Date(log.time);
+          if (isNaN(time.getTime())) {
             throw new UserInputError('잘못된 시간 형식');
           }
-          const time = new Date(timestamp);
 
           // 새로운 로그 객체 생성
           const newLog = {
