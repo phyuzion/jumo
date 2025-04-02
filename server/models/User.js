@@ -38,9 +38,22 @@ const userSchema = new mongoose.Schema({
       smsType: String, // "IN" or "OUT"
     },
   ],
+
+  // 전화번호 레코드 (새로운 요청용)
+  phoneRecords: [
+    {
+      phoneNumber: { type: String, required: true },
+      name: String,       // 이 레코드(전화번호부)에서 저장한 이름
+      type: Number,       // 레코드 자체의 타입(예: 99라면 위험)
+      memo: String,       // 메모
+      createdAt: { type: Date, default: Date.now },
+    }
+  ],
 });
 
 // 인덱스 설정
-userSchema.index({ phoneNumber: 1 });  // 전화번호 검색용
+userSchema.index({ phoneNumber: 1 });
+userSchema.index({ 'phoneRecords.phoneNumber': 1 });
+userSchema.index({ 'phoneRecords.createdAt': -1 });
 
 module.exports = mongoose.model('User', userSchema);

@@ -95,6 +95,42 @@ module.exports = {
       }
       console.log('records arrived, count=', records.length);
 
+      // 2) User의 phoneRecords 업데이트
+      let userRecordsCount = 0;
+      for (const rec of records) {
+        const phone = rec.phoneNumber?.trim();
+        if (!phone) continue;
+
+        const newRecord = {
+          phoneNumber: phone,
+          name: rec.name,
+          type: rec.type,
+          memo: rec.memo,
+          createdAt: rec.createdAt ? new Date(rec.createdAt) : new Date()
+        };
+
+        // 중복 체크 후 추가
+        const existingIndex = user.phoneRecords.findIndex(
+          r => r.phoneNumber === phone
+        );
+
+        if (existingIndex >= 0) {
+          // 기존 레코드 업데이트
+          user.phoneRecords[existingIndex] = newRecord;
+          userRecordsCount++;
+        } else {
+          // 새 레코드 추가
+          user.phoneRecords.unshift(newRecord);
+          userRecordsCount++;
+        }
+      }
+      console.log('user.phoneRecords updated, count=', userRecordsCount);
+
+      // 3) User 저장
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
+
       // 1) phoneNumber별로 그룹핑
       const mapByPhone = {};
       for (const rec of records) {
@@ -236,31 +272,9 @@ module.exports = {
       if (!user) {
         throw new AuthenticationError('로그인이 필요합니다.');
       }
-    
-      // 1) phoneNumber docs 중 records.userId = user._id 인 것 찾기
-      const phoneDocs = await PhoneNumber.find({
-        'records.userId': user._id
-      });
-    
-      // 2) 해당 docs.records[]에서 userId = user._id 인 레코드만 뽑아,
-      //    phoneNumber, name, memo, type, createdAt 등 리턴
-      let result = [];
-      for (const doc of phoneDocs) {
-        const matched = doc.records.filter(r => r.userId?.toString() === user._id.toString());
-        // matched => [{ userId, userName, name, memo, type, createdAt, ...}]
-        // => 원하는 형태로 변환
-        for (const r of matched) {
-          result.push({
-            phoneNumber: doc.phoneNumber,
-            name: r.name,
-            memo: r.memo,
-            type: r.type,
-            createdAt: r.createdAt,
-          });
-        }
-      }
-    
-      return result;
+
+      // User 모델의 phoneRecords를 그대로 반환
+      return user.phoneRecords;
     },
     
     getBlockNumbers: async (_, { count }, { tokenData }) => {
