@@ -95,7 +95,49 @@ module.exports = {
       }
       console.log('records arrived, count=', records.length);
 
-      // 1) phoneNumber별로 그룹핑
+      // 2) API 호출 유저의 레코드만 먼저 처리
+      if (!isAdmin) {
+        // 기존 userRecords 로딩
+        const existingUser = await User.findById(user._id).lean();
+        const existingRecords = existingUser?.userRecords || [];
+
+        // 새로운 레코드 매핑
+        const newRecords = records.map(rec => ({
+          name: rec.name || '',
+          memo: rec.memo || '',
+          type: rec.type || 0,
+          createdAt: rec.createdAt || new Date().toISOString()
+        }));
+
+        // 레코드 병합
+        const mergedRecords = [...existingRecords];
+        for (const newRec of newRecords) {
+          const existingIndex = mergedRecords.findIndex(r => r.name === newRec.name);
+          if (existingIndex >= 0) {
+            // 기존 레코드 업데이트
+            mergedRecords[existingIndex] = newRec;
+          } else {
+            // 새로운 레코드 추가
+            mergedRecords.push(newRec);
+          }
+        }
+
+        // User bulkWrite
+        await withTransaction(async (session) => {
+          await User.bulkWrite([
+            {
+              updateOne: {
+                filter: { _id: user._id },
+                update: {
+                  $set: { userRecords: mergedRecords }
+                }
+              }
+            }
+          ], { session });
+        });
+      }
+
+      // 3) phoneNumber별로 그룹핑
       const mapByPhone = {};
       for (const rec of records) {
         const phone = rec.phoneNumber?.trim();
@@ -108,7 +150,7 @@ module.exports = {
         return true; // 아무것도 없음
       }
 
-      // 2) 기존 PhoneNumber docs 한 번에 로딩
+      // 4) 기존 PhoneNumber docs 한 번에 로딩
       const existingDocs = await PhoneNumber.find({
         phoneNumber: { $in: phoneNumbers }
       }).lean();
@@ -121,7 +163,7 @@ module.exports = {
       // 최종 bulkOps
       const bulkOps = [];
 
-      // 3) phoneNumber 별로 병합
+      // 5) phoneNumber 별로 병합
       for (const phone of phoneNumbers) {
         const doc = phoneDocMap[phone];
         let currentRecords = [];
@@ -152,7 +194,7 @@ module.exports = {
           }
         }
 
-        // 4) bulkOps: upsert
+        // 6) bulkOps: upsert
         bulkOps.push({
           updateOne: {
             filter: { phoneNumber: phone },
@@ -169,7 +211,7 @@ module.exports = {
         });
       }
 
-      // 5) bulkWrite
+      // 7) bulkWrite
       if (bulkOps.length > 0) {
         await withTransaction(async (session) => {
           await PhoneNumber.bulkWrite(bulkOps, { session });
