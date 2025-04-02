@@ -174,13 +174,11 @@ module.exports = {
         if (userRecord) {
           userRecordsOps.push({
             updateOne: {
-              filter: { 
-                _id: user._id,
-                'userRecords.phoneNumber': phone 
-              },
+              filter: { _id: user._id },
               update: {
-                $set: {
-                  'userRecords.$': {
+                $pull: { userRecords: { phoneNumber: phone } },
+                $push: {
+                  userRecords: {
                     phoneNumber: phone,
                     name: userRecord.name,
                     memo: userRecord.memo,
@@ -188,8 +186,7 @@ module.exports = {
                     createdAt: userRecord.createdAt
                   }
                 }
-              },
-              upsert: true
+              }
             }
           });
         }
