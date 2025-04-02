@@ -6,7 +6,6 @@
   },
   "dependencies": {
     "apollo-server-express": "^3.13.0",
-    "apollo-server-plugin-response-cache": "^3.8.2",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -17,7 +16,6 @@
     "graphql-type-json": "^0.3.2",
     "graphql-upload": "^13.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5",
-    "node-cache": "^5.1.2"
+    "mongoose": "^8.9.5"
   }
 }

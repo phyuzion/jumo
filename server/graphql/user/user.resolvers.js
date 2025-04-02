@@ -9,7 +9,6 @@ const {
 const { GraphQLJSON } = require('graphql-type-json');
 const { withTransaction } = require('../../utils/transaction');
 const mongoose = require('mongoose');
-const CacheManager = require('../../utils/cache');
 
 const {
   generateAccessToken,
@@ -66,32 +65,26 @@ function pushNewLog(logArray, newLog, maxLen = 200) {
 
 module.exports = {
   Query: {
-    // 유저 통화내역 조회
+    // (Admin 전용) 유저 전화 내역
     getUserCallLog: async (_, { userId }, { tokenData }) => {
       await checkAdminValid(tokenData);
       const user = await User.findById(userId);
-      if (!user) {
-        throw new UserInputError('유저를 찾을 수 없습니다.');
-      }
+      if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
-      const logs = user.callLogs || [];
-      return logs.map((log) => ({
+      return user.callLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
         time: log.time.toISOString(),
         callType: log.callType,
       }));
     },
 
-    // 유저 문자내역 조회
+    // (Admin 전용) 유저 문자 내역
     getUserSMSLog: async (_, { userId }, { tokenData }) => {
       await checkAdminValid(tokenData);
       const user = await User.findById(userId);
-      if (!user) {
-        throw new UserInputError('유저를 찾을 수 없습니다.');
-      }
+      if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
-      const logs = user.smsLogs || [];
-      return logs.map((log) => ({
+      return user.smsLogs.map((log) => ({
         phoneNumber: log.phoneNumber,
         time: log.time.toISOString(),
         content: log.content || '',
@@ -99,7 +92,7 @@ module.exports = {
       }));
     },
 
-    // 전체 유저 조회
+    // (Admin 전용) 모든 유저 조회
     getAllUsers: async (_, __, { tokenData }) => {
       await checkAdminValid(tokenData);
       return User.find({});
@@ -114,12 +107,6 @@ module.exports = {
         if (!tokenData?.userId || tokenData.userId !== userId) {
           throw new ForbiddenError('본인 계정만 조회 가능합니다.');
         }
-      }
-
-      // 1. 캐시 확인
-      const cachedData = await CacheManager.getUserRecords(userId);
-      if (cachedData) {
-        return cachedData;
       }
 
       const user = await User.findById(userId);
@@ -149,15 +136,10 @@ module.exports = {
         }
       }
 
-      const result = {
+      return {
         user,
         records: recordList,
       };
-
-      // 2. 캐시 저장
-      CacheManager.setUserRecords(userId, result);
-
-      return result;
     },
 
     // 현재 로그인된 유저의 settings 조회
@@ -408,17 +390,12 @@ module.exports = {
 
           // 로그 추가
           pushNewLog(user.smsLogs, newLog);
-
-          // 관련 캐시 무효화
-          CacheManager.invalidatePhoneNumber(log.phoneNumber);
-          CacheManager.invalidateUserRecords(user._id.toString());
-          CacheManager.invalidateUserSMSLogs(user._id.toString());
         }
 
         await user.save({ session });
       });
 
-      return true;
+      return true;  // Boolean 타입으로 응답
     },
 
     // (새로 추가) 로그인 유저의 settings 저장

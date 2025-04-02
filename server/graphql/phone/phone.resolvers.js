@@ -9,7 +9,6 @@ const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
 const Grade = require('../../models/Grade');
 const { withTransaction } = require('../../utils/transaction');
-const CacheManager = require('../../utils/cache');
 
 const { checkUserOrAdmin } = require('../auth/utils');
 
@@ -121,7 +120,6 @@ module.exports = {
 
       // 최종 bulkOps
       const bulkOps = [];
-      const affectedUserIds = new Set(); // 영향을 받는 사용자 ID 추적
 
       // 3) phoneNumber 별로 병합
       for (const phone of phoneNumbers) {
@@ -152,10 +150,6 @@ module.exports = {
           if (name.includes('ㅋㅍ') || name.includes('콜폭')) {
             blockCount++;
           }
-          // 영향을 받는 사용자 ID 추적
-          if (record.userId) {
-            affectedUserIds.add(record.userId.toString());
-          }
         }
 
         // 4) bulkOps: upsert
@@ -179,10 +173,6 @@ module.exports = {
       if (bulkOps.length > 0) {
         await withTransaction(async (session) => {
           await PhoneNumber.bulkWrite(bulkOps, { session });
-        }, {
-          invalidateCache: Array.from(affectedUserIds).map(userId => () => {
-            CacheManager.invalidateUserRecords(userId);
-          })
         });
       }
 
@@ -246,12 +236,6 @@ module.exports = {
       if (!user) {
         throw new AuthenticationError('로그인이 필요합니다.');
       }
-
-      // 캐시 확인
-      const cachedRecords = await CacheManager.getUserRecords(user._id);
-      if (cachedRecords) {
-        return cachedRecords;
-      }
     
       // 1) phoneNumber docs 중 records.userId = user._id 인 것 찾기
       const phoneDocs = await PhoneNumber.find({
@@ -275,9 +259,6 @@ module.exports = {
           });
         }
       }
-
-      // 캐시 저장
-      await CacheManager.setUserRecords(user._id, result);
     
       return result;
     },

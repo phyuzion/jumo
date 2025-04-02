@@ -54,11 +54,6 @@ async function startServer() {
     typeDefs,
     resolvers,
     introspection: true,
-    cache: 'bounded',  // 메모리 캐시 사용
-    cacheControl: {
-      defaultMaxAge: 300,  // 5분
-      calculateHttpHeaders: true,
-    },
     plugins: [
       ApolloServerPluginLandingPageProductionDefault({
         embed: true,
