@@ -40,8 +40,7 @@ const userSchema = new mongoose.Schema({
   ],
 });
 
-// 인덱스 설정
-userSchema.index({ loginId: 1 }, { unique: true });  // unique 인덱스
+// 인덱스 설정 (unique: true는 스키마 정의에서 처리)
 userSchema.index({ phoneNumber: 1 });  // 전화번호 검색용
 
 module.exports = mongoose.model('User', userSchema);

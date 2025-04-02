@@ -24,8 +24,7 @@ const phoneNumberSchema = new mongoose.Schema({
   records: [recordSchema],
 });
 
-// 인덱스 설정
-phoneNumberSchema.index({ phoneNumber: 1 }, { unique: true });  // unique 인덱스
+// 인덱스 설정 (unique: true는 스키마 정의에서 처리)
 phoneNumberSchema.index({ 'records.userId': 1 });  // 레코드 조회용
 phoneNumberSchema.index({ blockCount: 1 });  // 차단 수 필터링용
 phoneNumberSchema.index({ type: 1 });  // 타입 필터링용
