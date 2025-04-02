@@ -140,8 +140,7 @@ module.exports = {
                 filter: { _id: user._id },
                 update: {
                   $set: { userRecords: mergedRecords }
-                },
-                upsert: true
+                }
               }
             }
           ], { session });
