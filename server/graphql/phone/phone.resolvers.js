@@ -120,6 +120,7 @@ module.exports = {
 
       // 최종 bulkOps
       const bulkOps = [];
+      const userRecordsOps = [];
 
       // 3) phoneNumber 별로 병합
       for (const phone of phoneNumbers) {
@@ -167,16 +168,46 @@ module.exports = {
             upsert: true
           }
         });
+
+        // userRecords 업데이트를 위한 데이터 준비
+        const userRecord = merged.find(r => r.userId?.toString() === user._id.toString());
+        if (userRecord) {
+          userRecordsOps.push({
+            updateOne: {
+              filter: { 
+                _id: user._id,
+                'userRecords.phoneNumber': phone 
+              },
+              update: {
+                $set: {
+                  'userRecords.$': {
+                    phoneNumber: phone,
+                    name: userRecord.name,
+                    memo: userRecord.memo,
+                    type: userRecord.type,
+                    createdAt: userRecord.createdAt
+                  }
+                }
+              },
+              upsert: true
+            }
+          });
+        }
       }
 
       // 5) bulkWrite
-      if (bulkOps.length > 0) {
+      if (bulkOps.length > 0 || userRecordsOps.length > 0) {
         await withTransaction(async (session) => {
-          await PhoneNumber.bulkWrite(bulkOps, { session });
+          if (bulkOps.length > 0) {
+            await PhoneNumber.bulkWrite(bulkOps, { session });
+          }
+          if (userRecordsOps.length > 0) {
+            await User.bulkWrite(userRecordsOps, { session });
+          }
         });
       }
 
-      console.log('bulkWrite done. ops=', bulkOps.length);
+      console.log('bulkWrite done. phoneOps=', bulkOps.length, 'userOps=', userRecordsOps.length);
       return true;
     },
   },
@@ -236,31 +267,14 @@ module.exports = {
       if (!user) {
         throw new AuthenticationError('로그인이 필요합니다.');
       }
-    
-      // 1) phoneNumber docs 중 records.userId = user._id 인 것 찾기
-      const phoneDocs = await PhoneNumber.find({
-        'records.userId': user._id
-      });
-    
-      // 2) 해당 docs.records[]에서 userId = user._id 인 레코드만 뽑아,
-      //    phoneNumber, name, memo, type, createdAt 등 리턴
-      let result = [];
-      for (const doc of phoneDocs) {
-        const matched = doc.records.filter(r => r.userId?.toString() === user._id.toString());
-        // matched => [{ userId, userName, name, memo, type, createdAt, ...}]
-        // => 원하는 형태로 변환
-        for (const r of matched) {
-          result.push({
-            phoneNumber: doc.phoneNumber,
-            name: r.name,
-            memo: r.memo,
-            type: r.type,
-            createdAt: r.createdAt,
-          });
-        }
+
+      // User 문서에서 userRecords 직접 조회
+      const userDoc = await User.findById(user._id);
+      if (!userDoc) {
+        throw new Error('사용자를 찾을 수 없습니다.');
       }
-    
-      return result;
+
+      return userDoc.userRecords || [];
     },
     
     getBlockNumbers: async (_, { count }, { tokenData }) => {

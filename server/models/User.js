@@ -19,6 +19,13 @@ const userSchema = new mongoose.Schema({
   lastSearchTime: { type: Date },           // 마지막 검색 시간
   settings: { type: String, default: '' },  // 설정(문자열로 저장)
   blockList: [String],      // 차단된 전화번호 목록
+  userRecords: [{          // 유저의 전화번호부
+    phoneNumber: String,
+    name: String,
+    memo: String,
+    type: Number,
+    createdAt: Date
+  }],
 
   // 통화내역 (최신이 위, 최대 200)
   callLogs: [
