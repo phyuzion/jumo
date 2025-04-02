@@ -69,19 +69,16 @@ class _CallEndedScreen extends State<CallEndedScreen> {
   /// 주소록(이미 저장) 에서 widget.incomingNumber 와 일치하는 contact 찾기
   Future<void> _loadContactName() async {
     final contactsController = context.read<ContactsController>();
-    final contacts = contactsController.getSavedContacts();
+    final contacts = contactsController.getContactsByPhones([
+      widget.callEndedNumber,
+    ]);
+    final contact = contacts[widget.callEndedNumber];
 
-    for (final c in contacts) {
-      final phoneStr = c.phoneNumber ?? '';
-      final normPhone = normalizePhone(phoneStr);
-
-      if (normPhone == normalizePhone(widget.callEndedNumber)) {
-        _displayName = c.name;
-        _phones = normPhone;
-        if (!mounted) return;
-        setState(() {});
-        break;
-      }
+    if (contact != null && mounted) {
+      setState(() {
+        _displayName = contact.name;
+        _phones = contact.phoneNumber;
+      });
     }
   }
 

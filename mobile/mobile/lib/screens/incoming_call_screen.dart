@@ -70,18 +70,16 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   Future<void> _loadContactName() async {
     final contactsController = context.read<ContactsController>();
-    final contacts = contactsController.getSavedContacts();
+    final contacts = contactsController.getContactsByPhones([
+      widget.incomingNumber,
+    ]);
+    final contact = contacts[widget.incomingNumber];
 
-    for (final c in contacts) {
-      final phoneStr = c.phoneNumber ?? '';
-      if (phoneStr.contains(widget.incomingNumber)) {
-        if (!mounted) return;
-        setState(() {
-          _displayName = c.name;
-          _phones = phoneStr;
-        });
-        break;
-      }
+    if (contact != null && mounted) {
+      setState(() {
+        _displayName = contact.name;
+        _phones = contact.phoneNumber;
+      });
     }
   }
 

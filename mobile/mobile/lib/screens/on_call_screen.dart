@@ -62,18 +62,16 @@ class _OnCallScreenState extends State<OnCallScreen> {
 
   Future<void> _loadContactName() async {
     final contactsController = context.read<ContactsController>();
-    final contacts = contactsController.getSavedContacts();
+    final contacts = contactsController.getContactsByPhones([
+      widget.phoneNumber,
+    ]);
+    final contact = contacts[widget.phoneNumber];
 
-    for (final c in contacts) {
-      final phoneStr = c.phoneNumber ?? '';
-      final normPhone = normalizePhone(phoneStr);
-      if (normPhone == normalizePhone(widget.phoneNumber)) {
-        _displayName = c.name;
-        _phones = normPhone;
-        if (!mounted) return;
-        setState(() {});
-        break;
-      }
+    if (contact != null && mounted) {
+      setState(() {
+        _displayName = contact.name;
+        _phones = contact.phoneNumber;
+      });
     }
   }
 

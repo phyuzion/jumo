@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/graphql/phone_records_api.dart';
@@ -22,7 +24,17 @@ class ContactsController {
   // 연락처 검색 최적화를 위한 인덱스
   Map<String, PhoneBookModel> _phoneToContactIndex = {};
   DateTime? _lastIndexUpdateTime;
-  static const _indexCacheDuration = Duration(minutes: 5);
+  static const _indexCacheDuration = Duration(hours: 1);
+
+  // 마지막 전체 동기화 시간
+  DateTime? _lastFullSyncTime;
+  static const _fullSyncInterval = Duration(hours: 1);
+
+  // 전체 동기화가 필요한지 확인
+  bool get _needsFullSync {
+    if (_lastFullSyncTime == null) return true;
+    return DateTime.now().difference(_lastFullSyncTime!) > _fullSyncInterval;
+  }
 
   // 인덱스 유효성 검사
   bool get _isIndexValid {
@@ -54,102 +66,186 @@ class ContactsController {
   int _totalContacts = 0;
   Map<String, int> _searchTimes = {};
 
+  // 서버 연락처 캐시
+  List<Map<String, dynamic>>? _serverContactsCache;
+  DateTime? _lastServerCacheTime;
+  static const _serverCacheDuration = Duration(hours: 4);
+  static const _maxServerCacheSize = 10000;
+
+  // 디바이스 연락처 캐시 추가
+  List<Contact>? _deviceContactsCache;
+  DateTime? _lastDeviceCacheTime;
+  static const _deviceCacheDuration = Duration(hours: 2);
+  static const _maxDeviceCacheSize = 10000;
+
+  // 디바이스 연락처 캐시 유효성 검사
+  bool get _isDeviceCacheValid {
+    if (_lastDeviceCacheTime == null) return false;
+    return DateTime.now().difference(_lastDeviceCacheTime!) <
+        _deviceCacheDuration;
+  }
+
+  Future<List<Contact>> _getDeviceContacts() async {
+    if (_isDeviceCacheValid && _deviceContactsCache != null) {
+      log(
+        '[ContactsController] Using cached device contacts (${_deviceContactsCache!.length} contacts)',
+      );
+      return _deviceContactsCache!;
+    }
+
+    final startTime = DateTime.now();
+    final contacts = await FlutterContacts.getContacts(
+      withProperties: true,
+      withAccounts: true,
+      withPhoto: true,
+      withThumbnail: true,
+      withGroups: false,
+    );
+
+    // 캐시 크기 제한 적용
+    if (contacts.length <= _maxDeviceCacheSize) {
+      _deviceContactsCache = contacts;
+      _lastDeviceCacheTime = DateTime.now();
+      log(
+        '[ContactsController] Device contacts cached (${contacts.length} contacts)',
+      );
+    } else {
+      log(
+        '[ContactsController] Device contacts too large to cache (${contacts.length} contacts)',
+      );
+    }
+
+    final duration = DateTime.now().difference(startTime).inMilliseconds;
+    log(
+      '[ContactsController] Device contacts fetch took: ${duration}ms (${contacts.length} contacts)',
+    );
+    return contacts;
+  }
+
+  Future<List<Map<String, dynamic>>> _getServerContacts() async {
+    if (_isServerCacheValid && _serverContactsCache != null) {
+      log(
+        '[ContactsController] Using cached server contacts (${_serverContactsCache!.length} contacts)',
+      );
+      return _serverContactsCache!;
+    }
+
+    final startTime = DateTime.now();
+    final contacts = await PhoneRecordsApi.getMyRecords();
+
+    // 캐시 크기 제한 적용
+    if (contacts.length <= _maxServerCacheSize) {
+      _serverContactsCache = contacts;
+      _lastServerCacheTime = DateTime.now();
+      log(
+        '[ContactsController] Server contacts cached (${contacts.length} contacts)',
+      );
+    } else {
+      log(
+        '[ContactsController] Server contacts too large to cache (${contacts.length} contacts)',
+      );
+    }
+
+    final duration = DateTime.now().difference(startTime).inMilliseconds;
+    log(
+      '[ContactsController] Server contacts fetch took: ${duration}ms (${contacts.length} contacts)',
+    );
+    return contacts;
+  }
+
   Future<void> syncContactsAll() async {
+    if (!_needsFullSync) {
+      log('[ContactsController] Skipping full sync - last sync was recent');
+      return;
+    }
+
     final completer = Completer<void>();
     _taskQueue.add(() async {
       try {
-        _lastSyncStartTime = DateTime.now();
+        final syncStartTime = DateTime.now();
         log('[ContactsController] syncContactsAll start...');
 
-        // 1) 서버 목록
-        final serverStartTime = DateTime.now();
-        final serverList = await PhoneRecordsApi.getMyRecords();
-        log(
-          '[ContactsController] Server contacts fetch took: ${DateTime.now().difference(serverStartTime).inMilliseconds}ms',
-        );
+        // 서버와 디바이스 연락처를 병렬로 가져오기 (캐시 활용)
+        final serverFuture = _getServerContacts();
+        final deviceFuture = _getDeviceContacts();
 
-        // 2) 기기 연락처 목록
+        final results = await Future.wait([serverFuture, deviceFuture]);
+        final serverList = results[0] as List<Map<String, dynamic>>;
+        final deviceContacts = results[1] as List<Contact>;
+
+        // 디바이스 연락처 처리 최적화
         final deviceStartTime = DateTime.now();
-        final deviceContacts = await FlutterContacts.getContacts(
-          withProperties: true,
-          withAccounts: true,
-          withPhoto: true,
-          withThumbnail: true,
-          withGroups: false,
-        );
+        final deviceList = await processContacts(deviceContacts);
+        final deviceTime =
+            DateTime.now().difference(deviceStartTime).inMilliseconds;
         log(
-          '[ContactsController] Device contacts fetch took: ${DateTime.now().difference(deviceStartTime).inMilliseconds}ms',
+          '[ContactsController] Device contacts processed: ${deviceList.length} contacts (${deviceContacts.length - deviceList.length} skipped) in ${deviceTime}ms',
         );
 
-        final deviceList = <PhoneBookModel>[];
-        for (final c in deviceContacts) {
-          if (c.phones.isEmpty) continue;
-          final rawPhone = c.phones.first.number.trim();
-          if (rawPhone.isEmpty) continue;
-
-          final normPhone = normalizePhone(rawPhone);
-          final rawName = '${c.name.last} ${c.name.first}'.trim();
-          final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
-
-          deviceList.add(
-            PhoneBookModel(
-              contactId: c.id,
-              name: finalName,
-              phoneNumber: normPhone,
-              memo: null,
-              type: null,
-              updatedAt: null,
-            ),
-          );
-        }
-        _totalContacts = deviceList.length;
-        log('[ContactsController] Total contacts processed: $_totalContacts');
-
-        // 3) 기존 로컬
+        // 로컬 연락처 로드 - 캐시 사용
         final localStartTime = DateTime.now();
         final oldList = _loadLocalPhoneBook();
+        final localTime =
+            DateTime.now().difference(localStartTime).inMilliseconds;
         log(
-          '[ContactsController] Local contacts load took: ${DateTime.now().difference(localStartTime).inMilliseconds}ms',
+          '[ContactsController] Local contacts load took: ${localTime}ms (${oldList.length} contacts)',
         );
 
-        // 4) 병합
+        // 병합 최적화
         final mergeStartTime = DateTime.now();
         final merged = _mergeAll(
           serverList: serverList,
           deviceList: deviceList,
           oldList: oldList,
         );
+        final mergeTime =
+            DateTime.now().difference(mergeStartTime).inMilliseconds;
         log(
-          '[ContactsController] Merge operation took: ${DateTime.now().difference(mergeStartTime).inMilliseconds}ms',
+          '[ContactsController] Merge operation took: ${mergeTime}ms (${merged.length} total contacts)',
         );
 
-        // 5) diff => 서버 업서트
+        // diff 계산 및 서버 업로드 최적화
         final diffStartTime = DateTime.now();
         final diffList = _computeDiffForServer(merged, serverList);
         if (diffList.isNotEmpty) {
-          log('[ContactsController] found ${diffList.length} diff => upsert');
+          log(
+            '[ContactsController] Found ${diffList.length} differences to upload',
+          );
           await _uploadDiff(diffList);
         } else {
-          log('[ContactsController] no diff => skip upsert');
+          log(
+            '[ContactsController] No differences found, skipping server update',
+          );
         }
+        final diffTime =
+            DateTime.now().difference(diffStartTime).inMilliseconds;
         log(
-          '[ContactsController] Diff computation and upload took: ${DateTime.now().difference(diffStartTime).inMilliseconds}ms',
+          '[ContactsController] Diff computation and upload took: ${diffTime}ms',
         );
 
-        // 6) 로컬 저장 + 인덱스 업데이트 + 이벤트
+        // 로컬 저장 및 인덱스 업데이트
         final saveStartTime = DateTime.now();
         await _saveLocalPhoneBook(merged);
         _updateIndex(merged);
+        _lastFullSyncTime = DateTime.now();
         appEventBus.fire(ContactsUpdatedEvent());
+        final saveTime =
+            DateTime.now().difference(saveStartTime).inMilliseconds;
         log(
-          '[ContactsController] Local save took: ${DateTime.now().difference(saveStartTime).inMilliseconds}ms',
+          '[ContactsController] Local save and index update took: ${saveTime}ms',
         );
 
-        _lastSyncEndTime = DateTime.now();
-        final totalTime = _lastSyncEndTime!.difference(_lastSyncStartTime!);
+        final totalTime =
+            DateTime.now().difference(syncStartTime).inMilliseconds;
+        log('[ContactsController] Total sync completed in ${totalTime}ms');
+        log('[ContactsController] Summary:');
+        log('  - Server contacts: ${serverList.length}');
         log(
-          '[ContactsController] Total sync time: ${totalTime.inMilliseconds}ms',
+          '  - Device contacts: ${deviceList.length} (${deviceContacts.length - deviceList.length} skipped)',
         );
+        log('  - Local contacts: ${oldList.length}');
+        log('  - Merged contacts: ${merged.length}');
+        log('  - Differences: ${diffList.length}');
 
         completer.complete();
       } catch (e, st) {
@@ -200,11 +296,18 @@ class ContactsController {
       list.add(newItem);
     }
     await _saveLocalPhoneBook(list);
+
     final endTime = DateTime.now();
     log(
       '[ContactsController] addOrUpdateLocalRecord took: ${endTime.difference(startTime).inMilliseconds}ms',
     );
     _updateIndex(list);
+
+    // 서버에 단일 연락처만 업데이트
+    await _uploadDiff([newItem]);
+
+    // 연락처 수정 후 이벤트 발생
+    appEventBus.fire(ContactsUpdatedEvent());
   }
 
   /// 내부: 병합 (server vs device vs oldLocal)
@@ -388,5 +491,110 @@ class ContactsController {
         log('  $phone: ${time}ms');
       });
     }
+  }
+
+  // 전화 종료 후 콜로그만 업데이트
+  Future<void> updateCallLog(String phoneNumber) async {
+    final contact = getContactByPhone(phoneNumber);
+    if (contact != null) {
+      await addOrUpdateLocalRecord(contact);
+    }
+  }
+
+  // 서버 연락처 캐시 유효성 검사
+  bool get _isServerCacheValid {
+    if (_lastServerCacheTime == null) return false;
+    return DateTime.now().difference(_lastServerCacheTime!) <
+        _serverCacheDuration;
+  }
+
+  // 연락처 처리 공통 메서드
+  Future<List<PhoneBookModel>> processContacts(List<Contact> contacts) async {
+    final startTime = DateTime.now();
+    final deviceList = <PhoneBookModel>[];
+    final batchSize = 1000;
+    final futures = <Future<void>>[];
+
+    // 모든 연락처를 병렬로 처리
+    for (var i = 0; i < contacts.length; i += batchSize) {
+      final end =
+          (i + batchSize < contacts.length) ? i + batchSize : contacts.length;
+      final batch = contacts.sublist(i, end);
+
+      futures.add(
+        Future(() {
+          for (final c in batch) {
+            if (c.phones.isEmpty) continue;
+            final rawPhone = c.phones.first.number.trim();
+            if (rawPhone.isEmpty) continue;
+
+            final normPhone = normalizePhone(rawPhone);
+            final rawName = '${c.name.last} ${c.name.first}'.trim();
+            final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
+
+            deviceList.add(
+              PhoneBookModel(
+                contactId: c.id,
+                name: finalName,
+                phoneNumber: normPhone,
+                memo: null,
+                type: null,
+                updatedAt: null,
+              ),
+            );
+          }
+        }),
+      );
+    }
+
+    await Future.wait(futures);
+    final processTime = DateTime.now().difference(startTime).inMilliseconds;
+    log(
+      '[ContactsController] Contacts processed: ${deviceList.length} contacts (${contacts.length - deviceList.length} skipped) in ${processTime}ms',
+    );
+
+    return deviceList;
+  }
+
+  /// 여러 전화번호에 대한 연락처를 한 번에 조회
+  Map<String, PhoneBookModel> getContactsByPhones(List<String> phoneNumbers) {
+    final stopwatch = Stopwatch()..start();
+    final contacts = getSavedContacts();
+    final result = <String, PhoneBookModel>{};
+
+    // 전화번호 정규화 캐시
+    final normalizedCache = <String, String>{};
+
+    // 연락처 전화번호 정규화 캐시
+    final contactNormalizedCache = <String, String>{};
+
+    // 전화번호 정규화
+    for (final phone in phoneNumbers) {
+      normalizedCache[phone] = normalizePhone(phone);
+    }
+
+    // 연락처 처리
+    for (final contact in contacts) {
+      final phoneStr = contact.phoneNumber ?? '';
+      final normPhone = contactNormalizedCache.putIfAbsent(
+        phoneStr,
+        () => normalizePhone(phoneStr),
+      );
+
+      // 매칭된 전화번호 찾기
+      for (final entry in normalizedCache.entries) {
+        if (entry.value == normPhone) {
+          result[entry.key] = contact;
+          break;
+        }
+      }
+    }
+
+    stopwatch.stop();
+    debugPrint(
+      '[ContactsController] Batch contact lookup took: ${stopwatch.elapsedMilliseconds}ms for ${phoneNumbers.length} numbers (${result.length} found)',
+    );
+
+    return result;
   }
 }

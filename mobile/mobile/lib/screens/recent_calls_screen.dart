@@ -65,8 +65,34 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   Future<void> _loadCalls() async {
     final logs = _callLogController.getSavedCallLogs();
+    final contactsCtrl = context.read<ContactsController>();
 
-    _callLogs = logs;
+    // 성능 측정을 위한 로그
+    final searchStartTime = DateTime.now();
+    var totalContacts = 0;
+
+    // 모든 전화번호 수집
+    final phoneNumbers =
+        logs.map((log) => log['number'] as String? ?? '').toList();
+
+    // 한 번에 모든 연락처 조회
+    final contacts = contactsCtrl.getContactsByPhones(phoneNumbers);
+
+    // 로그에 연락처 정보 추가
+    _callLogs =
+        logs.map((log) {
+          final number = log['number'] as String? ?? '';
+          final phoneNormalized = normalizePhone(number);
+          final contact = contacts[phoneNormalized];
+          if (contact != null) totalContacts++;
+          return {...log, 'contact': contact};
+        }).toList();
+
+    final searchEndTime = DateTime.now();
+    log(
+      '[RecentCallsScreen] Total contact search took: ${searchEndTime.difference(searchStartTime).inMilliseconds}ms for ${logs.length} calls (${totalContacts} contacts found)',
+    );
+
     if (!mounted) return;
     setState(() {
       // 스크롤 위치 복원
@@ -114,6 +140,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
           final number = call['number'] as String? ?? '';
           final callType = call['callType'] as String? ?? '';
           final ts = call['timestamp'] as int? ?? 0;
+          final contact = call['contact'] as PhoneBookModel?;
 
           // === 날짜/시간 표시
           final dateStr = formatDateOnly(ts.toString());
@@ -140,28 +167,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
               iconColor = Colors.grey;
           }
 
-          // === 이름 lookup
-          final phoneNormalized = normalizePhone(number);
-          final contactsCtrl = context.read<ContactsController>();
-
-          // 성능 측정을 위한 로그
-          final searchStartTime = DateTime.now();
-          final contact =
-              contactsCtrl.getContactByPhone(phoneNormalized) ??
-              PhoneBookModel(
-                contactId: '',
-                name: '',
-                phoneNumber: phoneNormalized,
-                memo: null,
-                type: null,
-                updatedAt: null,
-              );
-          final searchEndTime = DateTime.now();
-          log(
-            '[RecentCallsScreen] Contact search for $phoneNormalized took: ${searchEndTime.difference(searchStartTime).inMilliseconds}ms',
-          );
-
-          final name = contact.name; // 없으면 ''
+          final name = contact?.name ?? '';
 
           return Column(
             children: [
