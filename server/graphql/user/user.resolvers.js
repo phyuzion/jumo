@@ -364,28 +364,38 @@ module.exports = {
     // 문자내역 upsert
     updateSMSLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-
-      // 1. User의 smsLogs 업데이트
-      for (const log of logs) {
-        let dt = new Date(log.time);
-        if (isNaN(dt.getTime())) {
-          const epoch = parseFloat(log.time);
-          if (!isNaN(epoch)) dt = new Date(epoch);
-        }
-        const newLog = {
-          phoneNumber: log.phoneNumber,
-          time: dt,
-          content: log.content,
-          smsType: log.smsType,
-        };
-        pushNewLog(user.smsLogs, newLog, 200);
+      if (!logs || !Array.isArray(logs)) {
+        throw new UserInputError('logs는 배열이어야 합니다.');
       }
-      
+
       await withTransaction(async (session) => {
+        for (const log of logs) {
+          if (!log.phoneNumber || !log.time || !log.smsType) {
+            throw new UserInputError('필수 필드 누락');
+          }
+
+          // 시간을 Date 객체로 변환
+          const time = new Date(log.time);
+          if (isNaN(time.getTime())) {
+            throw new UserInputError('잘못된 시간 형식');
+          }
+
+          // 새로운 로그 객체 생성
+          const newLog = {
+            phoneNumber: log.phoneNumber,
+            time: time,
+            content: log.content || '',
+            smsType: log.smsType,
+          };
+
+          // 로그 추가
+          pushNewLog(user.smsLogs, newLog);
+        }
+
         await user.save({ session });
       });
 
-      return true;
+      return true;  // Boolean 타입으로 응답
     },
 
     // (새로 추가) 로그인 유저의 settings 저장
