@@ -68,6 +68,20 @@ class AppController {
     stopBackgroundService();
   }
 
+  Future<void> cleanupOnLogout() async {
+    // 백그라운드 서비스 정지
+    await stopBackgroundService();
+
+    // 전화 상태 감지 중지
+    phoneStateController.stopListening();
+
+    // 로컬 알림 정리
+    await LocalNotificationService.cancelAllNotifications();
+
+    // 이벤트 구독 해제
+    appEventBus.destroy();
+  }
+
   /// flutter_background_service config
   Future<void> configureBackgroundService() async {
     final service = FlutterBackgroundService();

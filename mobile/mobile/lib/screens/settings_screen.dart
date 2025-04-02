@@ -12,6 +12,7 @@ import 'package:mobile/widgets/dropdown_menus_widet.dart'; // formatDateString
 import 'package:mobile/widgets/blocked_numbers_dialog.dart';
 import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/controllers/app_controller.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -554,7 +555,11 @@ class _SettingsScreenState extends State<SettingsScreen>
           ListTile(
             leading: const Icon(Icons.logout),
             title: const Text('로그아웃'),
-            onTap: GraphQLClientManager.logout,
+            onTap: () async {
+              final appController = context.read<AppController>();
+              await appController.cleanupOnLogout();
+              GraphQLClientManager.logout;
+            },
           ),
         ],
       ),

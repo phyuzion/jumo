@@ -6,8 +6,6 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/io_client.dart'; // <-- IOClient
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
-import 'package:mobile/services/native_methods.dart';
-import 'package:mobile/utils/constants.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
