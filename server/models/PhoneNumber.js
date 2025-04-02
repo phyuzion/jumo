@@ -25,10 +25,14 @@ const phoneNumberSchema = new mongoose.Schema({
 });
 
 // 인덱스 설정
-phoneNumberSchema.index({ phoneNumber: 1 });  // unique 인덱스
+phoneNumberSchema.index({ phoneNumber: 1 }, { unique: true });  // unique 인덱스
 phoneNumberSchema.index({ 'records.userId': 1 });  // 레코드 조회용
 phoneNumberSchema.index({ blockCount: 1 });  // 차단 수 필터링용
 phoneNumberSchema.index({ type: 1 });  // 타입 필터링용
 phoneNumberSchema.index({ 'records.createdAt': -1 });  // 레코드 정렬용
+
+// 복합 인덱스 추가
+phoneNumberSchema.index({ 'records.userId': 1, type: 1 });  // getMyRecords 최적화
+phoneNumberSchema.index({ phoneNumber: 1, type: 1 });  // getPhoneNumber 최적화
 
 module.exports = mongoose.model('PhoneNumber', phoneNumberSchema);
