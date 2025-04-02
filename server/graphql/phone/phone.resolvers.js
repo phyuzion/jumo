@@ -190,7 +190,7 @@ module.exports = {
 
       // 유저이고 isRequested가 true일 때만 검색 횟수 체크
       if (isRequested && tokenData.userId) {
-        const user = await User.findById(tokenData.userId);
+        const user = await User.findById(tokenData.userId).select('searchCount lastSearchTime grade');
         if (!user) {
           throw new UserInputError('유저를 찾을 수 없습니다.');
         }
@@ -238,18 +238,17 @@ module.exports = {
       }
     
       // 1) phoneNumber docs 중 records.userId = user._id 인 것 찾기
-      const phoneDocs = await PhoneNumber.find({
-        'records.userId': user._id
-      });
+      // 필요한 필드만 선택적으로 가져오기
+      const phoneDocs = await PhoneNumber.find(
+        { 'records.userId': user._id },
+        { phoneNumber: 1, records: { $elemMatch: { userId: user._id } } }
+      );
     
-      // 2) 해당 docs.records[]에서 userId = user._id 인 레코드만 뽑아,
-      //    phoneNumber, name, memo, type, createdAt 등 리턴
+      // 2) 결과 변환
       let result = [];
       for (const doc of phoneDocs) {
-        const matched = doc.records.filter(r => r.userId?.toString() === user._id.toString());
-        // matched => [{ userId, userName, name, memo, type, createdAt, ...}]
-        // => 원하는 형태로 변환
-        for (const r of matched) {
+        // records 배열에서 이미 필터링된 레코드만 있음
+        for (const r of doc.records) {
           result.push({
             phoneNumber: doc.phoneNumber,
             name: r.name,

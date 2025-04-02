@@ -35,7 +35,7 @@ async function checkUserValid(tokenData) {
   if (!tokenData?.userId) {
     throw new AuthenticationError('로그인이 필요합니다.');
   }
-  const user = await User.findById(tokenData.userId);
+  const user = await User.findById(tokenData.userId).select('validUntil password settings blockList');
   if (!user) {
     throw new ForbiddenError('유효하지 않은 유저입니다.');
   }
@@ -50,7 +50,7 @@ async function checkUserOrAdmin(tokenData) {
   if (tokenData?.adminId) {
     return { isAdmin: true, user: null };
   } else if (tokenData?.userId) {
-    const user = await User.findById(tokenData.userId);
+    const user = await User.findById(tokenData.userId).select('validUntil');
     if (!user) throw new ForbiddenError('유효하지 않은 유저입니다.');
     if (user.validUntil && user.validUntil < new Date()) {
       throw new ForbiddenError('유효 기간이 만료된 계정입니다.');
