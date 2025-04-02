@@ -20,17 +20,6 @@ const userSchema = new mongoose.Schema({
   settings: { type: String, default: '' },  // 설정(문자열로 저장)
   blockList: [String],      // 차단된 전화번호 목록
 
-  // 유저의 전화번호부 기록
-  myRecords: [
-    {
-      phoneNumber: String,
-      name: String,
-      memo: String,
-      type: Number,
-      createdAt: Date
-    }
-  ],
-
   // 통화내역 (최신이 위, 최대 200)
   callLogs: [
     {
@@ -54,6 +43,5 @@ const userSchema = new mongoose.Schema({
 // 인덱스 설정
 userSchema.index({ loginId: 1 }, { unique: true });  // unique 인덱스
 userSchema.index({ phoneNumber: 1 });  // 전화번호 검색용
-userSchema.index({ 'myRecords.phoneNumber': 1 });  // myRecords 전화번호 검색용
 
 module.exports = mongoose.model('User', userSchema);

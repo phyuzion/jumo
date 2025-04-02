@@ -172,48 +172,7 @@ module.exports = {
       // 5) bulkWrite
       if (bulkOps.length > 0) {
         await withTransaction(async (session) => {
-          // PhoneNumber 업데이트
           await PhoneNumber.bulkWrite(bulkOps, { session });
-
-          // User의 myRecords 업데이트
-          if (!isAdmin) {
-            // 1) 현재 업데이트할 전화번호들의 레코드를 한번에 추출
-            const userRecords = phoneNumbers.reduce((acc, phone) => {
-              const doc = phoneDocMap[phone];
-              if (!doc) return acc;
-              
-              const userRecord = doc.records.find(r => r.userId?.toString() === user._id.toString());
-              if (userRecord) {
-                acc[phone] = {
-                  phoneNumber: phone,
-                  name: userRecord.name,
-                  memo: userRecord.memo,
-                  type: userRecord.type,
-                  createdAt: userRecord.createdAt
-                };
-              }
-              return acc;
-            }, {});
-
-            // 2) 기존 myRecords가 없으면 빈 배열로 초기화
-            if (!user.myRecords) {
-              user.myRecords = [];
-            }
-
-            // 3) 기존 myRecords를 Map으로 변환하여 빠른 검색 가능하게 함
-            const existingRecordsMap = new Map(
-              user.myRecords.map(record => [record.phoneNumber, record])
-            );
-
-            // 4) 업데이트할 레코드들로 Map 업데이트
-            Object.values(userRecords).forEach(record => {
-              existingRecordsMap.set(record.phoneNumber, record);
-            });
-
-            // 5) Map을 다시 배열로 변환하여 저장
-            user.myRecords = Array.from(existingRecordsMap.values());
-            await user.save({ session });
-          }
         });
       }
 
