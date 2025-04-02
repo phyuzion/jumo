@@ -97,20 +97,16 @@ module.exports = {
 
       // 2) API 호출 유저의 레코드만 먼저 처리
       if (!isAdmin) {
-        // 기존 userRecords 로딩
-        const existingUser = await User.findById(user._id).lean();
-        const existingRecords = existingUser?.userRecords || [];
+        // 기존 userRecords 사용
+        const existingRecords = user.userRecords || [];
 
         // 새로운 레코드 매핑
-        const newRecords = records.map(rec => {
-          const type = rec.type === undefined ? 0 : Number(rec.type);
-          return {
-            name: rec.name || '',
-            memo: rec.memo || '',
-            type: type,
-            createdAt: rec.createdAt || new Date().toISOString()
-          };
-        });
+        const newRecords = records.map(rec => ({
+          name: rec.name || '',
+          memo: rec.memo || '',
+          type: rec.type || 0,
+          createdAt: rec.createdAt || new Date().toISOString()
+        }));
 
         // 레코드 병합
         const mergedRecords = [...existingRecords];
