@@ -134,21 +134,18 @@ module.exports = {
 
         // User bulkWrite
         await withTransaction(async (session) => {
-          // 먼저 기존 userRecords를 비우고
-          await User.updateOne(
-            { _id: user._id },
-            { $set: { userRecords: [] } },
-            { session }
-          );
-          
-          // 새로운 레코드들을 하나씩 추가
-          for (const record of mergedRecords) {
-            await User.updateOne(
-              { _id: user._id },
-              { $push: { userRecords: record } },
-              { session }
-            );
-          }
+          const result = await User.bulkWrite([
+            {
+              updateOne: {
+                filter: { _id: user._id },
+                update: {
+                  $set: { userRecords: mergedRecords }
+                },
+                upsert: true
+              }
+            }
+          ], { session });
+          console.log('User bulkWrite result:', result);
         });
       }
 
