@@ -23,44 +23,18 @@ const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 const PhoneNumber = require('../../models/PhoneNumber'); // userRecords 조회용
 const TodayRecord = require('../../models/TodayRecord');
+const CallLog = require('../../models/CallLog');
+const SmsLog = require('../../models/SmsLog');
 
 /* 랜덤 문자열 생성 함수 (영문+숫자 6자리) */
 function generateRandomString(length = 6) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   let result = '';
   for (let i = 0; i < length; i++) {
     const randomIndex = Math.floor(Math.random() * chars.length);
     result += chars[randomIndex];
   }
   return result;
-}
-
-/* =========================================================
-   새 유틸:
-   - pushNewLog(arr, newLog, max=200)
-   - 중복 체크 -> 없으면 arr.unshift(newLog)
-   - if arr.length > max => arr.pop() (가장 오래된 제거)
-========================================================= */
-function pushNewLog(logArray, newLog, maxLen = 200) {
-  // 시간을 밀리초 단위로 변환하여 비교
-  const newLogTime = newLog.time.getTime();
-  
-  // 이미 같은 시간의 로그가 있는지 확인
-  const isDup = logArray.some(item => {
-    // phoneNumber와 time이 같으면 중복으로 간주
-    return item.phoneNumber === newLog.phoneNumber && 
-           item.time.getTime() === newLogTime;
-  });
-
-  if (isDup) return;
-
-  // 중복이 아니면 배열 앞에 추가
-  logArray.unshift(newLog);
-  
-  // 최대 길이 제한
-  if (logArray.length > maxLen) {
-    logArray.pop();
-  }
 }
 
 module.exports = {
@@ -71,7 +45,12 @@ module.exports = {
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
-      return user.callLogs.map((log) => ({
+      // 새로운 CallLog 모델에서 로그 조회
+      const logs = await CallLog.find({ userId })
+        .sort({ time: -1 })
+        .limit(200);
+
+      return logs.map(log => ({
         phoneNumber: log.phoneNumber,
         time: log.time.toISOString(),
         callType: log.callType,
@@ -84,7 +63,12 @@ module.exports = {
       const user = await User.findById(userId);
       if (!user) throw new UserInputError('해당 유저가 존재하지 않습니다.');
 
-      return user.smsLogs.map((log) => ({
+      // 새로운 SmsLog 모델에서 로그 조회
+      const logs = await SmsLog.find({ userId })
+        .sort({ time: -1 })
+        .limit(200);
+
+      return logs.map(log => ({
         phoneNumber: log.phoneNumber,
         time: log.time.toISOString(),
         content: log.content || '',
@@ -172,7 +156,7 @@ module.exports = {
       }
 
       // 4) 임시 비밀번호 생성 (8자리)
-      const tempPassword = Math.random().toString(36).slice(-8);
+      const tempPassword = Math.random().toString(36).slice(-6);
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
       const newUser = new User({
@@ -285,7 +269,7 @@ module.exports = {
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
-      // 시간 파싱 함수 추가
+      // 시간 파싱 함수
       function parseDateTime(time) {
         let dt = new Date(time);
         if (isNaN(dt.getTime())) {
@@ -293,28 +277,51 @@ module.exports = {
           if (!isNaN(epoch)) dt = new Date(epoch);
         }
         if (isNaN(dt.getTime())) {
-          dt = new Date(); // 현재 시간으로 대체
+          dt = new Date();
         }
         return dt;
       }
 
-      // 1. User의 callLogs 업데이트
-      for (const log of logs) {
-        const dt = parseDateTime(log.time);
-        const newLog = {
-          phoneNumber: log.phoneNumber,
-          time: dt,
-          callType: log.callType,
-        };
-        pushNewLog(user.callLogs, newLog, 200);
-      }
+      // 1. CallLog 업데이트
+      const callLogs = logs.map(log => ({
+        userId: user._id,
+        phoneNumber: log.phoneNumber,
+        time: parseDateTime(log.time),
+        callType: log.callType
+      }));
+
+      // 중복 제거 및 시간순 정렬
+      const uniqueLogs = callLogs.filter((log, index, self) =>
+        index === self.findIndex((t) => 
+          t.phoneNumber === log.phoneNumber && 
+          t.time.getTime() === log.time.getTime()
+        )
+      ).sort((a, b) => b.time - a.time).slice(0, 200);
+
+      // bulkWrite로 한번에 처리
       await withTransaction(async (session) => {
-        await user.save({ session });
+        const operations = uniqueLogs.map(log => ({
+          updateOne: {
+            filter: {
+              userId: log.userId,
+              phoneNumber: log.phoneNumber,
+              time: log.time
+            },
+            update: { $set: log },
+            upsert: true
+          }
+        }));
+
+        if (operations.length > 0) {
+          await CallLog.bulkWrite(operations, { 
+            session,
+            ordered: false
+          });
+        }
       });
 
       // 2. TodayRecord 업데이트
       try {
-        // 24시간 이내의 새로운 로그들만 필터링
         const oneDayAgo = new Date();
         oneDayAgo.setDate(oneDayAgo.getDate() - 1);
         
@@ -325,7 +332,6 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            // 각 로그에 대해 upsert 작업 생성
             const operations = recentLogs.map(log => {
               const dt = parseDateTime(log.time);
               return {
@@ -346,10 +352,9 @@ module.exports = {
               };
             });
 
-            // 한 번의 bulkWrite로 모든 작업 실행
             await TodayRecord.bulkWrite(operations, { 
               session,
-              ordered: false  // 순서 없이 병렬로 처리
+              ordered: false
             });
           });
         }
@@ -365,24 +370,59 @@ module.exports = {
     updateSMSLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
 
-      // 1. User의 smsLogs 업데이트
-      for (const log of logs) {
-        let dt = new Date(log.time);
+      // 시간 파싱 함수
+      function parseDateTime(time) {
+        let dt = new Date(time);
         if (isNaN(dt.getTime())) {
-          const epoch = parseFloat(log.time);
+          const epoch = parseFloat(time);
           if (!isNaN(epoch)) dt = new Date(epoch);
         }
-        const newLog = {
-          phoneNumber: log.phoneNumber,
-          time: dt,
-          content: log.content,
-          smsType: log.smsType,
-        };
-        pushNewLog(user.smsLogs, newLog, 200);
+        if (isNaN(dt.getTime())) {
+          dt = new Date();
+        }
+        return dt;
       }
-      
+
+      // 1. SmsLog 업데이트
+      const smsLogs = logs.map(log => ({
+        userId: user._id,
+        phoneNumber: log.phoneNumber,
+        time: parseDateTime(log.time),
+        content: log.content,
+        smsType: log.smsType
+      }));
+
+      // 중복 제거 및 시간순 정렬
+      const uniqueLogs = smsLogs
+        .filter((log, index, self) =>
+          index === self.findIndex((t) => 
+            t.phoneNumber === log.phoneNumber && 
+            t.time.getTime() === log.time.getTime()
+          )
+        )
+        .sort((a, b) => b.time - a.time)
+        .slice(0, 200);
+
+      // bulkWrite로 한번에 처리
       await withTransaction(async (session) => {
-        await user.save({ session });
+        const operations = uniqueLogs.map(log => ({
+          updateOne: {
+            filter: {
+              userId: log.userId,
+              phoneNumber: log.phoneNumber,
+              time: log.time
+            },
+            update: { $set: log },
+            upsert: true
+          }
+        }));
+
+        if (operations.length > 0) {
+          await SmsLog.bulkWrite(operations, { 
+            session,
+            ordered: false
+          });
+        }
       });
 
       return true;
