@@ -1,7 +1,6 @@
 // models/User.js
 
 const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
   loginId: { type: String, required: true, unique: true },
@@ -39,15 +38,6 @@ const userSchema = new mongoose.Schema({
       smsType: String, // "IN" or "OUT"
     },
   ],
-
-  userRecords: [{
-    name: String,
-    memo: String,
-    type: Number,
-    createdAt: String
-  }]
-}, {
-  timestamps: true
 });
 
 // 인덱스 설정
