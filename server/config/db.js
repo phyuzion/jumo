@@ -8,6 +8,10 @@ const connectDB = async () => {
       dbName: 'jumo'
     });
     console.log('✅ MongoDB connected');
+
+    // MongoDB 쿼리 로깅 활성화
+    mongoose.set('debug', true);
+    console.log('✅ MongoDB query logging enabled');
   } catch (err) {
     console.error('❌ MongoDB connection error:', err);
     process.exit(1);
