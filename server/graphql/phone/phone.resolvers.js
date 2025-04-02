@@ -176,15 +176,14 @@ module.exports = {
             updateOne: {
               filter: { _id: user._id },
               update: {
-                $pull: { userRecords: { phoneNumber: phone } },
-                $push: {
-                  userRecords: {
-                    phoneNumber: phone,
+                $set: {
+                  userRecords: [{
+                    phoneNumber: phone.toString(),
                     name: userRecord.name,
                     memo: userRecord.memo,
-                    type: userRecord.type,
+                    type: Number(userRecord.type),
                     createdAt: userRecord.createdAt
-                  }
+                  }]
                 }
               }
             }
