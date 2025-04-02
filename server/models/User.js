@@ -1,6 +1,7 @@
 // models/User.js
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
   loginId: { type: String, required: true, unique: true },
