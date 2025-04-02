@@ -97,9 +97,8 @@ module.exports = {
 
       // 2) API 호출 유저의 레코드만 먼저 처리
       if (!isAdmin) {
-        // 기존 userRecords 로딩
-        const existingUser = await User.findById(user._id).lean();
-        const existingRecords = existingUser?.userRecords || [];
+        // 기존 userRecords 사용
+        const existingRecords = user.userRecords || [];
 
         // 새로운 레코드 매핑
         const newRecords = records.map(rec => ({
@@ -122,9 +121,16 @@ module.exports = {
           }
         }
 
+        console.log('Updating userRecords:', {
+          userId: user._id,
+          existingCount: existingRecords.length,
+          newCount: newRecords.length,
+          mergedCount: mergedRecords.length
+        });
+
         // User bulkWrite
         await withTransaction(async (session) => {
-          await User.bulkWrite([
+          const result = await User.bulkWrite([
             {
               updateOne: {
                 filter: { _id: user._id },
@@ -134,6 +140,7 @@ module.exports = {
               }
             }
           ], { session });
+          console.log('User bulkWrite result:', result);
         });
       }
 
