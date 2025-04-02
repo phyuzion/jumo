@@ -97,15 +97,19 @@ module.exports = {
 
       // 2) User의 phoneRecords 업데이트
       let userRecordsCount = 0;
+      console.log('starting user.phoneRecords update...');
       for (const rec of records) {
         const phone = rec.phoneNumber?.trim();
-        if (!phone) continue;
+        if (!phone) {
+          console.log('skipping empty phone number');
+          continue;
+        }
 
         const newRecord = {
           phoneNumber: phone,
-          name: rec.name,
-          type: rec.type,
-          memo: rec.memo,
+          name: rec.name || '',
+          type: rec.type || 0,
+          memo: rec.memo || '',
           createdAt: rec.createdAt ? new Date(rec.createdAt) : new Date()
         };
 
@@ -124,14 +128,17 @@ module.exports = {
           userRecordsCount++;
         }
       }
-      console.log('user.phoneRecords updated, count=', userRecordsCount);
+      console.log('user.phoneRecords update completed, count=', userRecordsCount);
 
       // 3) User 저장
+      console.log('starting user save...');
       await withTransaction(async (session) => {
         await user.save({ session });
       });
+      console.log('user save completed');
 
       // 1) phoneNumber별로 그룹핑
+      console.log('starting phone number grouping...');
       const mapByPhone = {};
       for (const rec of records) {
         const phone = rec.phoneNumber?.trim();
@@ -141,8 +148,10 @@ module.exports = {
       }
       const phoneNumbers = Object.keys(mapByPhone);
       if (phoneNumbers.length === 0) {
+        console.log('no valid phone numbers to process');
         return true; // 아무것도 없음
       }
+      console.log('phoneNumbers to update, count=', phoneNumbers.length);
 
       // 2) 기존 PhoneNumber docs 한 번에 로딩
       const existingDocs = await PhoneNumber.find({

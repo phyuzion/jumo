@@ -42,7 +42,7 @@ const userSchema = new mongoose.Schema({
   // 전화번호 레코드 (새로운 요청용)
   phoneRecords: [
     {
-      phoneNumber: { type: String, required: true },
+      phoneNumber: String,    // required: true는 유지
       name: String,       // 이 레코드(전화번호부)에서 저장한 이름
       type: Number,       // 레코드 자체의 타입(예: 99라면 위험)
       memo: String,       // 메모
