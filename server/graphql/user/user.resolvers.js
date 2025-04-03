@@ -356,7 +356,6 @@ module.exports = {
               return {
                 updateOne: {
                   filter: {
-                    _id: existing?._id || new mongoose.Types.ObjectId(),  // 기존 _id 사용 또는 새 _id 생성
                     phoneNumber: log.phoneNumber,
                     userName: user.name
                   },
