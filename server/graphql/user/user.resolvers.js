@@ -332,30 +332,28 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            const operations = recentLogs.map(log => {
+            // 각 로그에 대해 upsert 수행
+            for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
-              return {
-                updateOne: {
-                  filter: {
-                    phoneNumber: log.phoneNumber,
-                    userName: user.name
-                  },
-                  update: {
-                    $set: {
-                      userType: user.userType,
-                      callType: log.callType,
-                      createdAt: dt
-                    }
-                  },
-                  upsert: true
+              
+              await TodayRecord.findOneAndUpdate(
+                {
+                  phoneNumber: log.phoneNumber,
+                  userName: user.name
+                },
+                {
+                  $set: {
+                    userType: user.userType,
+                    callType: log.callType,
+                    createdAt: dt
+                  }
+                },
+                {
+                  upsert: true,
+                  session
                 }
-              };
-            });
-
-            await TodayRecord.bulkWrite(operations, { 
-              session,
-              ordered: false
-            });
+              );
+            }
           });
         }
       } catch (error) {
