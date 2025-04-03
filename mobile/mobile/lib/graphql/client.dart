@@ -94,6 +94,11 @@ class GraphQLClientManager {
   /// 헬퍼: GraphQL Exception 핸들링
   ///  - 서버 GraphQLError가 있을 경우, 메시지 추출
   static void handleExceptions(QueryResult result) {
+    // result.data가 null이면 그냥 리턴 (예외 아님)
+    if (result.data == null) {
+      return;
+    }
+
     if (result.hasException) {
       // 타임아웃 에러는 무시
       if (result.exception?.linkException.toString().contains(
