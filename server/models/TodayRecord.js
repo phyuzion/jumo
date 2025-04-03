@@ -18,16 +18,17 @@ const todayRecordSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    createdAt: {
+    time: {
       type: Date,
       required: true,
-      expires: 86400, // 24시간 후 자동 삭제
-    },
+    }
   }
 );
 
 // phoneNumber와 userName에 대한 복합 인덱스 추가
 todayRecordSchema.index({ phoneNumber: 1, userName: 1 }, { unique: true });
+// TTL 인덱스 추가 (24시간 후 자동 삭제)
+todayRecordSchema.index({ time: 1 }, { expireAfterSeconds: 86400 });
 
 const TodayRecord = mongoose.model('TodayRecord', todayRecordSchema);
 

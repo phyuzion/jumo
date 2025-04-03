@@ -7,7 +7,7 @@ const typeDefs = gql`
     userName: String!
     userType: String!
     callType: String!
-    createdAt: String!
+    time: String!
   }
 
   extend type Query {
