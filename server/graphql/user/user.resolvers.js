@@ -344,10 +344,7 @@ module.exports = {
                     $set: {
                       userType: user.userType,
                       callType: log.callType,
-                      time: dt
-                    },
-                    $setOnInsert: {
-                      time: dt
+                      createdAt: dt
                     }
                   },
                   upsert: true

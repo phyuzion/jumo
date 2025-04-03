@@ -4,7 +4,7 @@ const resolvers = {
   Query: {
     getTodayRecord: async (_, { phoneNumber }) => {
       const records = await TodayRecord.find({ phoneNumber })
-        .sort({ time: -1 });
+        .sort({ createdAt: -1 });
       
       return records.map(record => ({
         id: record._id,
@@ -12,7 +12,7 @@ const resolvers = {
         userName: record.userName,
         userType: record.userType,
         callType: record.callType,
-        time: record.time,
+        createdAt: record.createdAt,
       }));
     },
   },
