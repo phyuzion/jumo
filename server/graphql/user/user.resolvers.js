@@ -332,8 +332,27 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
+            // 1. 기존 레코드들을 한 번에 조회
+            const existingRecords = await TodayRecord.find({
+              phoneNumber: { $in: recentLogs.map(log => log.phoneNumber) },
+              userName: user.name
+            }).session(session);
+
+            // 2. 기존 레코드들을 Map으로 변환하여 빠른 조회 가능하게 함
+            const existingMap = new Map(
+              existingRecords.map(record => [record.phoneNumber, record])
+            );
+
+            // 3. 업데이트할 레코드와 새로 생성할 레코드를 분리
             const operations = recentLogs.map(log => {
               const dt = parseDateTime(log.time);
+              const existing = existingMap.get(log.phoneNumber);
+
+              if (existing && dt <= existing.createdAt) {
+                // 기존 레코드가 있고 새로운 통화가 더 오래된 경우는 무시
+                return null;
+              }
+
               return {
                 updateOne: {
                   filter: {
@@ -350,7 +369,7 @@ module.exports = {
                   upsert: true
                 }
               };
-            });
+            }).filter(op => op !== null);  // null인 경우 제거
 
             if (operations.length > 0) {
               await TodayRecord.bulkWrite(operations, { 
