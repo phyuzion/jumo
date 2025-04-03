@@ -17,6 +17,7 @@ class CallResultOverlay extends StatefulWidget {
 class _CallResultOverlayState extends State<CallResultOverlay> {
   SearchResultModel? _result;
   String? _phoneNumber;
+  final ScrollController _scrollController = ScrollController();
 
   @override
   void initState() {
@@ -32,6 +33,12 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
       });
       _showOverlay();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   Future<void> _showOverlay() async {
@@ -50,6 +57,24 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
       flag: OverlayFlag.defaultFlag,
       visibility: NotificationVisibility.visibilityPublic,
       positionGravity: PositionGravity.auto,
+    );
+  }
+
+  void _scrollUp() {
+    final newOffset = _scrollController.offset - 100;
+    _scrollController.animateTo(
+      newOffset.clamp(0, _scrollController.position.maxScrollExtent), // 오버슈팅 방지
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  void _scrollDown() {
+    final newOffset = _scrollController.offset + 100;
+    _scrollController.animateTo(
+      newOffset.clamp(0, _scrollController.position.maxScrollExtent), // 오버슈팅 방지
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
     );
   }
 
@@ -108,7 +133,17 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
                   const Center(child: CircularProgressIndicator())
                 else
                   Positioned.fill(
-                    child: SearchResultWidget(searchResult: _result!),
+                    child: Padding(
+                      // 하단 패딩 추가
+                      padding: const EdgeInsets.only(
+                        bottom: 50,
+                      ), // 스크롤 버튼 높이만큼 패딩
+                      child: SearchResultWidget(
+                        searchResult: _result!,
+                        scrollController: _scrollController,
+                        ignorePointer: true,
+                      ),
+                    ),
                   ),
                 // (2) 닫기 버튼
                 Positioned(
@@ -117,6 +152,42 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
                   child: IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => FlutterOverlayWindow.closeOverlay(),
+                  ),
+                ),
+                // 스크롤 버튼들
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 50, // 고정 높이
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      // 그라데이션 추가
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.white.withOpacity(0.0),
+                          Colors.white.withOpacity(0.9),
+                        ],
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_upward),
+                          onPressed: _scrollUp,
+                          color: Colors.blue,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_downward),
+                          onPressed: _scrollDown,
+                          color: Colors.blue,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
