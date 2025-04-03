@@ -268,8 +268,6 @@ module.exports = {
     // 통화내역 upsert
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
-      console.log('updateCallLog - user:', user);  // user 객체 전체 로깅
-      console.log('updateCallLog - user.name:', user.name);  // user.name 로깅
 
       // 시간 파싱 함수
       function parseDateTime(time) {
@@ -336,7 +334,6 @@ module.exports = {
           await withTransaction(async (session) => {
             const operations = recentLogs.map(log => {
               const dt = parseDateTime(log.time);
-              console.log('Creating TodayRecord with userName:', user.name);  // TodayRecord 생성 시 로깅
               return {
                 updateOne: {
                   filter: {
