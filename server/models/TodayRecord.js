@@ -23,6 +23,9 @@ const todayRecordSchema = new mongoose.Schema(
       default: Date.now,
       expires: 86400, // 24시간 후 자동 삭제
     },
+  },
+  {
+    timestamps: true,
   }
 );
 
