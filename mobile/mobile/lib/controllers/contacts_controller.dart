@@ -163,6 +163,14 @@ class ContactsController {
       return;
     }
 
+    // 캐시된 연락처가 있고 유효한 경우 사용
+    if (_isCacheValid) {
+      log('[ContactsController] Using cached contacts');
+      _savedContacts = _getCachedContacts();
+      appEventBus.fire(ContactsUpdatedEvent());
+      return;
+    }
+
     final completer = Completer<void>();
     _taskQueue.add(() async {
       try {
@@ -238,6 +246,9 @@ class ContactsController {
         log(
           '[ContactsController] Local save and index update took: ${saveTime}ms',
         );
+
+        // 캐시 업데이트
+        await _saveAndUpdateCache(merged);
 
         final totalTime =
             DateTime.now().difference(syncStartTime).inMilliseconds;
@@ -583,8 +594,8 @@ class ContactsController {
 
   // 연락처 저장 및 캐시 업데이트
   Future<void> _saveAndUpdateCache(List<PhoneBookModel> contacts) async {
-    final jsonList = contacts.map((c) => c.toJson()).toList();
-    await _box.write(storageKey, jsonList);
+    final raw = jsonEncode(contacts.map((e) => e.toJson()).toList());
+    await _box.write(storageKey, raw);
     _savedContacts = contacts;
     _updateContactIndex(contacts);
     _lastSyncTime = DateTime.now();
