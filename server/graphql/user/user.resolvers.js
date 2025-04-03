@@ -332,41 +332,62 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            // 각 로그에 대해 upsert 수행
+            // 1. 기존 레코드들을 한 번에 조회
+            const existingRecords = await TodayRecord.find({
+              phoneNumber: { $in: recentLogs.map(log => log.phoneNumber) },
+              userName: user.name
+            }).session(session);
+
+            // 2. 기존 레코드들을 Map으로 변환하여 빠른 조회 가능하게 함
+            const existingMap = new Map(
+              existingRecords.map(record => [record.phoneNumber, record])
+            );
+
+            // 3. 업데이트할 레코드와 새로 생성할 레코드를 분리
+            const operations = [];
+
             for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
-              
-              // 기존 레코드 조회
-              const existing = await TodayRecord.findOne({
-                phoneNumber: log.phoneNumber,
-                userName: user.name
-              }).session(session);
+              const existing = existingMap.get(log.phoneNumber);
 
               if (existing) {
                 // 기존 레코드가 있고 새로운 통화가 더 최신인 경우만 업데이트
                 if (dt > existing.createdAt) {
-                  await TodayRecord.findOneAndUpdate(
-                    { _id: existing._id },
-                    {
-                      $set: {
-                        userType: user.userType,
-                        callType: log.callType,
-                        createdAt: dt
+                  operations.push({
+                    updateOne: {
+                      filter: { _id: existing._id },
+                      update: {
+                        $set: {
+                          userType: user.userType,
+                          callType: log.callType,
+                          createdAt: dt
+                        }
                       }
-                    },
-                    { session }
-                  );
+                    }
+                  });
                 }
               } else {
                 // 새 레코드 생성
-                await TodayRecord.create([{
-                  phoneNumber: log.phoneNumber,
-                  userName: user.name,
-                  userType: user.userType,
-                  callType: log.callType,
-                  createdAt: dt
-                }], { session });
+                operations.push({
+                  insertOne: {
+                    document: {
+                      phoneNumber: log.phoneNumber,
+                      userName: user.name,
+                      userType: user.userType,
+                      callType: log.callType,
+                      createdAt: dt
+                    }
+                  }
+                });
               }
+            }
+
+            // 4. 벌크 연산 실행
+            if (operations.length > 0) {
+              await TodayRecord.bulkWrite(operations, { 
+                session,
+                ordered: false
+              });
             }
           });
         }
