@@ -93,7 +93,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
         // -----------------------------
         Expanded(
           child:
-              ignorePointer
+              widget.ignorePointer
                   ? IgnorePointer(
                     child: ListView.separated(
                       controller: widget.scrollController,
@@ -148,11 +148,10 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
       } else {
         count += todayRecords.length.clamp(0, 3);
       }
-    }
-
-    // 더보기 버튼
-    if (todayRecords.isNotEmpty && todayRecords.length > 3) {
-      count += 1;
+      // 더보기 버튼 (TodayRecord가 3개 이상일 때만)
+      if (todayRecords.length > 3) {
+        count += 1;
+      }
     }
 
     // PhoneRecord 섹션 헤더
@@ -190,13 +189,20 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
     // TodayRecord 아이템들
     if (todayRecords.isNotEmpty && index > 0) {
       final recordIndex = index - 1;
-      if (!_showAllTodayRecords && recordIndex >= 3) {
+
+      // 더보기 버튼 (TodayRecord가 3개 이상이고, 3번째 아이템 다음에만 표시)
+      if (!_showAllTodayRecords &&
+          recordIndex == 3 &&
+          todayRecords.length > 3) {
         return TextButton(
           onPressed: _onMoreButtonPressed,
           child: const Text('더보기'),
         );
       }
-      if (recordIndex < todayRecords.length) {
+
+      // TodayRecord 아이템 표시
+      if (recordIndex < todayRecords.length &&
+          (_showAllTodayRecords || recordIndex < 3)) {
         return _buildTodayRecordItem(todayRecords[recordIndex]);
       }
     }
