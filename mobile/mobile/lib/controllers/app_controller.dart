@@ -14,6 +14,7 @@ import 'package:mobile/utils/constants.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
@@ -22,6 +23,13 @@ class AppController {
   final SmsController smsController;
   final BlockedNumbersController blockedNumbersController;
   final box = GetStorage();
+
+  // 로딩 상태 관리
+  final _isInitializing = ValueNotifier<bool>(false);
+  bool get isInitializing => _isInitializing.value;
+  ValueNotifier<bool> get isInitializingNotifier => _isInitializing;
+  String _initializationMessage = '';
+  String get initializationMessage => _initializationMessage;
 
   AppController(
     this.phoneStateController,
@@ -36,10 +44,23 @@ class AppController {
   }
 
   Future<void> initializeApp() async {
-    phoneStateController.startListening();
-    await contactsController.syncContactsAll();
-    await blockedNumbersController.initialize();
-    await callLogController.refreshCallLogs();
+    _isInitializing.value = true;
+    try {
+      _initializationMessage = '전화 상태 감지 시작 중...';
+      phoneStateController.startListening();
+
+      _initializationMessage = '연락처 동기화 중...';
+      await contactsController.syncContactsAll();
+
+      _initializationMessage = '차단 번호 초기화 중...';
+      await blockedNumbersController.initialize();
+
+      _initializationMessage = '통화 기록 새로고침 중...';
+      await callLogController.refreshCallLogs();
+    } finally {
+      _isInitializing.value = false;
+    }
+
     await LocalNotificationService.initialize();
     await smsController.refreshSms();
     await checkUpdate();
