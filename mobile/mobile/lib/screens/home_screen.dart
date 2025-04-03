@@ -39,11 +39,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-
-    final appController = context.read<AppController>();
-    appController.initializeApp();
-    appController.configureBackgroundService();
-    appController.startBackgroundService();
+    _initializeApp();
 
     NativeDefaultDialerMethods.notifyNativeAppInitialized();
 
@@ -106,6 +102,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context) => const NotificationDialog(),
     ).then((_) {
       _loadNotificationCount();
+    });
+  }
+
+  Future<void> _initializeApp() async {
+    final appController = context.read<AppController>();
+
+    // 이미 초기화된 경우 리턴
+    if (appController.isInitialized) {
+      return;
+    }
+
+    // 첫 프레임 렌더링 후 초기화 수행
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await appController.initializeApp();
+      await appController.configureBackgroundService();
+      await appController.startBackgroundService();
     });
   }
 

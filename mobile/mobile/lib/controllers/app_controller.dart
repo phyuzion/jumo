@@ -31,6 +31,10 @@ class AppController {
   String _initializationMessage = '';
   String get initializationMessage => _initializationMessage;
 
+  // 초기화 상태
+  bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
+
   AppController(
     this.phoneStateController,
     this.contactsController,
@@ -44,6 +48,12 @@ class AppController {
   }
 
   Future<void> initializeApp() async {
+    // 이미 초기화된 경우 리턴
+    if (_isInitialized) {
+      log('App already initialized, skipping...');
+      return;
+    }
+
     _isInitializing.value = true;
     try {
       _initializationMessage = '전화 상태 감지 시작 중...';
@@ -57,6 +67,8 @@ class AppController {
 
       _initializationMessage = '통화 기록 새로고침 중...';
       await callLogController.refreshCallLogs();
+
+      _isInitialized = true; // 초기화 완료 표시
     } finally {
       _isInitializing.value = false;
     }
