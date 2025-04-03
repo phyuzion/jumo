@@ -20,12 +20,9 @@ const todayRecordSchema = new mongoose.Schema(
     },
     createdAt: {
       type: Date,
-      default: Date.now,
+      required: true,
       expires: 86400, // 24시간 후 자동 삭제
     },
-  },
-  {
-    timestamps: true,
   }
 );
 
