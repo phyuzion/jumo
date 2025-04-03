@@ -336,23 +336,37 @@ module.exports = {
             for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
               
-              await TodayRecord.findOneAndUpdate(
-                {
-                  phoneNumber: log.phoneNumber,
-                  userName: user.name
-                },
-                {
-                  $set: {
-                    userType: user.userType,
-                    callType: log.callType,
-                    createdAt: dt
-                  }
-                },
-                {
-                  upsert: true,
-                  session
+              // 기존 레코드 조회
+              const existing = await TodayRecord.findOne({
+                phoneNumber: log.phoneNumber,
+                userName: user.name
+              }).session(session);
+
+              if (existing) {
+                // 기존 레코드가 있고 새로운 통화가 더 최신인 경우만 업데이트
+                if (dt > existing.createdAt) {
+                  await TodayRecord.findOneAndUpdate(
+                    { _id: existing._id },
+                    {
+                      $set: {
+                        userType: user.userType,
+                        callType: log.callType,
+                        createdAt: dt
+                      }
+                    },
+                    { session }
+                  );
                 }
-              );
+              } else {
+                // 새 레코드 생성
+                await TodayRecord.create([{
+                  phoneNumber: log.phoneNumber,
+                  userName: user.name,
+                  userType: user.userType,
+                  callType: log.callType,
+                  createdAt: dt
+                }], { session });
+              }
             }
           });
         }
