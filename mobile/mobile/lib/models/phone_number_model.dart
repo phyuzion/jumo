@@ -12,14 +12,15 @@ class PhoneNumberModel {
   // fromJson, toJson
   factory PhoneNumberModel.fromJson(Map<String, dynamic> json) {
     final recs =
-        (json['records'] as List<dynamic>? ?? [])
-            .map((r) => PhoneRecordModel.fromJson(r))
-            .toList();
+        (json['records'] as List<dynamic>?)
+            ?.map((e) => PhoneRecordModel.fromJson(e))
+            .toList()
+          ?..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
     return PhoneNumberModel(
       phoneNumber: json['phoneNumber'] as String,
       type: json['type'] as int,
-      records: recs,
+      records: recs ?? [],
     );
   }
 

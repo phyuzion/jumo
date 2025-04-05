@@ -142,7 +142,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
           phoneNumber: phone,
           memo: memo.isNotEmpty ? memo : null,
           type: _type != 0 ? _type : null,
-          updatedAt: DateTime.now().toIso8601String(),
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
         );
         await contactsCtrl.addOrUpdateLocalRecord(newItem);
       } else {
@@ -154,7 +154,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
           phoneNumber: phone,
           memo: memo.isNotEmpty ? memo : null,
           type: _type != 0 ? _type : null,
-          updatedAt: DateTime.now().toIso8601String(),
+          updatedAt: DateTime.now().toUtc().toIso8601String(),
         );
         await contactsCtrl.addOrUpdateLocalRecord(newItem);
       }

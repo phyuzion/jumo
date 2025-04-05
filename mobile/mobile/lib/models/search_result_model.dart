@@ -23,7 +23,8 @@ class SearchResultModel {
       todayRecords:
           (json['todayRecords'] as List<dynamic>?)
               ?.map((e) => TodayRecord.fromJson(e))
-              .toList(),
+              .toList()
+            ?..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
     );
   }
 }
