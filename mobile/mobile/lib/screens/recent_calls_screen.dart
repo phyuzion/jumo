@@ -112,8 +112,10 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   // 새로고침 시 통화기록 갱신 후 다시 로드
   Future<void> _refreshCalls() async {
-    await _callLogController.refreshCallLogs(); // 시스템 통화 기록 다시 읽기
-    await _loadCallsAndContacts(); // 연락처 정보 포함하여 다시 로드
+    // ***** 캐시 초기화 추가 *****
+    context.read<ContactsController>().invalidateCache();
+    await _callLogController.refreshCallLogs(); // 통화 기록 갱신
+    await _loadCallsAndContacts(); // 최신 연락처 포함하여 로드
   }
 
   Future<void> _checkDefaultDialer() async {

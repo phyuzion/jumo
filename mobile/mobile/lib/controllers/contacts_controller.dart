@@ -50,12 +50,10 @@ Map<String, Map<String, String>> _parseContactsToMap(List<Contact> contacts) {
 /// 백그라운드 연락처 동기화 로직 (top-level 함수)
 Future<void> performContactBackgroundSync() async {
   log('[BackgroundSync] Starting contact sync...');
-
-  // ***** Box 열림 확인 추가 *****
   const boxName = 'last_sync_state';
   if (!Hive.isBoxOpen(boxName)) {
     log('[BackgroundSync] Box \'$boxName\' is not open. Aborting sync.');
-    return; // Box가 안 열렸으면 작업 중단
+    return;
   }
   final Box stateBox = Hive.box(boxName);
 
@@ -86,15 +84,26 @@ Future<void> performContactBackgroundSync() async {
       currentContactsRaw,
     );
 
-    // 2. 이전 상태 로드 (Hive 사용)
+    // 2. 이전 상태 로드 (Hive 사용 및 타입 캐스팅 수정)
     final previousStateRaw =
         stateBox.get(ContactsController._lastSyncStateKey) as String?;
-    final previousContactsMap =
-        previousStateRaw != null
-            ? Map<String, Map<String, String>>.from(
-              jsonDecode(previousStateRaw),
-            )
-            : <String, Map<String, String>>{};
+    Map<String, Map<String, String>> previousContactsMap = {}; // 타입 명시 및 초기화
+    if (previousStateRaw != null) {
+      try {
+        // jsonDecode 결과를 Map<String, dynamic>으로 먼저 받고, 내부 Map을 캐스팅
+        final decodedDynamicMap =
+            jsonDecode(previousStateRaw) as Map<String, dynamic>;
+        previousContactsMap = decodedDynamicMap.map(
+          (key, value) => MapEntry(
+            key,
+            Map<String, String>.from(value as Map),
+          ), // 내부 Map 캐스팅
+        );
+      } catch (e) {
+        log('[BackgroundSync] Error decoding previous contacts state: $e');
+        previousContactsMap = {}; // 디코딩 실패 시 빈 맵 사용
+      }
+    }
 
     // 3. 변경 사항 계산 (추가/수정)
     final List<Map<String, dynamic>> recordsToUpsert = [];
@@ -226,5 +235,12 @@ class ContactsController {
     // TODO: 백그라운드 서비스에 동기화 시작 이벤트 보내기
     // 예: FlutterBackgroundService().invoke('startContactSyncNow');
     // 또는 주기적 실행에 맡김
+  }
+
+  // 메모리 캐시 초기화 메소드 추가
+  void invalidateCache() {
+    _memoryCache = [];
+    _lastMemoryCacheTime = null;
+    log('[ContactsController] Memory cache invalidated.');
   }
 }

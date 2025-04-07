@@ -223,6 +223,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
         foundContact = await FlutterContacts.getContact(
           contactId,
           withProperties: true,
+          withAccounts: true,
         );
       } catch (e) {
         log('[EditContactScreen] Failed to get contact by ID $contactId: $e');
@@ -234,6 +235,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
       try {
         final allContacts = await FlutterContacts.getContacts(
           withProperties: true,
+          withAccounts: true,
         );
         for (final c in allContacts) {
           if (c.phones.any(

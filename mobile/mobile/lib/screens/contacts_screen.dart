@@ -72,6 +72,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _refreshContacts() async {
+    context.read<ContactsController>().invalidateCache();
     await _loadContacts();
   }
 
