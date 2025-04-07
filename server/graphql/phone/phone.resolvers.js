@@ -87,28 +87,28 @@ module.exports = {
      * 4) bulkWrite
      */
     upsertPhoneRecords: async (_, { records }, { tokenData }) => {
-      // 1) 권한 체크
       const { isAdmin, user } = await checkUserOrAdmin(tokenData);
 
       if (!records || !Array.isArray(records) || records.length === 0) {
         throw new UserInputError('records 배열이 비어 있습니다.');
       }
-      console.log('records arrived, count=', records.length);
+      console.log('[Phone.Resolvers] upsertPhoneRecords received, count=', records.length);
 
-      // 1) phoneNumber별로 그룹핑
       const mapByPhone = {};
       for (const rec of records) {
+        // name 필드 필수 체크 (스키마에서 이미 처리)
+        // if (!rec.name || typeof rec.name !== 'string' || rec.name.trim() === '') continue;
         const phone = rec.phoneNumber?.trim();
         if (!phone) continue;
         if (!mapByPhone[phone]) mapByPhone[phone] = [];
+        // createdAt은 String으로 받음 (mergeRecords에서 Date로 변환)
         mapByPhone[phone].push(rec);
       }
       const phoneNumbers = Object.keys(mapByPhone);
       if (phoneNumbers.length === 0) {
-        return true; // 아무것도 없음
+        return true;
       }
 
-      // 2) 기존 PhoneNumber docs 한 번에 로딩
       const existingDocs = await PhoneNumber.find({
         phoneNumber: { $in: phoneNumbers }
       }).lean();
@@ -118,10 +118,8 @@ module.exports = {
         phoneDocMap[doc.phoneNumber] = doc;
       }
 
-      // 최종 bulkOps
       const bulkOps = [];
 
-      // 3) phoneNumber 별로 병합
       for (const phone of phoneNumbers) {
         const doc = phoneDocMap[phone];
         let currentRecords = [];
@@ -133,17 +131,17 @@ module.exports = {
           currentBlockCount = doc.blockCount || 0;
         }
 
-        // 병합
+        // 병합 (mergeRecords는 name, memo, type 업데이트)
         const merged = mergeRecords(currentRecords, mapByPhone[phone], isAdmin, user);
 
-        // 위험 번호 로직
+        // 위험 번호 로직 유지
         const countDanger = merged.filter(r => r.type === 99).length;
         let finalType = currentType;
         if (countDanger >= 3) {
           finalType = 99;
         }
 
-        // blockCount 계산
+        // blockCount 계산 로직 유지
         let blockCount = currentBlockCount;
         for (const record of merged) {
           const name = record.name?.toLowerCase() || '';
@@ -152,7 +150,6 @@ module.exports = {
           }
         }
 
-        // 4) bulkOps: upsert
         bulkOps.push({
           updateOne: {
             filter: { phoneNumber: phone },
@@ -161,7 +158,7 @@ module.exports = {
                 phoneNumber: phone,
                 type: finalType,
                 blockCount: blockCount,
-                records: merged
+                records: merged // 병합된 레코드 배열 전체 저장
               }
             },
             upsert: true
@@ -169,14 +166,13 @@ module.exports = {
         });
       }
 
-      // 5) bulkWrite
       if (bulkOps.length > 0) {
         await withTransaction(async (session) => {
           await PhoneNumber.bulkWrite(bulkOps, { session });
         });
       }
 
-      console.log('bulkWrite done. ops=', bulkOps.length);
+      console.log('[Phone.Resolvers] upsertPhoneRecords bulkWrite done. ops=', bulkOps.length);
       return true;
     },
   },
@@ -231,43 +227,48 @@ module.exports = {
       return PhoneNumber.find({ type });
     },
 
-    getMyRecords: async (_, __, { tokenData }) => {
-      const { isAdmin, user } = await checkUserOrAdmin(tokenData);
-      if (!user) {
-        throw new AuthenticationError('로그인이 필요합니다.');
-      }
-    
-      // 1) phoneNumber docs 중 records.userId = user._id 인 것 찾기
-      // 필요한 필드만 선택적으로 가져오기
-      const phoneDocs = await PhoneNumber.find(
-        { 'records.userId': user._id },
-        { phoneNumber: 1, records: { $elemMatch: { userId: user._id } } }
-      );
-    
-      // 2) 결과 변환
-      let result = [];
-      for (const doc of phoneDocs) {
-        // records 배열에서 이미 필터링된 레코드만 있음
-        for (const r of doc.records) {
-          result.push({
-            phoneNumber: doc.phoneNumber,
-            name: r.name,
-            memo: r.memo,
-            type: r.type,
-            createdAt: r.createdAt,
-          });
-        }
-      }
-    
-      return result;
-    },
-    
     getBlockNumbers: async (_, { count }, { tokenData }) => {
       if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
       return PhoneNumber.find(
         { blockCount: { $gte: count } },
         { phoneNumber: 1, blockCount: 1, _id: 0 }  // 필요한 필드만 선택
       );
+    },
+
+    // getPhoneRecord 구현
+    getPhoneRecord: async (_, { phoneNumber }, { tokenData }) => {
+      const { user } = await checkUserOrAdmin(tokenData);
+      if (!user) {
+        throw new AuthenticationError('로그인이 필요합니다.');
+      }
+      if (!phoneNumber || typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
+         throw new UserInputError('전화번호 입력이 필요합니다.');
+      }
+
+      // 정규화된 번호로 검색 (클라이언트에서 정규화해서 보낸다고 가정)
+      const normalizedPhoneNumber = phoneNumber.trim(); // 추가 정규화 필요 시 적용
+
+      const phoneDoc = await PhoneNumber.findOne({ phoneNumber: normalizedPhoneNumber }).lean();
+      if (!phoneDoc || !phoneDoc.records || phoneDoc.records.length === 0) {
+        return null; // 해당 번호 정보 없음
+      }
+
+      // 해당 유저의 레코드 찾기 (userId 기준)
+      const userRecord = phoneDoc.records.find(
+        (r) => r.userId && String(r.userId) === String(user._id)
+      );
+
+      if (!userRecord) {
+         return null; // 사용자 레코드 없음
+      }
+
+      // createdAt을 String으로 변환 (스키마 타입 일치)
+      if (userRecord.createdAt instanceof Date) {
+         userRecord.createdAt = userRecord.createdAt.toISOString();
+      }
+
+      // console.log('[Phone.Resolvers] getPhoneRecord found for user:', userRecord);
+      return userRecord; // Record 타입과 필드 일치
     },
   },
 };
