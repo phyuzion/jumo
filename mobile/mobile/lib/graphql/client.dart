@@ -1,7 +1,7 @@
 // lib/graphql/client.dart
 import 'dart:developer';
 import 'dart:io'; // <-- HttpClient
-import 'package:get_storage/get_storage.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/io_client.dart'; // <-- IOClient
 import 'package:mobile/controllers/navigation_controller.dart';
@@ -12,51 +12,57 @@ const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
 
 /// GraphQL 통신 공통 로직
 class GraphQLClientManager {
-  // GetStorage 인스턴스
-  static final GetStorage _box = GetStorage();
+  // GetStorage 인스턴스 제거
+  static Box get _authBox => Hive.box('auth');
 
   /// AccessToken Getter / Setter
-  static String? get accessToken => _box.read<String>('accessToken');
+  static String? get accessToken => _authBox.get('accessToken') as String?;
   static set accessToken(String? token) {
     if (token == null) {
-      _box.remove('accessToken');
+      _authBox.delete('accessToken');
     } else {
-      log('box write access token : $token');
-      _box.write('accessToken', token);
+      log('[GraphQL] Saving accessToken to Hive...');
+      _authBox.put('accessToken', token);
     }
   }
 
   // ===============================
   // 1) 자동로그인 함수 (id/pw 재로그인)
   static Future<void> tryAutoLogin() async {
-    final box = GetStorage();
-    final savedId = box.read<String>('savedLoginId');
-    final savedPw = box.read<String>('savedPassword');
-    final myNumber = box.read<String>('myNumber');
+    final savedId = _authBox.get('savedLoginId') as String?;
+    final savedPw = _authBox.get('savedPassword') as String?;
+    final myNumber = _authBox.get('myNumber') as String?;
 
-    if ((savedId == null || savedId.isEmpty) ||
-        (savedPw == null || savedPw.isEmpty) ||
-        (myNumber == null || myNumber.isEmpty)) {
-      logout();
+    if (savedId == null ||
+        savedId.isEmpty ||
+        savedPw == null ||
+        savedPw.isEmpty ||
+        myNumber == null ||
+        myNumber.isEmpty) {
+      log('[GraphQL] No saved credentials found for auto-login.');
+      await logout();
     } else {
       try {
-        await UserApi.userLogin(
+        final loginResult = await UserApi.userLogin(
           loginId: savedId,
           password: savedPw,
           phoneNumber: myNumber,
         );
-        log('[tryAutoLogin] re-login success with $savedId , $myNumber');
+        log(
+          '[GraphQL] tryAutoLogin: Re-login success with $savedId, $myNumber',
+        );
       } catch (e) {
-        log('[tryAutoLogin] failed: $e');
-        logout();
+        log('[GraphQL] tryAutoLogin failed: $e');
+        await logout();
       }
     }
   }
 
   /// 로그아웃 → 토큰 제거 후 DeciderScreen 으로 이동
-  static void logout() {
-    accessToken = null;
-    _box.erase(); // 모든 저장 데이터 초기화
+  static Future<void> logout() async {
+    await _authBox.clear();
+    log('[GraphQL] Cleared auth box on logout.');
+
     NavigationController.goToDecider();
   }
 
@@ -91,9 +97,21 @@ class GraphQLClientManager {
     return GraphQLClient(cache: GraphQLCache(), link: link);
   }
 
+  /// 자동 로그인 정보 저장 함수 추가
+  static Future<void> saveLoginCredentials(
+    String id,
+    String pw,
+    String myNumber,
+  ) async {
+    await _authBox.put('savedLoginId', id);
+    await _authBox.put('savedPassword', pw);
+    await _authBox.put('myNumber', myNumber);
+    log('[GraphQL] Saved login credentials to Hive.');
+  }
+
   /// 헬퍼: GraphQL Exception 핸들링
   ///  - 서버 GraphQLError가 있을 경우, 메시지 추출
-  static void handleExceptions(QueryResult result) {
+  static Future<void> handleExceptions(QueryResult result) async {
     // result.data가 null이면 그냥 리턴 (예외 아님)
     if (result.data == null) {
       return;

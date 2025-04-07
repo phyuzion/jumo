@@ -5,10 +5,12 @@ import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/models/today_record.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 import 'package:provider/provider.dart';
-import '../services/native_methods.dart';
-import '../controllers/contacts_controller.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/services/local_notification_service.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:mobile/utils/constants.dart';
+import 'dart:developer';
 
 class IncomingCallScreen extends StatefulWidget {
   final String incomingNumber;
@@ -20,7 +22,6 @@ class IncomingCallScreen extends StatefulWidget {
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   String? _displayName;
-  String? _phones;
   String? _error;
   bool _loading = false;
   SearchResultModel? _result;
@@ -30,11 +31,21 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     super.initState();
     _loadContactName();
     _loadSearchData();
+    _showInitialIncomingNotification();
+  }
 
-    // 수신 알림 띄우기
-    LocalNotificationService.showIncomingCallNotification(
+  Future<void> _showInitialIncomingNotification() async {
+    await LocalNotificationService.showIncomingCallNotification(
       id: 1234,
-      callerName: _displayName ?? '',
+      callerName: '',
+      phoneNumber: widget.incomingNumber,
+    );
+  }
+
+  Future<void> _updateIncomingNotification(String name) async {
+    await LocalNotificationService.showIncomingCallNotification(
+      id: 1234,
+      callerName: name,
       phoneNumber: widget.incomingNumber,
     );
   }
@@ -43,14 +54,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     if (!mounted) return;
     setState(() => _loading = true);
     try {
-      // 전화번호 검색
+      final normalizedNumber = normalizePhone(widget.incomingNumber);
       final phoneData = await SearchRecordsController.searchPhone(
-        widget.incomingNumber,
+        normalizedNumber,
       );
-
-      // 오늘의 레코드 검색
       final todayRecords = await SearchRecordsController.searchTodayRecord(
-        widget.incomingNumber,
+        normalizedNumber,
       );
 
       final searchResult = SearchResultModel(
@@ -58,51 +67,55 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         todayRecords: todayRecords,
       );
 
+      if (!mounted) return;
       setState(() {
         _result = searchResult;
       });
     } catch (e) {
-      setState(() => _error = '$e');
+      log('[IncomingCallScreen] Error loading search data: $e');
+      if (mounted) setState(() => _error = '검색 정보를 불러오는데 실패했습니다.');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   Future<void> _loadContactName() async {
-    final contactsController = context.read<ContactsController>();
-    final contacts = contactsController.getContactsByPhones([
-      widget.incomingNumber,
-    ]);
-    final contact = contacts[widget.incomingNumber];
+    final contactsCtrl = context.read<ContactsController>();
+    final normalizedNumber = normalizePhone(widget.incomingNumber);
+    try {
+      final contacts = await contactsCtrl.getLocalContacts();
+      PhoneBookModel? contact;
+      try {
+        contact = contacts.firstWhere((c) => c.phoneNumber == normalizedNumber);
+      } catch (e) {
+        contact = null;
+      }
 
-    if (contact != null && mounted) {
-      setState(() {
-        _displayName = contact.name;
-        _phones = contact.phoneNumber;
-      });
+      if (contact != null && mounted) {
+        setState(() {
+          _displayName = contact!.name;
+        });
+        _updateIncomingNotification(contact.name);
+      }
+    } catch (e) {
+      log('[IncomingCallScreen] Error loading contact name: $e');
     }
   }
 
   Future<void> _acceptCall() async {
     await NativeMethods.acceptCall();
-    // 알림 닫기 (수신 알림)
     await LocalNotificationService.cancelNotification(1234);
   }
 
   Future<void> _rejectCall() async {
     await NativeMethods.rejectCall();
-    // 수신 알림 닫기
     await LocalNotificationService.cancelNotification(1234);
-
-    if (!mounted) return;
-    //Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
     final number = widget.incomingNumber;
-    final contactName = _displayName ?? number;
-    final contactPhones = _phones ?? number;
+    final displayName = _displayName ?? number;
 
     return Scaffold(
       body: Stack(
@@ -112,16 +125,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
               children: [
                 const SizedBox(height: 100),
                 Text(
-                  contactName,
+                  displayName,
                   style: const TextStyle(
                     color: Colors.black,
                     fontSize: 28,
                     fontWeight: FontWeight.bold,
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 5),
                 Text(
-                  contactPhones,
+                  number,
                   style: const TextStyle(color: Colors.black, fontSize: 16),
                 ),
                 const SizedBox(height: 20),
@@ -158,15 +172,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     }
     if (_error != null) {
       return Center(
-        child: Text('에러: $_error', style: const TextStyle(color: Colors.red)),
+        child: Text(_error!, style: const TextStyle(color: Colors.red)),
       );
     }
     if (_result == null) {
-      return const Center(
-        child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
-      );
+      return const Center(child: Text(''));
     }
-    return SearchResultWidget(searchResult: _result!);
+    return SearchResultWidget(searchResult: _result!, ignorePointer: true);
   }
 
   Widget _buildCallButton({
@@ -187,7 +199,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.white)),
+        Text(label, style: const TextStyle(color: Colors.black)),
       ],
     );
   }

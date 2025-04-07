@@ -5,6 +5,10 @@ import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/models/today_record.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
+import 'package:provider/provider.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/models/phone_book_model.dart';
+import 'dart:developer';
 
 class SearchScreen extends StatefulWidget {
   final bool isRequested;
@@ -18,38 +22,51 @@ class _SearchScreenState extends State<SearchScreen> {
   final _textCtrl = TextEditingController();
   bool _loading = false;
   String? _error;
-  SearchResultModel? _result; // 검색 결과
-
+  SearchResultModel? _result;
   final _focusNode = FocusNode();
 
-  // 검색 실행 버튼을 누를 때마다 phoneNumber를 set => SearchResultWidget 로 교체
-  String _searchPhone = '';
+  Map<String, PhoneBookModel> _localContactsCache = {};
 
   @override
   void initState() {
     super.initState();
+    _loadLocalContacts();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map<String, dynamic>) {
-        _searchPhone = normalizePhone(args['number'] as String);
-        _textCtrl.text = _searchPhone;
-        _onSubmit(_searchPhone);
-        if (!mounted) return;
-        setState(() {});
+        final initialNum = args['number'] as String?;
+        if (initialNum != null) {
+          final normalizedNum = normalizePhone(initialNum);
+          _textCtrl.text = normalizedNum;
+          _onSubmit(normalizedNum);
+        }
       } else if (args is String) {
-        _searchPhone = normalizePhone(args);
-        _textCtrl.text = _searchPhone;
-        _onSubmit(_searchPhone);
-        if (!mounted) return;
-        setState(() {});
+        final normalizedNum = normalizePhone(args);
+        _textCtrl.text = normalizedNum;
+        _onSubmit(normalizedNum);
       }
       _focusNode.requestFocus();
     });
   }
 
+  Future<void> _loadLocalContacts() async {
+    try {
+      final contactsCtrl = context.read<ContactsController>();
+      final contacts = await contactsCtrl.getLocalContacts();
+      if (mounted) {
+        setState(() {
+          _localContactsCache = {for (var c in contacts) c.phoneNumber: c};
+        });
+      }
+    } catch (e) {
+      log('[SearchScreen] Error loading local contacts: $e');
+    }
+  }
+
   void _onSubmit(String num) async {
-    final numResult = num.trim();
-    if (numResult.isEmpty) return;
+    final normalizedNum = normalizePhone(num.trim());
+    if (normalizedNum.isEmpty) return;
 
     if (!mounted) return;
     setState(() {
@@ -59,17 +76,15 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      // 전화번호 검색 (isRequested 값 전달)
       final phoneData = await SearchRecordsController.searchPhone(
-        numResult,
+        normalizedNum,
         isRequested: widget.isRequested,
       );
-
-      // 오늘의 레코드 검색
       final todayRecords = await SearchRecordsController.searchTodayRecord(
-        numResult,
+        normalizedNum,
       );
 
+      if (!mounted) return;
       setState(() {
         _result = SearchResultModel(
           phoneNumberModel: phoneData,
@@ -77,11 +92,10 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       });
     } catch (e) {
-      // 에러 메시지에서 "Exception: " 부분 제거
       final errorMessage = e.toString().replaceAll('Exception: ', '');
-      setState(() => _error = errorMessage);
+      if (mounted) setState(() => _error = errorMessage);
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -138,11 +152,10 @@ class _SearchScreenState extends State<SearchScreen> {
     }
     if (_result == null) {
       return const Center(
-        child: Text('검색 결과가 없습니다.', style: TextStyle(color: Colors.grey)),
+        child: Text('검색어를 입력해주세요.', style: TextStyle(color: Colors.grey)),
       );
     }
 
-    // 결과가 있다면 -> SearchResultWidget(SearchResultModel)
     return SearchResultWidget(searchResult: _result!);
   }
 }

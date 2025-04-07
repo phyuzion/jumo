@@ -6,6 +6,8 @@ import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
+import 'package:mobile/graphql/phone_records_api.dart';
+import 'dart:developer';
 
 /// 신규: initialPhone==null => 전화번호 입력 가능
 /// 기존: 전화번호 수정불가, contactId, memo, type 편집
@@ -13,16 +15,12 @@ class EditContactScreen extends StatefulWidget {
   final String? initialContactId;
   final String? initialName;
   final String? initialPhone;
-  final String? initialMemo;
-  final int? initialType;
 
   const EditContactScreen({
     super.key,
     this.initialContactId,
     this.initialName,
     this.initialPhone,
-    this.initialMemo,
-    this.initialType,
   });
 
   @override
@@ -35,32 +33,67 @@ class _EditContactScreenState extends State<EditContactScreen> {
   final _memoCtrl = TextEditingController();
   int _type = 0;
   bool _isBlocked = false;
+  bool _isLoadingDetails = false;
 
-  bool get isNew => widget.initialPhone == null; // null이면 신규
+  bool get isNew => widget.initialPhone == null;
 
   @override
   void initState() {
     super.initState();
     _nameCtrl.text = widget.initialName ?? '';
     _phoneCtrl.text = widget.initialPhone ?? '';
-    _memoCtrl.text = widget.initialMemo ?? '';
-    _type = widget.initialType ?? 0;
     _checkBlockedStatus();
+
+    if (!isNew && widget.initialPhone != null) {
+      _loadContactDetails(widget.initialPhone!);
+    }
+  }
+
+  Future<void> _loadContactDetails(String phoneNumber) async {
+    setState(() {
+      _isLoadingDetails = true;
+    });
+    try {
+      final record = await PhoneRecordsApi.getPhoneRecord(
+        normalizePhone(phoneNumber),
+      );
+      if (record != null && mounted) {
+        setState(() {
+          _memoCtrl.text = record['memo'] as String? ?? '';
+          _type = record['type'] as int? ?? 0;
+        });
+      }
+    } catch (e) {
+      log('[EditContactScreen] Failed to load details: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('연락처 상세 정보를 불러오는데 실패했습니다.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingDetails = false;
+        });
+      }
+    }
   }
 
   void _checkBlockedStatus() {
     if (widget.initialPhone != null) {
+      final normalizedPhone = normalizePhone(widget.initialPhone!);
       final blocknumbersController = context.read<BlockedNumbersController>();
-      _isBlocked = blocknumbersController.isNumberBlocked(widget.initialPhone!);
+      _isBlocked = blocknumbersController.isNumberBlocked(normalizedPhone);
     }
   }
 
   Future<void> _toggleBlockStatus() async {
     if (widget.initialPhone == null) return;
+    final normalizedPhone = normalizePhone(widget.initialPhone!);
 
     final blocknumbersController = context.read<BlockedNumbersController>();
     final isCurrentlyBlocked = blocknumbersController.isNumberBlocked(
-      widget.initialPhone!,
+      normalizedPhone,
     );
 
     final confirmMessage = isCurrentlyBlocked ? '차단해제 하시겠습니까?' : '차단 하시겠습니까?';
@@ -86,9 +119,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     if (result == true) {
       if (isCurrentlyBlocked) {
-        await blocknumbersController.removeBlockedNumber(widget.initialPhone!);
+        await blocknumbersController.removeBlockedNumber(normalizedPhone);
       } else {
-        await blocknumbersController.addBlockedNumber(widget.initialPhone!);
+        await blocknumbersController.addBlockedNumber(normalizedPhone);
       }
       setState(() {
         _isBlocked = !isCurrentlyBlocked;
@@ -104,10 +137,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
     super.dispose();
   }
 
-  /// 저장 버튼 눌렀을 때
   Future<void> _onSave() async {
     final name = _nameCtrl.text.trim();
-    final phone = _phoneCtrl.text.trim();
+    final phone = normalizePhone(_phoneCtrl.text.trim());
     final memo = _memoCtrl.text.trim();
 
     if (name.isEmpty || phone.isEmpty) {
@@ -117,7 +149,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
       return;
     }
 
-    // 주소록 권한 확인
     final hasPerm = await FlutterContacts.requestPermission();
     if (!hasPerm) {
       ScaffoldMessenger.of(
@@ -126,134 +157,134 @@ class _EditContactScreenState extends State<EditContactScreen> {
       return;
     }
 
-    // 로딩 다이얼로그 표시
     _showLoadingDialog();
 
     try {
-      final contactsCtrl = context.read<ContactsController>();
-      final callLogCtrl = context.read<CallLogController>();
-
       if (isNew) {
-        // 신규
-        final contactId = await _insertDeviceContact(name, phone);
-        final newItem = PhoneBookModel(
-          contactId: contactId,
-          name: name,
-          phoneNumber: phone,
-          memo: memo.isNotEmpty ? memo : null,
-          type: _type != 0 ? _type : null,
-          updatedAt: DateTime.now().toUtc().toIso8601String(),
-        );
-        await contactsCtrl.addOrUpdateLocalRecord(newItem);
+        await _insertDeviceContact(name, phone);
       } else {
-        // 기존
-        await _updateDeviceContact(widget.initialContactId, name, phone);
-        final newItem = PhoneBookModel(
-          contactId: widget.initialContactId ?? '',
-          name: name,
-          phoneNumber: phone,
-          memo: memo.isNotEmpty ? memo : null,
-          type: _type != 0 ? _type : null,
-          updatedAt: DateTime.now().toUtc().toIso8601String(),
-        );
-        await contactsCtrl.addOrUpdateLocalRecord(newItem);
+        await _updateDeviceContact(widget.initialContactId, name);
       }
 
-      // 서버 / 로컬 동기화
-      await contactsCtrl.syncContactsAll();
-      await callLogCtrl.refreshCallLogs();
+      final recordToUpsert = {
+        'phoneNumber': phone,
+        'name': name,
+        'memo': memo.isNotEmpty ? memo : '',
+        'type': _type,
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
+      };
+      await PhoneRecordsApi.upsertPhoneRecords([recordToUpsert]);
 
-      // 다이얼로그 닫기
-      Navigator.pop(context); // 로딩 다이얼로그 pop
+      Navigator.pop(context);
 
-      // 화면 종료
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (e) {
-      Navigator.pop(context); // 로딩 다이얼로그 pop
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('오류: $e')));
+      log('[EditContactScreen] _onSave error: $e');
+      if (mounted) Navigator.pop(context);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('저장 중 오류가 발생했습니다: $e')));
+      }
     }
   }
 
-  /// 로딩 다이얼로그 (써큘러 인디케이터) 표시
   void _showLoadingDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false, // 외부 탭으로 닫히지 않도록
+      barrierDismissible: false,
       builder: (ctx) {
         return const Center(child: CircularProgressIndicator());
       },
     );
   }
 
-  /// 새 연락처 insert
   Future<String> _insertDeviceContact(String name, String phone) async {
     try {
-      final c =
-          Contact()
-            ..name.last = ''
-            ..name.first = name
-            ..displayName = name
-            ..phones = [Phone(phone)];
-      final inserted = await c.insert();
-      return inserted.id;
+      final contactToInsert = Contact(
+        name: Name(first: name),
+        phones: [Phone(phone)],
+      );
+      final insertedContact = await contactToInsert.insert();
+      log('[EditContactScreen] Inserted device contact: ${insertedContact.id}');
+      return insertedContact.id;
     } catch (e) {
+      log('[EditContactScreen] _insertDeviceContact error: $e');
       rethrow;
     }
   }
 
-  /// 기존 연락처 수정
-  Future<void> _updateDeviceContact(
-    String? contactId,
-    String name,
-    String phone,
-  ) async {
-    Contact? found;
+  Future<void> _updateDeviceContact(String? contactId, String name) async {
+    Contact? foundContact;
 
-    // 1) contactId로 찾기
     if (contactId != null && contactId.isNotEmpty) {
-      found = await FlutterContacts.getContact(
-        contactId,
-        withProperties: true,
-        withAccounts: true,
-        withPhoto: true,
-        withThumbnail: true,
-      );
-    }
-
-    // 2) fallback: phone 매칭
-    if (found == null) {
-      final all = await FlutterContacts.getContacts(
-        withProperties: true,
-        withAccounts: true,
-        withPhoto: true,
-        withThumbnail: true,
-      );
-      for (final c in all) {
-        if (c.phones.isEmpty) continue;
-        for (final p in c.phones) {
-          if (normalizePhone(p.number) == normalizePhone(phone)) {
-            found = c;
-            break;
-          }
-        }
-        if (found != null) break;
+      try {
+        foundContact = await FlutterContacts.getContact(
+          contactId,
+          withProperties: true,
+        );
+      } catch (e) {
+        log('[EditContactScreen] Failed to get contact by ID $contactId: $e');
       }
     }
 
-    // 3) 그래도 없으면 insert
-    if (found == null) {
-      await _insertDeviceContact(name, phone);
-      return;
+    if (foundContact == null && widget.initialPhone != null) {
+      final normalizedPhone = normalizePhone(widget.initialPhone!);
+      try {
+        final allContacts = await FlutterContacts.getContacts(
+          withProperties: true,
+        );
+        for (final c in allContacts) {
+          if (c.phones.any(
+            (p) => normalizePhone(p.number) == normalizedPhone,
+          )) {
+            foundContact = c;
+            log('[EditContactScreen] Found contact by phone fallback: ${c.id}');
+            break;
+          }
+        }
+      } catch (e) {
+        log(
+          '[EditContactScreen] Failed to search contact by phone $normalizedPhone: $e',
+        );
+        throw Exception('디바이스에서 연락처를 찾을 수 없습니다.');
+      }
     }
 
-    // 4) update
-    found.name.last = '';
-    found.name.first = name;
-    found.displayName = name;
-    await found.update();
+    if (foundContact == null) {
+      log(
+        '[EditContactScreen] Contact not found for update (ID: $contactId, Phone: ${widget.initialPhone})',
+      );
+      throw Exception('수정할 연락처를 디바이스에서 찾을 수 없습니다.');
+    }
+
+    bool needsUpdate = false;
+    final newName = Name(first: name);
+    if (foundContact.name.first != newName.first ||
+        foundContact.name.last != newName.last ||
+        foundContact.name.middle != newName.middle) {
+      foundContact.name = newName;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      try {
+        await foundContact.update();
+        log(
+          '[EditContactScreen] Updated device contact name for ${foundContact.id}',
+        );
+      } catch (e) {
+        log(
+          '[EditContactScreen] _updateDeviceContact error for ${foundContact.id}: $e',
+        );
+        rethrow;
+      }
+    } else {
+      log(
+        '[EditContactScreen] Device contact name is already up-to-date for ${foundContact.id}.',
+      );
+    }
   }
 
   @override
@@ -267,62 +298,72 @@ class _EditContactScreenState extends State<EditContactScreen> {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: '이름'),
-            ),
-            TextField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: '전화번호'),
-              enabled: isNew,
-            ),
-            TextField(
-              controller: _memoCtrl,
-              decoration: const InputDecoration(labelText: '메모'),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('타입:'),
-                const SizedBox(width: 10),
-                DropdownButton<int>(
-                  value: _type,
-                  items: const [
-                    DropdownMenuItem(value: 0, child: Text('일반')),
-                    DropdownMenuItem(value: 99, child: Text('위험')),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(
+                controller: _nameCtrl,
+                decoration: const InputDecoration(labelText: '이름'),
+              ),
+              TextField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: '전화번호'),
+                enabled: isNew,
+              ),
+              const SizedBox(height: 12),
+              if (_isLoadingDetails)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16.0),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else ...[
+                TextField(
+                  controller: _memoCtrl,
+                  decoration: const InputDecoration(labelText: '메모 (선택)'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('타입 (선택):'),
+                    const SizedBox(width: 10),
+                    DropdownButton<int>(
+                      value: _type,
+                      items: const [
+                        DropdownMenuItem(value: 0, child: Text('일반')),
+                        DropdownMenuItem(value: 99, child: Text('위험')),
+                      ],
+                      onChanged: (val) => setState(() => _type = val ?? 0),
+                    ),
                   ],
-                  onChanged: (val) => setState(() => _type = val ?? 0),
                 ),
               ],
-            ),
-            if (!isNew) ...[
-              const SizedBox(height: 16),
-              InkWell(
-                onTap: _toggleBlockStatus,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: _isBlocked ? Colors.red : Colors.black,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _isBlocked ? '차단 상태입니다.' : '정상 상태입니다.',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+              if (!isNew) ...[
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: _toggleBlockStatus,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _isBlocked ? Colors.red : Colors.black,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
+                      child: Text(
+                        _isBlocked ? '차단 상태입니다.' : '정상 상태입니다.',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

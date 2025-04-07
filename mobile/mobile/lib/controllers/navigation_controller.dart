@@ -17,8 +17,8 @@ class NavigationController {
       switch (call.method) {
         case 'onIncomingNumber':
           final number = call.arguments as String;
-          // 차단된 번호인지 확인
-          if (blockedNumbersController.isNumberBlocked(
+          // 차단된 번호인지 비동기 확인
+          if (await blockedNumbersController.isNumberBlockedAsync(
             number,
             addHistory: true,
           )) {
@@ -43,15 +43,17 @@ class NavigationController {
             final endedNumber = map['number'] as String? ?? '';
             final reason = map['reason'] as String? ?? '';
 
-            // 차단된 번호인 경우 call_ended_screen으로 이동하지 않고 콜로그만 업데이트
-            if (blockedNumbersController.isNumberBlocked(
+            // 차단된 번호인지 비동기 확인
+            if (await blockedNumbersController.isNumberBlockedAsync(
               endedNumber,
-              addHistory: false,
+              addHistory: false, // 통화 종료 시에는 이력 추가 안 함
             )) {
+              // 차단된 번호였으면 콜로그만 업데이트하고 종료 화면 안 감
               final ctx = navKey.currentContext;
               if (ctx != null) {
                 final callLogController = ctx.read<CallLogController>();
-                callLogController.refreshCallLogs();
+                // refreshCallLogs는 비동기일 수 있으므로 await 추가 (구현 확인 필요)
+                await callLogController.refreshCallLogs();
               }
               return;
             }

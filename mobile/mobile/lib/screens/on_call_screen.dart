@@ -5,9 +5,9 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
-import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/constants.dart';
+import 'dart:developer';
 
 class OnCallScreen extends StatefulWidget {
   final String phoneNumber;
@@ -25,13 +25,11 @@ class OnCallScreen extends StatefulWidget {
 
 class _OnCallScreenState extends State<OnCallScreen> {
   String? _displayName;
-  String? _phones;
 
   bool isMuted = false;
   bool isHold = false;
   bool isSpeakerOn = false;
 
-  // 여기서는 더이상 Timer 없음. => 백그라운드 서비스가 타이머 관리
   int _callDuration = 0;
   StreamSubscription? _sub;
 
@@ -40,52 +38,57 @@ class _OnCallScreenState extends State<OnCallScreen> {
     super.initState();
     _loadContactName();
 
-    final caller = _displayName ?? '';
-
     if (widget.connected) {
-      // (1) 백그라운드 서비스로부터 타이머 업데이트 수신
-      final service = FlutterBackgroundService();
-
-      service.invoke('startCallTimer', {
-        'phoneNumber': widget.phoneNumber,
-        'callerName': caller,
-      });
-      _sub = service.on('updateCallUI').listen((event) {
-        // event = { 'elapsed':..., 'phoneNumber':...}
-        final elapsed = event?['elapsed'] as int? ?? 0;
-        if (mounted) {
-          setState(() => _callDuration = elapsed);
-        }
-      });
+      _startCallTimer();
     }
   }
 
   Future<void> _loadContactName() async {
-    final contactsController = context.read<ContactsController>();
-    final contacts = contactsController.getContactsByPhones([
-      widget.phoneNumber,
-    ]);
-    final contact = contacts[widget.phoneNumber];
+    final contactsCtrl = context.read<ContactsController>();
+    final normalizedNumber = normalizePhone(widget.phoneNumber);
+    try {
+      final contacts = await contactsCtrl.getLocalContacts();
+      PhoneBookModel? contact;
+      try {
+        contact = contacts.firstWhere((c) => c.phoneNumber == normalizedNumber);
+      } catch (e) {
+        contact = null;
+      }
 
-    if (contact != null && mounted) {
-      setState(() {
-        _displayName = contact.name;
-        _phones = contact.phoneNumber;
-      });
+      if (contact != null && mounted) {
+        setState(() {
+          _displayName = contact!.name;
+        });
+      }
+    } catch (e) {
+      log('[OnCallScreen] Error loading contact name: $e');
     }
+  }
+
+  void _startCallTimer() {
+    final service = FlutterBackgroundService();
+    final callerName = _displayName ?? '';
+
+    service.invoke('startCallTimer', {
+      'phoneNumber': widget.phoneNumber,
+      'callerName': callerName,
+    });
+
+    _sub = service.on('updateCallUI').listen((event) {
+      final elapsed = event?['elapsed'] as int? ?? 0;
+      if (mounted) {
+        setState(() => _callDuration = elapsed);
+      }
+    });
   }
 
   /// 통화 종료
   Future<void> _hangUp() async {
     await NativeMethods.hangUpCall();
     if (widget.connected) {
-      // 백그라운드 서비스 타이머 중지
       final service = FlutterBackgroundService();
       service.invoke('stopCallTimer');
-    } else {
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
     }
-
     if (!mounted) return;
   }
 
@@ -124,7 +127,6 @@ class _OnCallScreenState extends State<OnCallScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final displayNumber = widget.phoneNumber;
     final displayName = _displayName ?? widget.phoneNumber;
     final callStateText =
         widget.connected ? _formatDuration(_callDuration) : '통화 연결중...';
@@ -148,8 +150,6 @@ class _OnCallScreenState extends State<OnCallScreen> {
                 fontWeight: FontWeight.bold,
               ),
             ),
-            const SizedBox(height: 5),
-            Text(displayNumber, style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 20),
             Card(
               elevation: 4,

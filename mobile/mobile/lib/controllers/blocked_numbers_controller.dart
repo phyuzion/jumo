@@ -1,15 +1,20 @@
 import 'dart:developer';
 
-import 'package:get_storage/get_storage.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:mobile/graphql/block_api.dart';
 import '../models/blocked_number.dart';
 import '../models/blocked_history.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/graphql/search_api.dart';
+import 'package:mobile/utils/constants.dart';
 
 class BlockedNumbersController {
   static const String _blockedHistoryKey = 'blocked_history';
-  final _storage = GetStorage();
+  Box<BlockedHistory> get _historyBox =>
+      Hive.box<BlockedHistory>(_blockedHistoryKey);
+  Box get _settingsBox => Hive.box('settings');
+  Box get _blockedNumbersBox => Hive.box('blocked_numbers');
+
   final ContactsController _contactsController;
   List<BlockedNumber> _blockedNumbers = [];
   List<BlockedHistory> _blockedHistory = [];
@@ -37,6 +42,12 @@ class BlockedNumbersController {
   int get bombCallsCount => _bombCallsCount;
 
   Future<void> initialize() async {
+    if (!_settingsBox.isOpen ||
+        !_blockedNumbersBox.isOpen ||
+        !_historyBox.isOpen) {
+      log('[BlockedNumbers] Required boxes not open during initialize.');
+      return;
+    }
     try {
       log('[BlockedNumbers] Starting initialization...');
 
@@ -74,27 +85,39 @@ class BlockedNumbersController {
         );
       }
 
+      _isInitialized = true;
       log('[BlockedNumbers] Initialization completed successfully');
     } catch (e) {
       log('[BlockedNumbers] Error during initialization: $e');
-      rethrow;
+      _isInitialized = false;
     }
   }
 
   Future<void> _loadSettings() async {
     try {
-      _isTodayBlocked = _storage.read<bool>('isTodayBlocked') ?? false;
-      _isUnknownBlocked = _storage.read<bool>('isUnknownBlocked') ?? false;
-      _isAutoBlockDanger = _storage.read<bool>('isAutoBlockDanger') ?? false;
-      _isBombCallsBlocked = _storage.read<bool>('isBombCallsBlocked') ?? false;
-      _bombCallsCount = _storage.read<int>('bombCallsCount') ?? 0;
+      _isTodayBlocked = _settingsBox.get('isTodayBlocked', defaultValue: false);
+      _isUnknownBlocked = _settingsBox.get(
+        'isUnknownBlocked',
+        defaultValue: false,
+      );
+      _isAutoBlockDanger = _settingsBox.get(
+        'isAutoBlockDanger',
+        defaultValue: false,
+      );
+      _isBombCallsBlocked = _settingsBox.get(
+        'isBombCallsBlocked',
+        defaultValue: false,
+      );
+      _bombCallsCount = _settingsBox.get('bombCallsCount', defaultValue: 0);
 
-      final todayBlockDate = _storage.read<String>('todayBlockDate');
-      if (todayBlockDate != null) {
-        _todayBlockDate = DateTime.parse(todayBlockDate);
+      final todayBlockDateStr = _settingsBox.get('todayBlockDate') as String?;
+      if (todayBlockDateStr != null) {
+        try {
+          _todayBlockDate = DateTime.parse(todayBlockDateStr);
+        } catch (_) {}
       }
     } catch (e) {
-      log('Error loading settings: $e');
+      log('Error loading settings from Hive: $e');
       rethrow;
     }
   }
@@ -109,125 +132,141 @@ class BlockedNumbersController {
         '[BlockedNumbers] Server numbers received: ${serverNumbers.length} numbers',
       );
 
-      // 로컬 저장소에 저장
-      final updatedNumbers =
-          serverNumbers.map((n) => BlockedNumber(number: n)).toList();
-      await _saveBlockedNumbers(updatedNumbers);
-      log('[BlockedNumbers] Numbers updated and saved successfully');
+      final numbersToSave =
+          serverNumbers.map((n) => normalizePhone(n)).toList();
+      await _blockedNumbersBox.clear();
+      await _blockedNumbersBox.addAll(numbersToSave);
+      _blockedNumbers =
+          numbersToSave.map((n) => BlockedNumber(number: n)).toList();
+
+      log('[BlockedNumbers] Blocked numbers updated and saved successfully');
     } catch (e) {
-      log('[BlockedNumbers] Error loading blocked numbers: $e');
-      rethrow;
+      log('[BlockedNumbers] Error loading/saving blocked numbers: $e');
+      final storedNumbers = _blockedNumbersBox.values.toList().cast<String>();
+      _blockedNumbers =
+          storedNumbers.map((n) => BlockedNumber(number: n)).toList();
+      log(
+        '[BlockedNumbers] Loaded ${_blockedNumbers.length} numbers from local cache due to error.',
+      );
     }
   }
 
   Future<void> _loadBlockedHistory() async {
-    final List<dynamic> jsonList = _storage.read(_blockedHistoryKey) ?? [];
-    _blockedHistory =
-        jsonList.map((json) => BlockedHistory.fromJson(json)).toList();
+    try {
+      _blockedHistory = _historyBox.values.toList();
+    } catch (e) {
+      log('Error loading blocked history from Hive: $e');
+      _blockedHistory = [];
+    }
   }
 
   Future<void> _saveBlockedHistory() async {
-    final jsonList =
-        _blockedHistory.map((history) => history.toJson()).toList();
-    await _storage.write(_blockedHistoryKey, jsonList);
+    try {
+      await _historyBox.clear();
+      await _historyBox.addAll(_blockedHistory);
+    } catch (e) {
+      log('Error saving blocked history to Hive: $e');
+    }
   }
 
   Future<void> _addBlockedHistory(String number, String type) async {
-    _blockedHistory.add(
-      BlockedHistory(
-        phoneNumber: number,
-        blockedAt: DateTime.now(),
-        type: type,
-      ),
+    if (!_historyBox.isOpen) {
+      log('[BlockedNumbers] History box not open, cannot add history.');
+      return;
+    }
+    final newHistory = BlockedHistory(
+      phoneNumber: number,
+      blockedAt: DateTime.now(),
+      type: type,
     );
-    await _saveBlockedHistory();
+    _blockedHistory.add(newHistory);
+    try {
+      await _historyBox.add(newHistory);
+    } catch (e) {
+      log('Error adding blocked history to Hive: $e');
+    }
   }
 
   Future<void> setTodayBlocked(bool value) async {
+    if (!_settingsBox.isOpen) {
+      log('[BlockedNumbers] Settings box not open, cannot set today block.');
+      return;
+    }
     _isTodayBlocked = value;
-    await _storage.write('isTodayBlocked', value);
+    await _settingsBox.put('isTodayBlocked', value);
 
     if (value) {
       _todayBlockDate = DateTime.now();
-      await _storage.write(
+      await _settingsBox.put(
         'todayBlockDate',
         _todayBlockDate!.toIso8601String(),
       );
     } else {
       _todayBlockDate = null;
-      await _storage.remove('todayBlockDate');
+      await _settingsBox.delete('todayBlockDate');
     }
   }
 
   Future<void> setUnknownBlocked(bool value) async {
+    if (!_settingsBox.isOpen) {
+      log('[BlockedNumbers] Settings box not open.');
+      return;
+    }
     _isUnknownBlocked = value;
-    await _storage.write('isUnknownBlocked', value);
+    await _settingsBox.put('isUnknownBlocked', value);
   }
 
   Future<void> addBlockedNumber(String number) async {
+    if (!_blockedNumbersBox.isOpen) {
+      log('[BlockedNumbers] Blocked numbers box not open, cannot add.');
+      return;
+    }
+    final normalizedNumber = normalizePhone(number);
+    if (_blockedNumbers.any(
+      (bn) => normalizePhone(bn.number) == normalizedNumber,
+    )) {
+      log('[BlockedNumbers] Number $normalizedNumber already blocked.');
+      return;
+    }
+
+    _blockedNumbers.add(BlockedNumber(number: normalizedNumber));
+    final currentList = _blockedNumbersBox.values.toList().cast<String>();
+    if (!currentList.contains(normalizedNumber)) {
+      currentList.add(normalizedNumber);
+      await _blockedNumbersBox.clear();
+      await _blockedNumbersBox.addAll(currentList);
+    }
+
     try {
-      log('[BlockedNumbers] Adding blocked number: $number');
-      _blockedNumbers.add(BlockedNumber(number: number));
-      log(
-        '[BlockedNumbers] Current blocked numbers: ${_blockedNumbers.length} numbers',
-      );
-
-      final serverNumbers = await BlockApi.updateBlockedNumbers(
-        _blockedNumbers.map((bn) => bn.number).toList(),
-      );
-      log(
-        '[BlockedNumbers] Server update response: ${serverNumbers.length} numbers',
-      );
-
-      await _saveBlockedNumbers(
-        serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
-      );
-      log('[BlockedNumbers] Number added and saved successfully');
+      log('[BlockedNumbers] Updating server with new blocked list...');
+      final serverNumbers = await BlockApi.updateBlockedNumbers(currentList);
+      log('[BlockedNumbers] Server update successful.');
     } catch (e) {
-      log('[BlockedNumbers] Error adding blocked number: $e');
-      await _saveBlockedNumbers(_blockedNumbers);
-      rethrow;
+      log('[BlockedNumbers] Error updating server blocked numbers: $e');
     }
   }
 
   Future<void> removeBlockedNumber(String number) async {
-    try {
-      log('[BlockedNumbers] Removing blocked number: $number');
-      _blockedNumbers.removeWhere((bn) => bn.number == number);
-      log(
-        '[BlockedNumbers] Current blocked numbers: ${_blockedNumbers.length} numbers',
-      );
-
-      final serverNumbers = await BlockApi.updateBlockedNumbers(
-        _blockedNumbers.map((bn) => bn.number).toList(),
-      );
-      log(
-        '[BlockedNumbers] Server update response: ${serverNumbers.length} numbers',
-      );
-
-      await _saveBlockedNumbers(
-        serverNumbers.map((n) => BlockedNumber(number: n)).toList(),
-      );
-      log('[BlockedNumbers] Number removed and saved successfully');
-    } catch (e) {
-      log('[BlockedNumbers] Error removing blocked number: $e');
-      await _saveBlockedNumbers(_blockedNumbers);
-      rethrow;
+    if (!_blockedNumbersBox.isOpen) {
+      log('[BlockedNumbers] Blocked numbers box not open, cannot remove.');
+      return;
     }
-  }
+    final normalizedNumber = normalizePhone(number);
+    _blockedNumbers.removeWhere(
+      (bn) => normalizePhone(bn.number) == normalizedNumber,
+    );
+    final currentList = _blockedNumbersBox.values.toList().cast<String>();
+    if (currentList.remove(normalizedNumber)) {
+      await _blockedNumbersBox.clear();
+      await _blockedNumbersBox.addAll(currentList);
+    }
 
-  Future<void> _saveBlockedNumbers(List<BlockedNumber> numbers) async {
     try {
-      log('[BlockedNumbers] Saving blocked numbers...');
-      final jsonList = numbers.map((number) => number.toJson()).toList();
-      await _storage.write('blocked_numbers', jsonList);
-      _blockedNumbers = numbers;
-      log(
-        '[BlockedNumbers] Numbers saved successfully: ${_blockedNumbers.length} numbers',
-      );
+      log('[BlockedNumbers] Updating server after removing blocked number...');
+      await BlockApi.updateBlockedNumbers(currentList);
+      log('[BlockedNumbers] Server update successful after removal.');
     } catch (e) {
-      log('[BlockedNumbers] Error saving blocked numbers: $e');
-      rethrow;
+      log('[BlockedNumbers] Error updating server after removal: $e');
     }
   }
 
@@ -247,78 +286,153 @@ class BlockedNumbersController {
   }
 
   Future<void> setAutoBlockDanger(bool value) async {
+    if (!_settingsBox.isOpen) {
+      log('[BlockedNumbers] Settings box not open.');
+      return;
+    }
     _isAutoBlockDanger = value;
-    await _storage.write('isAutoBlockDanger', value);
+    await _settingsBox.put('isAutoBlockDanger', value);
     if (value) {
       await _loadDangerNumbers();
     }
   }
 
   Future<void> setBombCallsBlocked(bool value) async {
+    if (!_settingsBox.isOpen) {
+      log('[BlockedNumbers] Settings box not open.');
+      return;
+    }
     _isBombCallsBlocked = value;
-    await _storage.write('isBombCallsBlocked', value);
+    await _settingsBox.put('isBombCallsBlocked', value);
     if (value) {
       await _loadBombCallsNumbers();
     }
   }
 
   Future<void> setBombCallsCount(int count) async {
+    if (!_settingsBox.isOpen) {
+      log('[BlockedNumbers] Settings box not open.');
+      return;
+    }
     _bombCallsCount = count;
-    await _storage.write('bombCallsCount', count);
+    await _settingsBox.put('bombCallsCount', count);
     if (_isBombCallsBlocked) {
       await _loadBombCallsNumbers();
     }
   }
 
-  bool isNumberBlocked(String phoneNumber, {bool addHistory = false}) {
-    String? blockType;
+  Future<bool> isNumberBlockedAsync(
+    String phoneNumber, {
+    bool addHistory = false,
+  }) async {
+    const settingsBoxName = 'settings';
+    const blockedNumbersBoxName = 'blocked_numbers';
+    if (!Hive.isBoxOpen(settingsBoxName) ||
+        !Hive.isBoxOpen(blockedNumbersBoxName)) {
+      log(
+        '[BlockedNumbers] Required boxes not open. Cannot check block status.',
+      );
+      return false;
+    }
 
-    // 위험번호 자동 차단 체크
-    if (_isAutoBlockDanger && _dangerNumbers.contains(phoneNumber)) {
-      blockType = 'danger';
+    String? blockType;
+    final normalizedPhoneNumber = normalizePhone(phoneNumber);
+
+    final isTodayBlockedSetting =
+        _settingsBox.get('isTodayBlocked', defaultValue: false) as bool;
+    final todayBlockDateStr = _settingsBox.get('todayBlockDate') as String?;
+    DateTime? todayBlockDate;
+    if (todayBlockDateStr != null) {
+      try {
+        todayBlockDate = DateTime.parse(todayBlockDateStr);
+      } catch (_) {}
     }
-    // 통화 횟수 기반 차단 체크
-    else if (_isBombCallsBlocked && _bombCallsNumbers.contains(phoneNumber)) {
-      blockType = 'bomb_calls';
-    }
-    // 오늘 상담 차단 체크
-    else if (_isTodayBlocked && _todayBlockDate != null) {
+
+    if (isTodayBlockedSetting && todayBlockDate != null) {
       final now = DateTime.now();
       final today = DateTime(
-        _todayBlockDate!.year,
-        _todayBlockDate!.month,
-        _todayBlockDate!.day,
+        todayBlockDate.year,
+        todayBlockDate.month,
+        todayBlockDate.day,
       );
       final tomorrow = today.add(const Duration(days: 1));
-
       if (now.isBefore(tomorrow)) {
         blockType = 'today';
       } else {
-        setTodayBlocked(false);
+        log('[BlockedNumbers] Today block expired, should be reset.');
       }
     }
-    // 모르는번호 차단 체크
-    else if (_isUnknownBlocked) {
-      final savedContacts = _contactsController.getSavedContacts();
-      if (!savedContacts.any((contact) => contact.phoneNumber == phoneNumber)) {
-        blockType = 'unknown';
+
+    final isUnknownBlockedSetting =
+        _settingsBox.get('isUnknownBlocked', defaultValue: false) as bool;
+    if (blockType == null && isUnknownBlockedSetting) {
+      try {
+        final savedContacts = await _contactsController.getLocalContacts();
+        if (!savedContacts.any(
+          (contact) => contact.phoneNumber == normalizedPhoneNumber,
+        )) {
+          blockType = 'unknown';
+        }
+      } catch (e) {
+        log('[BlockedNumbers] Error checking unknown number: $e');
       }
     }
-    // 사용자가 추가한 번호 체크 (포함)
-    else if (_blockedNumbers.any(
-      (blocked) => phoneNumber.contains(blocked.number),
-    )) {
-      blockType = 'user';
+
+    if (blockType == null) {
+      final blockedListBox = Hive.box('blocked_numbers');
+      if (!blockedListBox.isOpen) {
+        log('[BlockedNumbers] blocked_numbers box became closed unexpectedly.');
+        return false;
+      }
+      final blockedList = blockedListBox.values.toList().cast<String>();
+      if (blockedList.any(
+        (blockedNum) =>
+            normalizedPhoneNumber.contains(normalizePhone(blockedNum)),
+      )) {
+        blockType = 'user';
+      }
+    }
+
+    if (blockType == null && _isInitialized) {
+      final isAutoBlockDangerSetting =
+          _settingsBox.get('isAutoBlockDanger', defaultValue: false) as bool;
+      if (isAutoBlockDangerSetting &&
+          _dangerNumbers.contains(normalizedPhoneNumber)) {
+        blockType = 'danger';
+      }
+      final isBombCallsBlockedSetting =
+          _settingsBox.get('isBombCallsBlocked', defaultValue: false) as bool;
+      if (blockType == null &&
+          isBombCallsBlockedSetting &&
+          _bombCallsNumbers.contains(normalizedPhoneNumber)) {
+        blockType = 'bomb_calls';
+      }
+    } else if (blockType == null && !_isInitialized) {
+      log(
+        '[BlockedNumbers] Controller not initialized, skipping danger/bomb checks.',
+      );
     }
 
     if (blockType != null) {
-      // 인커밍일 때만 차단 이력 추가
       if (addHistory) {
-        _addBlockedHistory(phoneNumber, blockType);
+        const historyBoxName = 'blocked_history';
+        if (Hive.isBoxOpen(historyBoxName)) {
+          await _addBlockedHistory(normalizedPhoneNumber, blockType);
+        } else {
+          log('[BlockedNumbers] History box not open, cannot add history.');
+        }
       }
       return true;
     }
 
+    return false;
+  }
+
+  @Deprecated('Use isNumberBlockedAsync instead')
+  bool isNumberBlocked(String phoneNumber, {bool addHistory = false}) {
+    log(
+      '[BlockedNumbers] Warning: Synchronous isNumberBlocked called. Returns false.',
+    );
     return false;
   }
 }

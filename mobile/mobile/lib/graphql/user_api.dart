@@ -1,5 +1,6 @@
 import 'dart:developer';
-import 'package:get_storage/get_storage.dart';
+// import 'package:get_storage/get_storage.dart'; // 제거
+import 'package:hive_ce/hive.dart'; // Hive 추가
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'client.dart'; // 위에서 만든 client.dart
@@ -22,13 +23,13 @@ class UserApi {
           validUntil
           region
           grade
-          blockList
+          # blockList 제거됨 (GraphQL 주석 # 사용)
         }
       }
     }
   ''';
 
-  static Future<void> userLogin({
+  static Future<Map<String, dynamic>?> userLogin({
     required String loginId,
     required String password,
     required String phoneNumber,
@@ -57,33 +58,34 @@ class UserApi {
     if (token == null) {
       throw Exception('accessToken이 null');
     }
-    // 저장 (기존)
+    // accessToken 저장 (GraphQLClientManager 내부에서 Hive 사용)
     GraphQLClientManager.accessToken = token;
 
-    // 새로 반환된 user
-    final userData = data['user'];
+    final userData = data['user'] as Map<String, dynamic>?; // 타입 명시
     if (userData == null) {
       throw Exception('user 필드가 null임');
     }
-    print('[[userLogin]] user=$userData');
+    log('[[userLogin]] user=$userData');
 
-    // GetStorage 에 유저정보 저장
-    final box = GetStorage();
-    box.write('userId', userData['id']);
-    box.write('userName', userData['name']);
-    box.write('userType', userData['userType']);
-    box.write('loginStatus', true);
-    box.write('userValidUntil', userData['validUntil'] ?? '');
-    box.write('userRegion', userData['region'] ?? '');
-    box.write('userGrade', userData['grade'] ?? '');
+    // Hive 'auth' Box 에 유저정보 저장
+    final authBox = Hive.box('auth');
+    await authBox.put('userId', userData['id']);
+    await authBox.put('userName', userData['name']);
+    await authBox.put('userType', userData['userType']);
+    await authBox.put('loginStatus', true);
+    await authBox.put('userValidUntil', userData['validUntil'] ?? '');
+    await authBox.put('userRegion', userData['region'] ?? '');
+    await authBox.put('userGrade', userData['grade'] ?? '');
+    // 자동 로그인을 위해 ID/PW/번호 저장 (GraphQLClientManager 함수 사용)
+    await GraphQLClientManager.saveLoginCredentials(
+      loginId,
+      password,
+      phoneNumber,
+    );
 
-    // 차단 목록 저장 부분 제거
-    // final blockList = userData['blockList'] ?? [];
-    // log('[UserApi.userLogin] blockList=$blockList');
-    // box.write(
-    //   'blocked_numbers',
-    //   blockList.map((number) => {'number': number}).toList(),
-    // );
+    // 차단 목록 저장 부분은 이미 제거됨
+
+    return data; // 결과 데이터 반환 (필요 시 사용)
   }
 
   // ==================== 2) userChangePassword ====================
@@ -115,13 +117,19 @@ class UserApi {
     );
 
     final result = await client.mutate(opts);
-    GraphQLClientManager.handleExceptions(result);
+    // handleExceptions 호출 (Future 반환하므로 await 추가)
+    await GraphQLClientManager.handleExceptions(result);
 
     final data = result.data?['userChangePassword'];
     if (data == null) {
       throw Exception('비밀번호 변경 응답이 null');
     }
     final success = data['success'] as bool? ?? false;
+    // 성공 시 저장된 비밀번호 업데이트 (선택적)
+    if (success) {
+      final authBox = Hive.box('auth');
+      await authBox.put('savedPassword', newPassword);
+    }
     return success;
   }
 

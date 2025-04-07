@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:get_storage/get_storage.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/graphql/client.dart';
@@ -33,12 +33,12 @@ class _SettingsScreenState extends State<SettingsScreen>
   bool _overlayGranted = false;
 
   /// 유저 정보
-  late String _phoneNumber; // 내 휴대폰번호
-  late String _loginId; // 아이디
-  late String _userName; // 이름
-  late String _userRegion;
-  late String _validUntil; // 만료일(문자열)
-  late String _userGrade; // 등급
+  String _phoneNumber = '(unknown)';
+  String _loginId = '(no id)';
+  String _userName = '(no name)';
+  String _userRegion = '(no region)';
+  String _validUntil = '';
+  String _userGrade = '일반';
 
   // 업데이트 관련
   String _serverVersion = ''; // 서버에서 조회한 버전
@@ -51,29 +51,19 @@ class _SettingsScreenState extends State<SettingsScreen>
   // 콜폭 차단 횟수 입력 컨트롤러
   late final TextEditingController _bombCallsCountController;
 
+  // Hive Box 사용
+  Box get _authBox => Hive.box('auth');
+
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
 
-    final box = GetStorage();
+    // Hive에서 유저 정보 읽어오기
+    _loadUserInfo();
 
-    // 1) 저장된 유저정보 읽어오기
-    _phoneNumber = box.read<String>('myNumber') ?? '(unknown)';
-    _loginId = box.read<String>('savedLoginId') ?? '(no id)';
-    _userName = box.read<String>('userName') ?? '(no name)';
-    _userRegion = box.read<String>('userRegion') ?? '(no region)';
-    _userGrade = box.read<String>('userGrade') ?? '일반';
-
-    final rawValidUntil = box.read<String>(
-      'userValidUntil',
-    ); // 예: "1689730000" or ISO
-    _validUntil = formatDateString(rawValidUntil ?? '');
-
-    // 2) 현재 기본 전화앱인지 / 오버레이권한 인지 체크
     _checkStatus();
-
     _checkVersionManually();
 
     // 3) 차단 설정 컨트롤러 초기화
@@ -260,6 +250,20 @@ class _SettingsScreenState extends State<SettingsScreen>
       context: context,
       builder: (context) => BlockedHistoryDialog(history: history),
     );
+  }
+
+  // Hive에서 사용자 정보 로드 메소드 추가
+  void _loadUserInfo() {
+    // 기본값을 사용하여 안전하게 로드
+    _phoneNumber = _authBox.get('myNumber', defaultValue: '(unknown)');
+    _loginId = _authBox.get('savedLoginId', defaultValue: '(no id)');
+    _userName = _authBox.get('userName', defaultValue: '(no name)');
+    _userRegion = _authBox.get('userRegion', defaultValue: '(no region)');
+    _userGrade = _authBox.get('userGrade', defaultValue: '일반');
+    final rawValidUntil =
+        _authBox.get('userValidUntil', defaultValue: '') as String;
+    _validUntil = formatDateString(rawValidUntil);
+    // setState는 initState에서 불필요
   }
 
   @override

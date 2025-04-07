@@ -5,12 +5,13 @@ import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/widgets/notification_dialog.dart';
 import 'package:provider/provider.dart';
-import 'package:get_storage/get_storage.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
 import 'board_screen.dart';
 import 'settings_screen.dart';
+import 'dart:developer';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -21,7 +22,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
-  final _box = GetStorage();
+  Box get _notificationsBox => Hive.box('notifications');
   int _notificationCount = 0;
   StreamSubscription? _notificationSub;
 
@@ -39,9 +40,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initializeApp();
+
+    _initializePostLogin();
 
     NativeDefaultDialerMethods.notifyNativeAppInitialized();
+    log('[HomeScreen] Native app initialized notification sent.');
 
     _loadNotificationCount();
     _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((
@@ -55,6 +58,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _notificationSub?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
@@ -72,19 +76,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _loadNotificationCount() {
     if (!mounted) return;
 
-    final notifications = List<Map<String, dynamic>>.from(
-      _box.read('notifications') ?? [],
-    );
     setState(() {
-      _notificationCount = notifications.length;
+      _notificationCount = _notificationsBox.length;
     });
+    log('[HomeScreen] Loaded notification count: $_notificationCount');
   }
 
   void _toggleSearch() {
-    // 검색 실행
     final number = _searchController.text.trim();
     if (number.isNotEmpty) {
-      // 액션바에서 직접 검색할 때는 isRequested: true
       Navigator.pushNamed(
         context,
         '/search',
@@ -105,25 +105,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _initializeApp() async {
-    final appController = context.read<AppController>();
-
-    // 이미 초기화된 경우 리턴
-    if (appController.isInitialized) {
-      return;
-    }
-
-    // 첫 프레임 렌더링 후 초기화 수행
+  Future<void> _initializePostLogin() async {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await appController.initializeApp();
-      await appController.configureBackgroundService();
-      await appController.startBackgroundService();
+      if (mounted) {
+        try {
+          final appController = context.read<AppController>();
+          await appController.initializePostLoginData();
+        } catch (e) {
+          log('[HomeScreen] Error initializing post-login data: $e');
+        }
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final appController = context.read<AppController>();
+    final appController = context.watch<AppController>();
 
     return Scaffold(
       appBar: AppBar(
@@ -226,7 +223,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             valueListenable: appController.isInitializingNotifier,
             builder: (context, isInitializing, child) {
               if (!isInitializing) return const SizedBox.shrink();
-
               return Container(
                 color: Colors.black.withOpacity(0.5),
                 child: Center(
@@ -261,9 +257,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         currentIndex: _currentIndex,
         onTap: (idx) => setState(() => _currentIndex = idx),
         type: BottomNavigationBarType.fixed,
-        // 스타일 커스터마이징
         backgroundColor: Colors.white,
-        elevation: 0, // 윗선 제거
+        elevation: 0,
         selectedItemColor: Colors.black,
         unselectedItemColor: Colors.grey,
         showSelectedLabels: true,

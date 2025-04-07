@@ -1,7 +1,9 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:get_storage/get_storage.dart';
+// import 'package:get_storage/get_storage.dart'; // 제거
+import 'package:hive_ce/hive.dart'; // Hive 추가
 import 'package:mobile/graphql/user_api.dart';
+import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,7 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _loginIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
-  late final String _myNumber; // 내 휴대폰번호
+  String _myNumber = ''; // 초기값 설정
   bool _loading = false;
 
   // "아이디/비번 기억하기" 체크 여부
@@ -23,23 +25,29 @@ class _LoginScreenState extends State<LoginScreen> {
   // 비밀번호 보이기/숨기기
   bool _showPassword = false;
 
-  final box = GetStorage();
+  // final box = GetStorage(); // 제거
+  Box get _authBox => Hive.box('auth'); // Hive auth Box 사용
 
   @override
   void initState() {
     super.initState();
+    _loadInitialData();
+  }
 
-    // 1) 내 휴대폰번호 가져오기
-    _myNumber = box.read<String>('myNumber') ?? '';
+  // 초기 데이터 로드 (myNumber, savedId/pw)
+  void _loadInitialData() {
+    _myNumber = _authBox.get('myNumber', defaultValue: '') as String;
+    final savedId = _authBox.get('savedLoginId') as String?;
+    final savedPw = _authBox.get('savedPassword') as String?;
 
-    // 2) 저장된 아이디/비번이 있는지 확인
-    final savedId = box.read<String>('savedLoginId');
-    final savedPw = box.read<String>('savedPassword');
+    // 저장된 ID/PW 있으면 입력 필드에 설정
+    if (savedId != null) _loginIdCtrl.text = savedId;
+    if (savedPw != null) _passwordCtrl.text = savedPw;
 
-    if (savedId != null && savedPw != null) {
-      // 자동 로그인 로직이 필요하다면 주석 해제
-      // _autoLogin(savedId, savedPw);
-    }
+    // 저장된 정보가 있다면 _rememberMe 기본값 true 유지, 없으면 false
+    _rememberMe = (savedId != null && savedPw != null);
+
+    // 자동 로그인 로직 제거 (user_api 또는 client 에서 처리)
   }
 
   /// 로그인 버튼 or Enter key
@@ -50,27 +58,31 @@ class _LoginScreenState extends State<LoginScreen> {
       final loginId = _loginIdCtrl.text.trim();
       final password = _passwordCtrl.text.trim();
 
-      // 아이디/비번 체크
       if (loginId.isEmpty || password.isEmpty) {
         throw Exception('아이디와 비번을 모두 입력해주세요.');
       }
-
-      // 전화번호 체크
       if (_myNumber.isEmpty) {
-        throw Exception('전화번호를 인식할수 없습니다.');
+        throw Exception('전화번호를 인식할수 없습니다. 앱을 재시작해주세요.');
       }
 
-      // 로그인 호출
+      // 로그인 호출 (내부에서 Hive에 토큰 저장)
       await UserApi.userLogin(
         loginId: loginId,
         password: password,
         phoneNumber: _myNumber,
       );
 
-      // 아이디/비번 기억하기
+      // 아이디/비번 기억하기 체크 시 Hive에 저장
       if (_rememberMe) {
-        box.write('savedLoginId', loginId);
-        box.write('savedPassword', password);
+        await GraphQLClientManager.saveLoginCredentials(
+          loginId,
+          password,
+          _myNumber,
+        );
+      } else {
+        // 체크 해제 시 저장된 정보 삭제 (선택적)
+        await _authBox.delete('savedLoginId');
+        await _authBox.delete('savedPassword');
       }
 
       if (!mounted) return;
@@ -78,7 +90,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 

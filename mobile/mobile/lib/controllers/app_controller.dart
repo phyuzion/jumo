@@ -1,6 +1,8 @@
 // lib/controllers/app_controller.dart
+import 'dart:convert';
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
@@ -11,10 +13,11 @@ import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 
 class AppController {
   final PhoneStateController phoneStateController;
@@ -22,7 +25,9 @@ class AppController {
   final CallLogController callLogController;
   final SmsController smsController;
   final BlockedNumbersController blockedNumbersController;
-  final box = GetStorage();
+  Box get _settingsBox => Hive.box('settings');
+  Box get _notificationsBox => Hive.box('notifications');
+  Box get _displayNotiIdsBox => Hive.box('display_noti_ids');
 
   // 로딩 상태 관리
   final _isInitializing = ValueNotifier<bool>(false);
@@ -48,34 +53,49 @@ class AppController {
   }
 
   Future<void> initializeApp() async {
-    // 이미 초기화된 경우 리턴
+    // 로그인 불필요한 초기화만 수행
+    log('[AppController] Performing pre-login initialization...');
     if (_isInitialized) {
-      log('App already initialized, skipping...');
+      log('[AppController] Already pre-initialized, skipping...');
       return;
     }
-
-    _isInitializing.value = true;
     try {
-      _initializationMessage = '전화 상태 감지 시작 중...';
+      // 1. 전화 상태 감지 시작
+      _initializationMessage = '전화 상태 감지 서비스 시작 중...';
       phoneStateController.startListening();
 
-      _initializationMessage = '연락처 동기화 중...';
-      await contactsController.syncContactsAll();
+      // 2. 로컬 알림 초기화
+      _initializationMessage = '알림 서비스 초기화 중...';
+      await LocalNotificationService.initialize();
 
-      _initializationMessage = '차단 번호 초기화 중...';
-      await blockedNumbersController.initialize();
+      // 3. 백그라운드 서비스 설정 (시작은 로그인 후)
+      _initializationMessage = '백그라운드 서비스 설정 중...';
+      await configureBackgroundService();
 
-      _initializationMessage = '통화 기록 새로고침 중...';
-      await callLogController.refreshCallLogs();
+      // 4. 네이티브 앱 초기화 완료 알림 (HomeScreen에서 호출)
+      // log('[AppController] Notifying native app initialized...');
+      // await NativeDefaultDialerMethods.notifyNativeAppInitialized();
 
-      _isInitialized = true; // 초기화 완료 표시
+      // 5. 앱 업데이트 확인 (선택적 - 로그인 전 실행 가능)
+      _initializationMessage = '앱 업데이트 확인 중...';
+      // await checkUpdate(); // 로그인 후 또는 다른 시점으로 이동 고려
+
+      _isInitialized = true;
+      log('[AppController] Pre-login initialization complete.');
+    } catch (e) {
+      log('[AppController] Error during pre-login initialization: $e');
     } finally {
-      _isInitializing.value = false;
+      // _isInitializing.value = false; // 제거
     }
 
-    await LocalNotificationService.initialize();
-    await smsController.refreshSms();
-    await checkUpdate();
+    // --- 아래 로직은 로그인 *후* HomeScreen 등에서 별도 호출 ---
+    // await blockedNumbersController.initialize();
+    // await callLogController.refreshCallLogs();
+    // await smsController.refreshSms();
+    // final service = FlutterBackgroundService();
+    // if (await service.isRunning()) {
+    //   service.invoke('startContactSyncNow');
+    // }
   }
 
   Future<void> checkUpdate() async {
@@ -126,7 +146,12 @@ class AppController {
       await removeExpiredNotifications();
     });
 
-    // 예시: 안드로이드 config
+    // 통화 UI 업데이트 이벤트 리스너 제거
+    // service.on('updateCallUI').listen((event) {
+    //    // TODO: 통화 중 화면에 시간 업데이트 등 이벤트 전달
+    // });
+
+    // 안드로이드/iOS 설정
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
@@ -134,73 +159,91 @@ class AppController {
         autoStart: false,
         isForegroundMode: false,
         notificationChannelId: 'jumo_data_sync_channel',
-        initialNotificationTitle: 'Data Sync Service',
-        initialNotificationContent: 'Initializing...',
+        initialNotificationTitle: 'JUMO 서비스',
+        initialNotificationContent: '데이터 동기화 및 통화 서비스 실행 중',
       ),
-      iosConfiguration: IosConfiguration(
-        onForeground: onStart,
-        autoStart: false,
-      ),
+      iosConfiguration: IosConfiguration(autoStart: false),
     );
   }
 
   List<Map<String, dynamic>> getNotifications() {
-    return List<Map<String, dynamic>>.from(box.read('notifications') ?? []);
+    final notifications = _notificationsBox.values.toList();
+    try {
+      return notifications.cast<Map<String, dynamic>>().toList();
+    } catch (e) {
+      log('[AppController] Error casting notifications from Hive: $e');
+      return [];
+    }
   }
 
   // 만료된 알림 제거
   Future<void> removeExpiredNotifications() async {
     final notifications = getNotifications();
-    final now = DateTime.now().toUtc(); // UTC로 변환
-
+    final now = DateTime.now().toUtc();
     final validNotifications =
         notifications.where((notification) {
           final validUntilStr = notification['validUntil'] as String?;
           if (validUntilStr == null) return true;
-          final validUntil = parseServerTime(validUntilStr);
-          return validUntil?.isAfter(now) ?? true;
+          try {
+            final validUntil = DateTime.parse(validUntilStr).toUtc();
+            return validUntil.isAfter(now);
+          } catch (e) {
+            log("Error parsing validUntil date: $validUntilStr");
+            return true;
+          }
         }).toList();
 
     if (validNotifications.length != notifications.length) {
-      await box.write('notifications', validNotifications);
+      log(
+        '[AppController] Removing ${notifications.length - validNotifications.length} expired notifications.',
+      );
+      await _notificationsBox.clear();
+      await _notificationsBox.addAll(validNotifications);
       appEventBus.fire(NotificationCountUpdatedEvent());
     }
   }
 
+  // 알림 저장 (내부 로직)
   Future<void> saveNotification({
     required String id,
     required String title,
     required String message,
     String? validUntil,
   }) async {
-    // 이미 표시된 알림인지 확인 (타이틀과 메시지로 체크)
-    final displayedNotiIds = box.read<List<dynamic>>('displayedNotiIds') ?? [];
+    // 표시된 알림 ID 로드 (JSON 문자열 리스트 저장 방식으로 변경)
+    final displayedListRaw =
+        _displayNotiIdsBox.get('ids', defaultValue: '[]') as String;
+    List<Map<String, dynamic>> displayedNotiIds;
+    try {
+      displayedNotiIds =
+          (jsonDecode(displayedListRaw) as List).cast<Map<String, dynamic>>();
+    } catch (_) {
+      displayedNotiIds = [];
+    }
+
     final isDisplayed = displayedNotiIds.any(
       (noti) => noti['title'] == title && noti['message'] == message,
     );
 
-    // 이미 저장된 알림인지 확인
+    // 기존 알림 로드 (getNotifications 사용)
     final notifications = getNotifications();
     final isDuplicate = notifications.any(
       (noti) => noti['title'] == title && noti['message'] == message,
     );
 
     if (!isDuplicate) {
-      notifications.insert(0, {
+      final newNotification = {
         'id': id,
         'title': title,
         'message': message,
         'timestamp': DateTime.now().toIso8601String(),
         'validUntil': validUntil,
-      });
+      };
+      await _notificationsBox.put(id, newNotification);
 
-      await box.write('notifications', notifications);
-
-      // 알림 저장 후 이벤트 발생
       appEventBus.fire(NotificationCountUpdatedEvent());
     }
 
-    // 표시되지 않은 알림만 로컬 알림으로 표시
     if (!isDisplayed) {
       await LocalNotificationService.showNotification(
         id: notifications.length,
@@ -208,30 +251,71 @@ class AppController {
         body: message,
       );
       displayedNotiIds.add({'title': title, 'message': message});
-      await box.write('displayedNotiIds', displayedNotiIds);
+      await _displayNotiIdsBox.put('ids', jsonEncode(displayedNotiIds));
     }
   }
 
   Future<void> startBackgroundService() async {
     final service = FlutterBackgroundService();
-    // already running check
     if (await service.isRunning()) {
-      log('[DataSync] Service already running!');
+      log('[AppController] Background service already running!');
       return;
     }
-    // start
     await service.startService();
-    log('[DataSync] Service started.');
+    log('[AppController] Background service started.');
   }
 
   Future<void> stopBackgroundService() async {
     final service = FlutterBackgroundService();
     if (!(await service.isRunning())) {
-      log('[DataSync] Service not running!');
+      log('[AppController] Background service not running!');
       return;
     }
-    // invoke stopService event
     service.invoke('stopService');
-    log('[DataSync] Service stop command sent.');
+    log('[AppController] Sent stop command to background service.');
   }
+
+  // 로그인 후 데이터 로딩/초기화 함수
+  Future<void> initializePostLoginData() async {
+    log('[AppController] Initializing post-login data...');
+    _isInitializing.value = true;
+    try {
+      // **** 백그라운드 서비스 시작 (로그인 후) ****
+      await startBackgroundService();
+
+      _initializationMessage = '차단 목록 동기화 중...';
+      await blockedNumbersController.initialize();
+
+      _initializationMessage = '통화 기록 동기화 중...';
+      await callLogController.refreshCallLogs();
+
+      _initializationMessage = 'SMS 기록 동기화 중...';
+      await smsController.refreshSms();
+
+      // 백그라운드 연락처 동기화 즉시 요청
+      final service = FlutterBackgroundService();
+      if (await service.isRunning()) {
+        log('[AppController] Invoking initial contact sync post-login...');
+        service.invoke('startContactSyncNow');
+      }
+
+      // 앱 업데이트 확인 (로그인 후 실행)
+      await checkUpdate();
+
+      log('[AppController] Post-login data initialization complete.');
+    } catch (e) {
+      log('[AppController] Error initializing post-login data: $e');
+    } finally {
+      _isInitializing.value = false;
+    }
+  }
+}
+
+// iOS 백그라운드 핸들러 (필요 시 구현)
+@pragma('vm:entry-point')
+Future<bool> onIosBackground(ServiceInstance service) async {
+  WidgetsFlutterBinding.ensureInitialized();
+  log('FLUTTER BACKGROUND FETCH');
+  // 필요한 백그라운드 작업 수행 (예: 알림 확인 등)
+  return true;
 }

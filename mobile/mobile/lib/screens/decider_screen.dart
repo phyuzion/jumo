@@ -2,7 +2,8 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
-import 'package:get_storage/get_storage.dart';
+// import 'package:get_storage/get_storage.dart'; // 제거
+import 'package:hive_ce/hive.dart'; // Hive 추가
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/constants.dart';
@@ -20,7 +21,8 @@ class _DeciderScreenState extends State<DeciderScreen> {
 
   bool _allPermsGranted = false;
 
-  final box = GetStorage();
+  // final box = GetStorage(); // 제거
+  Box get _authBox => Hive.box('auth'); // Hive auth Box 사용
 
   @override
   void initState() {
@@ -35,16 +37,33 @@ class _DeciderScreenState extends State<DeciderScreen> {
     final ok = await appController.checkEssentialPermissions();
 
     if (ok) {
-      if (box.read('loginStatus') != null && box.read('loginStatus') == true) {
+      // Hive에서 loginStatus 확인
+      final isLoggedIn =
+          _authBox.get('loginStatus', defaultValue: false) as bool;
+      if (isLoggedIn) {
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        final myNumber = await NativeMethods.getMyPhoneNumber();
-        log('myNumber=$myNumber');
-        if (myNumber == '') {
-          //kill app
+        String myNumber = '';
+        try {
+          myNumber = await NativeMethods.getMyPhoneNumber();
+        } catch (e) {
+          log('[DeciderScreen] Failed to get phone number: $e');
+          // 번호 못 가져올 시 예외 처리 (예: 에러 메시지 표시 후 앱 종료)
         }
+
+        log('myNumber=$myNumber');
+        if (myNumber.isEmpty) {
+          // TODO: 번호 없을 시 처리 (예: 사용자 안내 후 종료)
+          log('[DeciderScreen] Phone number is empty.');
+          // SystemNavigator.pop(); // 앱 종료 예시
+          // 임시로 로그인 화면으로 이동 (개선 필요)
+          Navigator.pushReplacementNamed(context, '/login');
+          return;
+        }
+
         final myRealnumber = normalizePhone(myNumber);
-        box.write('myNumber', myRealnumber);
+        // Hive에 myNumber 저장
+        await _authBox.put('myNumber', myRealnumber);
 
         Navigator.pushReplacementNamed(context, '/login');
       }

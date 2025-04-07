@@ -5,9 +5,9 @@ import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
-import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'package:provider/provider.dart';
+import 'dart:developer';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -18,9 +18,9 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   List<PhoneBookModel> _contacts = [];
-  StreamSubscription? _eventSub;
   int? _expandedIndex;
   bool _isDefaultDialer = false;
+  bool _isLoading = true;
 
   // 검색 모드 On/Off
   bool _isSearching = false;
@@ -32,14 +32,10 @@ class _ContactsScreenState extends State<ContactsScreen> {
     super.initState();
     _loadContacts();
     _checkDefaultDialer();
-    _eventSub = appEventBus.on<ContactsUpdatedEvent>().listen((event) {
-      _loadContacts();
-    });
   }
 
   @override
   void dispose() {
-    _eventSub?.cancel();
     super.dispose();
   }
 
@@ -50,16 +46,32 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _loadContacts() async {
-    final contactsCtrl = context.read<ContactsController>();
-    final list = contactsCtrl.getSavedContacts();
-
     if (!mounted) return;
-    setState(() => _contacts = list);
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final contactsCtrl = context.read<ContactsController>();
+      final list = await contactsCtrl.getLocalContacts();
+      if (!mounted) return;
+      setState(() {
+        _contacts = list;
+        _isLoading = false;
+      });
+    } catch (e) {
+      log('[ContactsScreen] Error loading contacts: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('연락처를 불러오는데 실패했습니다.')));
+      }
+    }
   }
 
   Future<void> _refreshContacts() async {
-    final contactsCtrl = context.read<ContactsController>();
-    await contactsCtrl.syncContactsAll();
     await _loadContacts();
   }
 
@@ -103,7 +115,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                       fontWeight: FontWeight.w500,
                     ),
                   )
-                  : Text(
+                  : const Text(
                     '연락처',
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                   ),
@@ -122,86 +134,92 @@ class _ContactsScreenState extends State<ContactsScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
-        child: ListView.builder(
-          itemCount: data.length,
-          itemBuilder: (ctx, i) {
-            final c = data[i];
-            final name = c.name;
-            final phone = c.phoneNumber;
-            final memo = c.memo ?? '';
-            final firstChar = name.isNotEmpty ? name.characters.first : '?';
+        child:
+            _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView.builder(
+                  itemCount: data.length,
+                  itemBuilder: (ctx, i) {
+                    final c = data[i];
+                    final name = c.name;
+                    final phone = c.phoneNumber;
+                    final firstChar =
+                        name.isNotEmpty ? name.characters.first : '?';
 
-            return Column(
-              children: [
-                if (i > 0)
-                  const Divider(
-                    color: Colors.grey,
-                    thickness: 0.5,
-                    indent: 16.0,
-                    endIndent: 16.0,
-                    height: 0,
-                  ),
-                CustomExpansionTile(
-                  key: ValueKey('${phone}_$i'),
-                  isExpanded: i == _expandedIndex,
-                  onTap: () {
-                    setState(() {
-                      _expandedIndex = i == _expandedIndex ? null : i;
-                    });
-                  },
-                  leading: CircleAvatar(
-                    radius: 16,
-                    backgroundColor: _pickColorFromChar(firstChar),
-                    child: Text(
-                      firstChar,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  title: Text(
-                    name.isNotEmpty ? name : '이름 없음',
-                    style: const TextStyle(fontSize: 16),
-                  ),
-                  subtitle: Text(
-                    phone + (memo.isNotEmpty ? ' / $memo' : ''),
-                    style: const TextStyle(fontSize: 14, color: Colors.grey),
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    return Column(
                       children: [
-                        if (_isDefaultDialer)
-                          _buildActionButton(
-                            icon: Icons.call,
-                            color: Colors.green,
-                            onPressed: () => _onTapCall(phone),
+                        if (i > 0)
+                          const Divider(
+                            color: Colors.grey,
+                            thickness: 0.5,
+                            indent: 16.0,
+                            endIndent: 16.0,
+                            height: 0,
                           ),
-                        _buildActionButton(
-                          icon: Icons.message,
-                          color: Colors.blue,
-                          onPressed: () => _onTapMessage(phone),
-                        ),
-                        _buildActionButton(
-                          icon: Icons.search,
-                          color: Colors.orange,
-                          onPressed: () => _onTapSearch(phone),
-                        ),
-                        _buildActionButton(
-                          icon: Icons.edit,
-                          color: Colors.blueGrey,
-                          onPressed: () => _onTapEdit(c),
+                        CustomExpansionTile(
+                          key: ValueKey('${phone}_$i'),
+                          isExpanded: i == _expandedIndex,
+                          onTap: () {
+                            setState(() {
+                              _expandedIndex = i == _expandedIndex ? null : i;
+                            });
+                          },
+                          leading: CircleAvatar(
+                            radius: 16,
+                            backgroundColor: _pickColorFromChar(firstChar),
+                            child: Text(
+                              firstChar,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          title: Text(
+                            name.isNotEmpty ? name : '이름 없음',
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                          subtitle: Text(
+                            phone,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                if (_isDefaultDialer)
+                                  _buildActionButton(
+                                    icon: Icons.call,
+                                    color: Colors.green,
+                                    onPressed: () => _onTapCall(phone),
+                                  ),
+                                _buildActionButton(
+                                  icon: Icons.message,
+                                  color: Colors.blue,
+                                  onPressed: () => _onTapMessage(phone),
+                                ),
+                                _buildActionButton(
+                                  icon: Icons.search,
+                                  color: Colors.orange,
+                                  onPressed: () => _onTapSearch(phone),
+                                ),
+                                _buildActionButton(
+                                  icon: Icons.edit,
+                                  color: Colors.blueGrey,
+                                  onPressed: () => _onTapEdit(c),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                       ],
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              ],
-            );
-          },
-        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _onTapAddContact,
@@ -216,9 +234,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Future<void> _onTapCall(String phoneNumber) async {
     await NativeMethods.makeCall(phoneNumber);
-    // if (await NativeDefaultDialerMethods.isDefaultDialer()) {
-    //   Navigator.of(context).pushNamed('/onCall', arguments: phoneNumber);
-    // }
   }
 
   void _onTapSearch(String phone) {
@@ -226,7 +241,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _onTapEdit(PhoneBookModel model) async {
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
@@ -234,11 +249,12 @@ class _ContactsScreenState extends State<ContactsScreen> {
               initialContactId: model.contactId,
               initialName: model.name,
               initialPhone: model.phoneNumber,
-              initialMemo: model.memo,
-              initialType: model.type,
             ),
       ),
     );
+    if (result == true) {
+      await _refreshContacts();
+    }
   }
 
   Future<void> _onTapAddContact() async {

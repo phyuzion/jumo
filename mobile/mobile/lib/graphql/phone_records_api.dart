@@ -5,16 +5,16 @@ import 'package:mobile/graphql/client.dart';
 // ↑ GraphQLClientManager (accessToken, handleExceptions 등) 이 있다고 가정
 
 class PhoneRecordsApi {
-  static const _mutation = r'''
+  static const _mutationUpsert = r'''
     mutation upsertPhoneRecords($records: [PhoneRecordInput!]!) {
       upsertPhoneRecords(records: $records)
     }
   ''';
 
-  // 신규 쿼리
-  static const _queryGetMyRecords = r'''
-    query getMyRecords {
-      getMyRecords {
+  // 신규 쿼리: 특정 전화번호 정보 조회
+  static const _queryGetPhoneRecord = r'''
+    query getPhoneRecord($phoneNumber: String!) {
+      getPhoneRecord(phoneNumber: $phoneNumber) {
         phoneNumber
         name
         memo
@@ -24,25 +24,25 @@ class PhoneRecordsApi {
     }
   ''';
 
-  /// 여러 phoneRecords 업서트
-  /// records 예: [{phoneNumber,name,memo,type,createdAt}, ...]
+  /// 단일 또는 여러 phoneRecords 업서트 (백그라운드 업데이트 및 저장 시 사용)
+  /// records 예: [{phoneNumber, name, memo?, type?, createdAt(UTC)}, ...]
   static Future<void> upsertPhoneRecords(
     List<Map<String, dynamic>> records,
   ) async {
     if (records.isEmpty) {
-      log('[PhoneRecordsApi] No records => skip.');
+      log('[PhoneRecordsApi] No records to upsert => skip.');
       return;
     }
     final client = GraphQLClientManager.client;
 
-    log('upload start');
+    log('[PhoneRecordsApi] Upserting ${records.length} records...');
     final opts = MutationOptions(
-      document: gql(_mutation),
+      document: gql(_mutationUpsert),
       variables: {'records': records},
     );
 
     final result = await client.mutate(opts);
-    GraphQLClientManager.handleExceptions(result);
+    GraphQLClientManager.handleExceptions(result); // 실패 시 Exception 발생
 
     final updated = result.data?['upsertPhoneRecords'] as bool? ?? false;
     if (updated) {
@@ -50,28 +50,33 @@ class PhoneRecordsApi {
         '[PhoneRecordsApi] upsertPhoneRecords success, count=${records.length}',
       );
     } else {
-      log('[PhoneRecordsApi] upsertPhoneRecords -> false');
+      // 서버에서 false를 반환하는 경우는 드물지만 로깅
+      log(
+        '[PhoneRecordsApi] upsertPhoneRecords returned false (data: ${result.data})',
+      );
     }
   }
 
-  /// "내 기록" 전체 조회
-  /// 반환 형식: List<Map<String, dynamic>>
-  ///   각 item = { 'phoneNumber': ..., 'name':..., 'memo':..., 'type':..., 'createdAt':... }
-  static Future<List<Map<String, dynamic>>> getMyRecords() async {
+  /// 전화번호로 "내 기록" (타입, 메모 등) 조회
+  /// 반환 형식: Map<String, dynamic>? (없으면 null)
+  ///   Map = { 'phoneNumber': ..., 'name':..., 'memo':..., 'type':..., 'createdAt':... }
+  static Future<Map<String, dynamic>?> getPhoneRecord(
+    String phoneNumber,
+  ) async {
     final client = GraphQLClientManager.client;
 
-    final opts = QueryOptions(document: gql(_queryGetMyRecords));
+    final opts = QueryOptions(
+      document: gql(_queryGetPhoneRecord),
+      variables: {'phoneNumber': phoneNumber},
+      // 필요 시 fetchPolicy 설정 (예: network-only)
+      fetchPolicy: FetchPolicy.networkOnly,
+    );
 
     final result = await client.query(opts);
-    GraphQLClientManager.handleExceptions(result);
+    GraphQLClientManager.handleExceptions(result); // 실패 시 Exception 발생
 
-    // getMyRecords 가 배열 => List<dynamic>
-    final data = result.data?['getMyRecords'] as List?;
-    if (data == null) return [];
-
-    // 각 element 는 Map<String, dynamic> 로 변환 가능
-    final List<Map<String, dynamic>> list =
-        data.map((e) => e as Map<String, dynamic>).toList();
-    return list;
+    // getPhoneRecord는 단일 객체 또는 null 반환
+    final data = result.data?['getPhoneRecord'] as Map<String, dynamic>?;
+    return data;
   }
 }

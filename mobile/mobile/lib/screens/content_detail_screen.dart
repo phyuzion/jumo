@@ -3,7 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
-import 'package:get_storage/get_storage.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:mobile/graphql/contents_api.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString()
 
@@ -21,7 +21,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   Map<String, dynamic>? _item;
   QuillController? _quillController;
 
-  final box = GetStorage();
+  Box get _authBox => Hive.box('auth');
 
   final _replyCtrl = TextEditingController();
 
@@ -30,6 +30,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   @override
   void initState() {
     super.initState();
+    currentUserId = _authBox.get('userId', defaultValue: '') as String;
     _fetchDetail();
   }
 
@@ -54,12 +55,10 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
           _quillController = QuillController.basic();
         }
       }
-
-      currentUserId = box.read<String>('userId')!;
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
