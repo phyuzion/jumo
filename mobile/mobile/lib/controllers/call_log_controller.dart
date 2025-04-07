@@ -14,12 +14,20 @@ class CallLogController {
 
   /// 통화 목록 새로 읽어서 -> 로컬 DB(Hive)에 저장 -> 백그라운드 서비스에 업로드 요청
   Future<void> refreshCallLogs() async {
+    final stopwatch = Stopwatch()..start(); // 전체 시간 측정 시작
     log('[CallLogController] Refreshing call logs...');
     try {
+      final stepWatch = Stopwatch()..start(); // 단계별 시간 측정
       final callEntries = await CallLog.get();
+      log(
+        '[CallLogController] CallLog.get() took: ${stepWatch.elapsedMilliseconds}ms, count: ${callEntries.length}',
+      );
+      stepWatch.reset();
+
       final takeCount = callEntries.length > 30 ? 30 : callEntries.length;
       final entriesToProcess = callEntries.take(takeCount);
 
+      stepWatch.start();
       final newList = <Map<String, dynamic>>[];
       for (final e in entriesToProcess) {
         final map = {
@@ -31,39 +39,38 @@ class CallLogController {
           newList.add(map);
         }
       }
-
-      // (A) 로컬 DB(Hive)에 저장 (덮어쓰기)
-      await _callLogBox.clear(); // 기존 내용 삭제
-      // Map<String, dynamic> 저장 위해 addAll 대신 put 사용 (키 필요)
-      // 또는 List<Map>을 JSON 문자열로 저장?
-      // 우선 JSON 문자열로 저장하는 방식 사용
-      await _callLogBox.put(
-        'logs',
-        jsonEncode(newList),
-      ); // 'logs' 키에 JSON 문자열 저장
       log(
-        '[CallLogController] Saved ${newList.length} call logs locally to Hive.',
+        '[CallLogController] Processing logs took: ${stepWatch.elapsedMilliseconds}ms',
       );
+      stepWatch.reset();
+
+      stepWatch.start();
+      await _callLogBox.clear();
+      await _callLogBox.put('logs', jsonEncode(newList));
+      log(
+        '[CallLogController] Saving to Hive took: ${stepWatch.elapsedMilliseconds}ms',
+      );
+      stepWatch.stop();
 
       appEventBus.fire(CallLogUpdatedEvent());
 
-      // (B) 백그라운드 서비스에 업로드 요청
       final logsForServer = _prepareLogsForServer(newList);
       if (logsForServer.isNotEmpty) {
         final service = FlutterBackgroundService();
         if (await service.isRunning()) {
-          log(
-            '[CallLogController] Invoking uploadCallLogs to background service...',
-          );
+          log('[CallLogController] Invoking uploadCallLogs...');
           service.invoke('uploadCallLogs', {'logs': logsForServer});
         } else {
-          log(
-            '[CallLogController] Background service not running, cannot upload logs now.',
-          );
+          log('[CallLogController] Background service not running for upload.');
         }
       }
     } catch (e, st) {
       log('refreshCallLogs error: $e\n$st');
+    } finally {
+      stopwatch.stop();
+      log(
+        '[CallLogController] Total refreshCallLogs took: ${stopwatch.elapsedMilliseconds}ms',
+      );
     }
   }
 

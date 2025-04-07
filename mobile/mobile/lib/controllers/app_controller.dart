@@ -49,79 +49,70 @@ class AppController {
   );
 
   Future<bool> checkEssentialPermissions() async {
-    return await PermissionController.requestAllEssentialPermissions();
+    log('[AppController] Checking essential permissions...');
+    final result = await PermissionController.requestAllEssentialPermissions();
+    log('[AppController] Permission check result: $result');
+    return result;
   }
 
   Future<void> initializeApp() async {
-    // 로그인 불필요한 초기화만 수행
     log('[AppController] Performing pre-login initialization...');
     if (_isInitialized) {
       log('[AppController] Already pre-initialized, skipping...');
       return;
     }
     try {
-      // 1. 전화 상태 감지 시작
       _initializationMessage = '전화 상태 감지 서비스 시작 중...';
       phoneStateController.startListening();
+      log('[AppController] Phone state listening started.');
 
-      // 2. 로컬 알림 초기화
       _initializationMessage = '알림 서비스 초기화 중...';
       await LocalNotificationService.initialize();
+      log('[AppController] Local notifications initialized.');
 
-      // 3. 백그라운드 서비스 설정 (시작은 로그인 후)
       _initializationMessage = '백그라운드 서비스 설정 중...';
       await configureBackgroundService();
-
-      // 4. 네이티브 앱 초기화 완료 알림 (HomeScreen에서 호출)
-      // log('[AppController] Notifying native app initialized...');
-      // await NativeDefaultDialerMethods.notifyNativeAppInitialized();
-
-      // 5. 앱 업데이트 확인 (선택적 - 로그인 전 실행 가능)
-      _initializationMessage = '앱 업데이트 확인 중...';
-      // await checkUpdate(); // 로그인 후 또는 다른 시점으로 이동 고려
+      log('[AppController] Background service configured.');
 
       _isInitialized = true;
-      log('[AppController] Pre-login initialization complete.');
-    } catch (e) {
-      log('[AppController] Error during pre-login initialization: $e');
-    } finally {
-      // _isInitializing.value = false; // 제거
+      log('[AppController] Pre-login initialization complete flag set.');
+    } catch (e, st) {
+      log('[AppController] Error during pre-login initialization: $e\n$st');
+      _isInitialized = false;
     }
-
-    // --- 아래 로직은 로그인 *후* HomeScreen 등에서 별도 호출 ---
-    // await blockedNumbersController.initialize();
-    // await callLogController.refreshCallLogs();
-    // await smsController.refreshSms();
-    // final service = FlutterBackgroundService();
-    // if (await service.isRunning()) {
-    //   service.invoke('startContactSyncNow');
-    // }
+    log('[AppController] initializeApp finished.');
   }
 
   Future<void> checkUpdate() async {
-    log('check Update');
-    final UpdateController updateController = UpdateController();
-
-    final ver = await updateController.getServerVersion();
-
-    if (ver.isNotEmpty && ver != APP_VERSION) {
-      updateController.downloadAndInstallApk();
+    log('[AppController] checkUpdate started.');
+    try {
+      final UpdateController updateController = UpdateController();
+      final ver = await updateController.getServerVersion();
+      log('[AppController] Server version: $ver, App version: $APP_VERSION');
+      if (ver.isNotEmpty && ver != APP_VERSION) {
+        log(
+          '[AppController] Update available, attempting download and install...',
+        );
+        updateController.downloadAndInstallApk();
+      } else {
+        log('[AppController] App is up to date or server version not found.');
+      }
+    } catch (e) {
+      log('[AppController] Error checking update: $e');
     }
   }
 
   Future<void> cleanupOnLogout() async {
-    // 백그라운드 서비스 정지
+    log('[AppController] cleanupOnLogout called.');
     await stopBackgroundService();
-
-    // 전화 상태 감지 중지
     phoneStateController.stopListening();
-
-    // 로컬 알림 정리
     await LocalNotificationService.cancelAllNotifications();
+    log('[AppController] Cleanup on logout finished.');
   }
 
   /// flutter_background_service config
   Future<void> configureBackgroundService() async {
+    log('[AppController] configureBackgroundService executing...');
     final service = FlutterBackgroundService();
 
     // 알림 저장 이벤트 처리
@@ -164,6 +155,7 @@ class AppController {
       ),
       iosConfiguration: IosConfiguration(autoStart: false),
     );
+    log('[AppController] Background service configuration complete.');
   }
 
   List<Map<String, dynamic>> getNotifications() {
@@ -256,57 +248,93 @@ class AppController {
   }
 
   Future<void> startBackgroundService() async {
+    log('[AppController] startBackgroundService called.');
     final service = FlutterBackgroundService();
     if (await service.isRunning()) {
       log('[AppController] Background service already running!');
       return;
     }
-    await service.startService();
-    log('[AppController] Background service started.');
+    try {
+      await service.startService();
+      log('[AppController] Background service started successfully.');
+    } catch (e) {
+      log('[AppController] Error starting background service: $e');
+    }
   }
 
   Future<void> stopBackgroundService() async {
+    log('[AppController] stopBackgroundService called.');
     final service = FlutterBackgroundService();
     if (!(await service.isRunning())) {
       log('[AppController] Background service not running!');
       return;
     }
-    service.invoke('stopService');
-    log('[AppController] Sent stop command to background service.');
+    try {
+      service.invoke('stopService');
+      log('[AppController] Sent stop command to background service.');
+    } catch (e) {
+      log('[AppController] Error sending stop command: $e');
+    }
   }
 
   // 로그인 후 데이터 로딩/초기화 함수
   Future<void> initializePostLoginData() async {
-    log('[AppController] Initializing post-login data...');
+    log('[AppController] initializePostLoginData called.');
+    final totalStopwatch = Stopwatch()..start();
     _isInitializing.value = true;
     try {
-      // **** 백그라운드 서비스 시작 (로그인 후) ****
+      // 1. 백그라운드 서비스 시작
+      final stopwatchBgService = Stopwatch()..start();
       await startBackgroundService();
+      log(
+        '[AppController] startBackgroundService (post-login) took: ${stopwatchBgService.elapsedMilliseconds}ms',
+      );
 
-      _initializationMessage = '차단 목록 동기화 중...';
-      await blockedNumbersController.initialize();
+      // 2. BlockedNumbersController 초기화 (로컬 데이터 로드 - 빠름)
+      _initializationMessage = '차단 설정 로딩 중...';
+      log('[AppController] Initializing BlockedNumbersController (local)...');
+      final stopwatchBlocked = Stopwatch()..start();
+      await blockedNumbersController.initialize(); // 로컬만 로드
+      log(
+        '[AppController] blockedNumbersController.initialize (local) took: ${stopwatchBlocked.elapsedMilliseconds}ms',
+      );
 
-      _initializationMessage = '통화 기록 동기화 중...';
-      await callLogController.refreshCallLogs();
-
-      _initializationMessage = 'SMS 기록 동기화 중...';
-      await smsController.refreshSms();
-
-      // 백그라운드 연락처 동기화 즉시 요청
+      // 3. 통화 기록/SMS/연락처 동기화는 백그라운드 서비스에 요청
+      _initializationMessage = '백그라운드 동기화 요청 중...';
+      log(
+        '[AppController] Requesting background sync for CallLog, SMS, Contacts...',
+      );
       final service = FlutterBackgroundService();
       if (await service.isRunning()) {
-        log('[AppController] Invoking initial contact sync post-login...');
+        service.invoke('refreshAndUploadCallLogs'); // 새 이벤트
+        service.invoke('refreshAndUploadSms'); // 새 이벤트
         service.invoke('startContactSyncNow');
+        // 추가: 백그라운드에서 차단 목록 등도 동기화하도록 요청
+        service.invoke('syncBlockedLists'); // 새 이벤트
+      } else {
+        log(
+          '[AppController] Background service not running, cannot invoke sync tasks.',
+        );
       }
+      log('[AppController] Invoked background sync tasks.');
 
-      // 앱 업데이트 확인 (로그인 후 실행)
+      // 4. 앱 업데이트 확인 (로그인 후 실행)
+      _initializationMessage = '업데이트 확인 중...';
+      final stopwatchUpdate = Stopwatch()..start();
       await checkUpdate();
+      log(
+        '[AppController] checkUpdate (post-login) took: ${stopwatchUpdate.elapsedMilliseconds}ms',
+      );
 
-      log('[AppController] Post-login data initialization complete.');
-    } catch (e) {
-      log('[AppController] Error initializing post-login data: $e');
+      log('[AppController] Post-login essential initialization complete.');
+    } catch (e, st) {
+      log('[AppController] Error initializing post-login data: $e\n$st');
     } finally {
       _isInitializing.value = false;
+      totalStopwatch.stop();
+      log(
+        '[AppController] Total post-login essential init took: ${totalStopwatch.elapsedMilliseconds}ms',
+      );
     }
   }
 }

@@ -8,6 +8,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:mobile/graphql/phone_records_api.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:crypto/crypto.dart';
 
 // compute 함수를 사용하기 위해 top-level 함수로 분리
 List<PhoneBookModel> _parseContacts(List<Contact> contacts) {
@@ -47,9 +48,29 @@ Map<String, Map<String, String>> _parseContactsToMap(List<Contact> contacts) {
   return resultMap;
 }
 
+// 해시 계산 헬퍼 함수
+String _calculateContactHash(Contact contact) {
+  // 해시 계산에 사용할 데이터 조합 (ID, 이름, 첫번째 전화번호)
+  String combinedData = contact.id;
+  if (contact.displayName.isNotEmpty) {
+    combinedData += contact.displayName;
+  }
+  if (contact.phones.isNotEmpty) {
+    final phone = contact.phones.first.number.trim();
+    if (phone.isNotEmpty) {
+      combinedData += normalizePhone(phone);
+    }
+  }
+  // UTF-8 인코딩 후 SHA-256 해시 계산
+  var bytes = utf8.encode(combinedData);
+  var digest = sha256.convert(bytes);
+  return digest.toString();
+}
+
 /// 백그라운드 연락처 동기화 로직 (top-level 함수)
 Future<void> performContactBackgroundSync() async {
-  log('[BackgroundSync] Starting contact sync...');
+  final stopwatch = Stopwatch()..start(); // 전체 시간 측정
+  log('[BackgroundSync] Starting contact sync (hash-based delta)...');
   const boxName = 'last_sync_state';
   if (!Hive.isBoxOpen(boxName)) {
     log('[BackgroundSync] Box \'$boxName\' is not open. Aborting sync.');
@@ -58,8 +79,9 @@ Future<void> performContactBackgroundSync() async {
   final Box stateBox = Hive.box(boxName);
 
   try {
-    // 1. 현재 로컬 연락처 가져오기 (권한 확인 포함)
+    // 1. 현재 로컬 연락처 로드 및 현재 해시 맵 생성
     List<Contact> currentContactsRaw;
+    final stepWatch = Stopwatch()..start(); // 단계별 측정
     try {
       final hasPermission = await FlutterContacts.requestPermission(
         readonly: true,
@@ -73,92 +95,165 @@ Future<void> performContactBackgroundSync() async {
         withPhoto: false,
         withThumbnail: false,
       );
+      log(
+        '[BackgroundSync] Reading ${currentContactsRaw.length} contacts took: ${stepWatch.elapsedMilliseconds}ms',
+      );
+      stepWatch.reset();
     } catch (e) {
       log('[BackgroundSync] Error getting contacts: $e');
       return;
     }
 
-    // 백그라운드 파싱
-    final currentContactsMap = await compute(
-      _parseContactsToMap,
-      currentContactsRaw,
+    stepWatch.start();
+    final Map<String, String> currentHashes = {};
+    final Map<String, Contact> currentContactsById = {};
+    for (final contact in currentContactsRaw) {
+      final hash = _calculateContactHash(contact);
+      currentHashes[contact.id] = hash;
+      currentContactsById[contact.id] = contact;
+    }
+    log(
+      '[BackgroundSync] Calculating ${currentContactsRaw.length} hashes took: ${stepWatch.elapsedMilliseconds}ms',
     );
+    stepWatch.reset();
 
-    // 2. 이전 상태 로드 (Hive 사용 및 타입 캐스팅 수정)
-    final previousStateRaw =
-        stateBox.get(ContactsController._lastSyncStateKey) as String?;
-    Map<String, Map<String, String>> previousContactsMap = {}; // 타입 명시 및 초기화
-    if (previousStateRaw != null) {
+    // 2. 이전 상태 (해시 맵) 로드 (타입 확인 및 처리 강화)
+    stepWatch.start();
+    final previousStateData = stateBox.get(
+      ContactsController._lastSyncStateKey,
+    ); // dynamic으로 읽기
+    Map<String, String> previousHashes = {};
+    if (previousStateData != null) {
       try {
-        // jsonDecode 결과를 Map<String, dynamic>으로 먼저 받고, 내부 Map을 캐스팅
-        final decodedDynamicMap =
-            jsonDecode(previousStateRaw) as Map<String, dynamic>;
-        previousContactsMap = decodedDynamicMap.map(
-          (key, value) => MapEntry(
-            key,
-            Map<String, String>.from(value as Map),
-          ), // 내부 Map 캐스팅
-        );
+        if (previousStateData is String) {
+          // 정상 케이스: 문자열이면 JSON 디코드 후 캐스팅
+          final decodedDynamicMap =
+              jsonDecode(previousStateData) as Map<String, dynamic>;
+          previousHashes = decodedDynamicMap.map(
+            (key, value) => MapEntry(key, value as String),
+          );
+          log('[BackgroundSync] Loaded previous state from JSON string.');
+        } else if (previousStateData is Map) {
+          // 비정상 케이스: 이전에 Map으로 잘못 저장된 경우
+          log(
+            '[BackgroundSync] Warning: Loaded previous state directly as Map. Converting manually and resaving as JSON string.',
+          );
+          previousHashes = <String, String>{}; // 새 맵 생성
+          previousStateData.forEach((key, value) {
+            // 타입 체크하며 안전하게 변환
+            if (key is String && value is String) {
+              previousHashes[key] = value;
+            } else {
+              log(
+                '[BackgroundSync] Warning: Skipped invalid entry in stored map: key=${key.runtimeType}, value=${value.runtimeType}',
+              );
+            }
+          });
+          // 변환 후, 올바른 포맷(JSON 문자열)으로 다시 저장하여 문제 해결
+          await stateBox.put(
+            ContactsController._lastSyncStateKey,
+            jsonEncode(previousHashes),
+          );
+        } else {
+          // 예상치 못한 타입 저장된 경우
+          log(
+            '[BackgroundSync] Previous state has unexpected type: ${previousStateData.runtimeType}. Clearing state.',
+          );
+          await stateBox.delete(
+            ContactsController._lastSyncStateKey,
+          ); // 해당 키 데이터 삭제
+        }
       } catch (e) {
-        log('[BackgroundSync] Error decoding previous contacts state: $e');
-        previousContactsMap = {}; // 디코딩 실패 시 빈 맵 사용
+        log('[BackgroundSync] Error processing previous contact hashes: $e');
+        previousHashes = {}; // 오류 시 빈 맵 사용
+        // 오류 발생 시 이전 상태 삭제 고려 (선택적)
+        // await stateBox.delete(ContactsController._lastSyncStateKey);
       }
     }
+    log(
+      '[BackgroundSync] Loading previous state took: ${stepWatch.elapsedMilliseconds}ms',
+    );
+    stepWatch.reset();
 
-    // 3. 변경 사항 계산 (추가/수정)
+    // 3. 변경 사항 계산
+    stepWatch.start();
+    final List<String> changedContactIds = [];
+    for (final currentId in currentHashes.keys) {
+      if (!previousHashes.containsKey(currentId) ||
+          previousHashes[currentId] != currentHashes[currentId]) {
+        changedContactIds.add(currentId);
+      }
+    }
+    log(
+      '[BackgroundSync] Calculating diff took: ${stepWatch.elapsedMilliseconds}ms, changes: ${changedContactIds.length}',
+    );
+    stepWatch.reset();
+
+    // 4. 변경된 연락처 정보로 업로드 데이터 생성
+    stepWatch.start();
     final List<Map<String, dynamic>> recordsToUpsert = [];
-    final Set<String> currentIds = currentContactsMap.keys.toSet();
-    for (var id in currentIds) {
-      final currentData = currentContactsMap[id]!;
-      final previousData = previousContactsMap[id];
-      bool changed = false;
-      if (previousData == null ||
-          currentData['name'] != previousData['name'] ||
-          currentData['phoneNumber'] != previousData['phoneNumber']) {
-        changed = true;
-      }
-      if (changed) {
-        recordsToUpsert.add({
-          'phoneNumber': currentData['phoneNumber']!,
-          'name': currentData['name']!,
-          'createdAt': DateTime.now().toUtc().toIso8601String(),
-        });
+    for (final id in changedContactIds) {
+      final contact = currentContactsById[id];
+      if (contact != null && contact.phones.isNotEmpty) {
+        final normPhone = normalizePhone(contact.phones.first.number.trim());
+        final name =
+            contact.displayName.trim().isNotEmpty
+                ? contact.displayName.trim()
+                : '(No Name)';
+        if (normPhone.isNotEmpty) {
+          recordsToUpsert.add({
+            'phoneNumber': normPhone,
+            'name': name,
+            'createdAt': DateTime.now().toUtc().toIso8601String(),
+          });
+        }
       }
     }
+    log(
+      '[BackgroundSync] Preparing upload data took: ${stepWatch.elapsedMilliseconds}ms',
+    );
+    stepWatch.reset();
 
-    // 4. 삭제 로직 없음
-
-    // 5. 변경 사항 서버에 업로드 (Hive 사용)
+    // 5. 변경 사항 서버에 업로드
     if (recordsToUpsert.isNotEmpty) {
       log(
-        '[BackgroundSync] Found ${recordsToUpsert.length} changes to upload.',
+        '[BackgroundSync] Uploading ${recordsToUpsert.length} changed contacts...',
       );
+      stepWatch.start();
       try {
         await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
-        log('[BackgroundSync] Successfully attempted upload.');
-        // 업로드 성공/실패 여부와 관계없이 현재 상태 Hive에 저장
+        log(
+          '[BackgroundSync] Upload successful, took: ${stepWatch.elapsedMilliseconds}ms',
+        );
+        // 업로드 성공 시 현재 해시 맵 저장
         await stateBox.put(
           ContactsController._lastSyncStateKey,
-          jsonEncode(currentContactsMap),
+          jsonEncode(currentHashes),
         );
-        log('[BackgroundSync] Saved current state after attempt.');
+        log(
+          '[BackgroundSync] Saved current contact hashes after successful upload.',
+        );
       } catch (e) {
-        log('[BackgroundSync] Failed to upload changes: $e');
-        // 오류 로그만 남기고 재시도 안함
+        log(
+          '[BackgroundSync] Upload failed: $e, took: ${stepWatch.elapsedMilliseconds}ms',
+        );
+        // 업로드 실패 시 상태 저장 안 함 (다음 동기화 시 재시도)
       }
+      stepWatch.stop();
     } else {
-      log('[BackgroundSync] No changes detected.');
-      // 변경 없어도 현재 상태 Hive에 저장
+      log('[BackgroundSync] No contact changes detected.');
+      // 변경 없어도 현재 해시 상태 저장
       await stateBox.put(
         ContactsController._lastSyncStateKey,
-        jsonEncode(currentContactsMap),
+        jsonEncode(currentHashes),
       );
-      log('[BackgroundSync] Saved current state (no changes).');
+      log('[BackgroundSync] Saved current contact hashes (no changes).');
     }
   } catch (e, st) {
     log('[BackgroundSync] Sync error: $e\n$st');
   } finally {
-    log('[BackgroundSync] Sync finished.');
+    stopwatch.stop();
+    log('[BackgroundSync] Total sync took: ${stopwatch.elapsedMilliseconds}ms');
   }
 }
 

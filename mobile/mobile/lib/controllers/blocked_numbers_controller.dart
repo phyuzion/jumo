@@ -1,4 +1,5 @@
 import 'dart:developer';
+import 'dart:async';
 
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/graphql/block_api.dart';
@@ -42,6 +43,10 @@ class BlockedNumbersController {
   int get bombCallsCount => _bombCallsCount;
 
   Future<void> initialize() async {
+    final stopwatch = Stopwatch()..start();
+    log(
+      '[BlockedNumbers] Initialization started (loading from local cache only)...',
+    );
     if (!_settingsBox.isOpen ||
         !_blockedNumbersBox.isOpen ||
         !_historyBox.isOpen) {
@@ -49,47 +54,55 @@ class BlockedNumbersController {
       return;
     }
     try {
-      log('[BlockedNumbers] Starting initialization...');
+      final stepWatch = Stopwatch();
 
-      // 1. 기본 설정 로드
+      stepWatch.start();
       await _loadSettings();
       log(
-        '[BlockedNumbers] Settings loaded: todayBlocked=$_isTodayBlocked, unknownBlocked=$_isUnknownBlocked, autoBlockDanger=$_isAutoBlockDanger, bombCallsBlocked=$_isBombCallsBlocked, bombCallsCount=$_bombCallsCount',
+        '[BlockedNumbers] _loadSettings took: ${stepWatch.elapsedMilliseconds}ms',
       );
+      stepWatch.reset();
 
-      // 2. 서버 데이터와 동기화
-      await _loadBlockedNumbers();
+      stepWatch.start();
+      try {
+        final storedNumbers = _blockedNumbersBox.values.toList().cast<String>();
+        _blockedNumbers =
+            storedNumbers.map((n) => BlockedNumber(number: n)).toList();
+        log(
+          '[BlockedNumbers] Loaded ${_blockedNumbers.length} blocked numbers from local Hive.',
+        );
+      } catch (e) {
+        log('[BlockedNumbers] Error loading blocked numbers from Hive: $e');
+        _blockedNumbers = [];
+      }
       log(
-        '[BlockedNumbers] Blocked numbers loaded: ${_blockedNumbers.length} numbers',
+        '[BlockedNumbers] Loading blocked numbers from Hive took: ${stepWatch.elapsedMilliseconds}ms',
       );
+      stepWatch.reset();
 
-      // 3. 차단 이력 로드
+      stepWatch.start();
       await _loadBlockedHistory();
       log(
-        '[BlockedNumbers] Blocked history loaded: ${_blockedHistory.length} entries',
+        '[BlockedNumbers] _loadBlockedHistory took: ${stepWatch.elapsedMilliseconds}ms',
+      );
+      stepWatch.reset();
+
+      log(
+        '[BlockedNumbers] Danger/Bomb number loading deferred to background.',
       );
 
-      // 4. 위험번호 로드 (자동차단이 켜져있을 때만)
-      if (_isAutoBlockDanger) {
-        await _loadDangerNumbers();
-        log(
-          '[BlockedNumbers] Danger numbers loaded: ${_dangerNumbers.length} numbers',
-        );
-      }
-
-      // 5. 콜폭 번호 로드 (콜폭 차단이 켜져있을 때만)
-      if (_isBombCallsBlocked && _bombCallsCount > 0) {
-        await _loadBombCallsNumbers();
-        log(
-          '[BlockedNumbers] Bomb calls numbers loaded: ${_bombCallsNumbers.length} numbers',
-        );
-      }
-
       _isInitialized = true;
-      log('[BlockedNumbers] Initialization completed successfully');
+      log(
+        '[BlockedNumbers] Initialization completed successfully (local data only)',
+      );
     } catch (e) {
       log('[BlockedNumbers] Error during initialization: $e');
       _isInitialized = false;
+    } finally {
+      stopwatch.stop();
+      log(
+        '[BlockedNumbers] Total initialize (local only) took: ${stopwatch.elapsedMilliseconds}ms',
+      );
     }
   }
 
@@ -119,35 +132,6 @@ class BlockedNumbersController {
     } catch (e) {
       log('Error loading settings from Hive: $e');
       rethrow;
-    }
-  }
-
-  Future<void> _loadBlockedNumbers() async {
-    try {
-      log('[BlockedNumbers] Starting to load blocked numbers...');
-
-      // 서버에서 모든 번호 가져오기
-      final serverNumbers = await BlockApi.getBlockedNumbers();
-      log(
-        '[BlockedNumbers] Server numbers received: ${serverNumbers.length} numbers',
-      );
-
-      final numbersToSave =
-          serverNumbers.map((n) => normalizePhone(n)).toList();
-      await _blockedNumbersBox.clear();
-      await _blockedNumbersBox.addAll(numbersToSave);
-      _blockedNumbers =
-          numbersToSave.map((n) => BlockedNumber(number: n)).toList();
-
-      log('[BlockedNumbers] Blocked numbers updated and saved successfully');
-    } catch (e) {
-      log('[BlockedNumbers] Error loading/saving blocked numbers: $e');
-      final storedNumbers = _blockedNumbersBox.values.toList().cast<String>();
-      _blockedNumbers =
-          storedNumbers.map((n) => BlockedNumber(number: n)).toList();
-      log(
-        '[BlockedNumbers] Loaded ${_blockedNumbers.length} numbers from local cache due to error.',
-      );
     }
   }
 
