@@ -44,13 +44,12 @@ class BlockedNumbersController {
 
   Future<void> initialize() async {
     final stopwatch = Stopwatch()..start();
-    log(
-      '[BlockedNumbers] Initialization started (loading from local cache only)...',
-    );
+    log('[BlockedNumbers] Initialization started...');
     if (!_settingsBox.isOpen ||
         !_blockedNumbersBox.isOpen ||
         !_historyBox.isOpen) {
       log('[BlockedNumbers] Required boxes not open during initialize.');
+      _isInitialized = false;
       return;
     }
     try {
@@ -65,18 +64,27 @@ class BlockedNumbersController {
 
       stepWatch.start();
       try {
+        log('[BlockedNumbers] Loading blocked numbers from Server...');
+        final serverNumbers = await BlockApi.getBlockedNumbers();
+        final numbersToSave =
+            serverNumbers.map((n) => normalizePhone(n)).toList();
+        await _blockedNumbersBox.clear();
+        await _blockedNumbersBox.addAll(numbersToSave);
+        _blockedNumbers =
+            numbersToSave.map((n) => BlockedNumber(number: n)).toList();
+        log(
+          '[BlockedNumbers] Loaded and saved ${numbersToSave.length} blocked numbers from server.',
+        );
+      } catch (e) {
+        log(
+          '[BlockedNumbers] Error loading blocked numbers from server: $e. Loading from local cache...',
+        );
         final storedNumbers = _blockedNumbersBox.values.toList().cast<String>();
         _blockedNumbers =
             storedNumbers.map((n) => BlockedNumber(number: n)).toList();
-        log(
-          '[BlockedNumbers] Loaded ${_blockedNumbers.length} blocked numbers from local Hive.',
-        );
-      } catch (e) {
-        log('[BlockedNumbers] Error loading blocked numbers from Hive: $e');
-        _blockedNumbers = [];
       }
       log(
-        '[BlockedNumbers] Loading blocked numbers from Hive took: ${stepWatch.elapsedMilliseconds}ms',
+        '[BlockedNumbers] Loading/Saving blocked numbers took: ${stepWatch.elapsedMilliseconds}ms',
       );
       stepWatch.reset();
 
@@ -92,16 +100,14 @@ class BlockedNumbersController {
       );
 
       _isInitialized = true;
-      log(
-        '[BlockedNumbers] Initialization completed successfully (local data only)',
-      );
+      log('[BlockedNumbers] Initialization completed successfully');
     } catch (e) {
       log('[BlockedNumbers] Error during initialization: $e');
       _isInitialized = false;
     } finally {
       stopwatch.stop();
       log(
-        '[BlockedNumbers] Total initialize (local only) took: ${stopwatch.elapsedMilliseconds}ms',
+        '[BlockedNumbers] Total initialize took: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
   }

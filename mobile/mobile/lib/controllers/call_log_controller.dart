@@ -12,22 +12,15 @@ class CallLogController {
   Box get _callLogBox => Hive.box(storageKey);
 
   /// 통화 목록 새로 읽어서 -> 로컬 DB(Hive)에 저장하고 이벤트 발생
-  Future<List<Map<String, dynamic>>> refreshCallLogs() async {
+  /// 서버 업로드는 별도로 요청해야 함.
+  Future<void> refreshCallLogs() async {
     final stopwatch = Stopwatch()..start();
     log('[CallLogController] Refreshing call logs and saving locally...');
-    List<Map<String, dynamic>> newList = []; // 반환용
     try {
-      final stepWatch = Stopwatch()..start(); // 단계별 시간 측정
       final callEntries = await CallLog.get();
-      log(
-        '[CallLogController] CallLog.get() took: ${stepWatch.elapsedMilliseconds}ms, count: ${callEntries.length}',
-      );
-      stepWatch.reset();
-
       final takeCount = callEntries.length > 30 ? 30 : callEntries.length;
       final entriesToProcess = callEntries.take(takeCount);
-
-      stepWatch.start();
+      final newList = <Map<String, dynamic>>[];
       for (final e in entriesToProcess) {
         if (e.number != null && e.number!.isNotEmpty) {
           newList.add({
@@ -37,20 +30,16 @@ class CallLogController {
           });
         }
       }
-      log(
-        '[CallLogController] Processing logs took: ${stepWatch.elapsedMilliseconds}ms',
-      );
-      stepWatch.reset();
 
-      stepWatch.start();
-      await _callLogBox.clear();
+      // Hive 저장
       await _callLogBox.put('logs', jsonEncode(newList));
       log(
-        '[CallLogController] Saving to Hive took: ${stepWatch.elapsedMilliseconds}ms',
+        '[CallLogController] Saved ${newList.length} call logs locally to Hive.',
       );
-      stepWatch.stop();
 
+      // UI 갱신 이벤트 발생
       appEventBus.fire(CallLogUpdatedEvent());
+      log('[CallLogController] Fired CallLogUpdatedEvent.');
     } catch (e, st) {
       log('refreshCallLogs error: $e\n$st');
     } finally {
@@ -59,7 +48,6 @@ class CallLogController {
         '[CallLogController] Total refreshCallLogs (local save) took: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
-    return newList; // 저장된 목록 반환 (업로드 요청 시 사용 가능)
   }
 
   /// 서버 전송용 데이터 준비 헬퍼 (백그라운드 서비스에서 사용할 수 있도록 public 또는 static으로 변경하거나, 로직 복제)
@@ -93,7 +81,6 @@ class CallLogController {
 
   /// 외부: 로컬(Hive)에 저장된 통화 목록 불러오기
   List<Map<String, dynamic>> getSavedCallLogs() {
-    // Hive에서 JSON 문자열 읽어와서 디코딩
     final logString = _callLogBox.get('logs', defaultValue: '[]') as String;
     try {
       final decodedList = jsonDecode(logString) as List;
@@ -104,3 +91,6 @@ class CallLogController {
     }
   }
 }
+
+// CallLogUpdatedEvent 정의 제거 (app_event_bus.dart 사용)
+// class CallLogUpdatedEvent {}

@@ -13,7 +13,7 @@ import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'dart:developer';
-import 'package:flutter_background_service/flutter_background_service.dart'; // 추가
+import 'package:mobile/utils/app_event_bus.dart'; // 복구
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -33,24 +33,33 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   List<Map<String, dynamic>> _callLogs = [];
   // 연락처 정보 캐시 (Key: 정규화된 전화번호)
   Map<String, PhoneBookModel> _contactInfoCache = {};
-  StreamSubscription? _callLogRefreshSub; // 변경: 변수명 명확화
+  StreamSubscription? _callLogUpdateSub; // 이벤트 구독 변수
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadCallsAndContacts(); // 통화기록 & 연락처 로드
+    _loadCallsAndContacts(); // 초기 로드
     _checkDefaultDialer();
-    // _scrollController.addListener(() { ... }); // 제거
+    _scrollController.addListener(() {
+      /* ... */
+    });
 
-    // 백그라운드 서비스 이벤트 구독
-    _listenForBackgroundUpdates();
+    // CallLogUpdatedEvent 구독 복구
+    _callLogUpdateSub = appEventBus.on<CallLogUpdatedEvent>().listen((_) {
+      log('[RecentCallsScreen] Received CallLogUpdatedEvent. Reloading...');
+      if (mounted) {
+        _loadCallsAndContacts(); // 데이터 다시 로드
+      }
+    });
+    // 백그라운드 서비스 리스너 제거
+    // _listenForBackgroundUpdates();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _callLogRefreshSub?.cancel(); // 구독 해제
+    _callLogUpdateSub?.cancel(); // 구독 해제
     _scrollController.dispose();
     super.dispose();
   }
@@ -117,20 +126,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     final isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
     if (!mounted) return;
     setState(() => _isDefaultDialer = isDefault);
-  }
-
-  // 백그라운드 이벤트 리스너 설정
-  void _listenForBackgroundUpdates() {
-    final service = FlutterBackgroundService();
-    _callLogRefreshSub?.cancel(); // 이전 구독 취소
-    _callLogRefreshSub = service.on('callLogsRefreshed').listen((event) {
-      log('[RecentCallsScreen] Received callLogsRefreshed event. Reloading...');
-      if (mounted) {
-        // 단순히 다시 로드하여 화면 갱신
-        _loadCallsAndContacts();
-      }
-    });
-    // TODO: 다른 필요한 백그라운드 이벤트 구독 추가 가능
   }
 
   @override

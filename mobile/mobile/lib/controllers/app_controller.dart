@@ -290,21 +290,20 @@ class AppController {
         '[AppController] startBackgroundService (post-login) took: ${stopwatchBgService.elapsedMilliseconds}ms',
       );
 
-      // 2. BlockedNumbersController 초기화 (로컬)
+      // 2. BlockedNumbersController 초기화 (서버 호출 포함)
       _initializationMessage = '차단 설정 로딩 중...';
-      log('[AppController] Initializing BlockedNumbersController (local)...');
+      log('[AppController] Initializing BlockedNumbersController (server)...');
       final stopwatchBlocked = Stopwatch()..start();
       await blockedNumbersController.initialize();
       log(
-        '[AppController] blockedNumbersController.initialize (local) took: ${stopwatchBlocked.elapsedMilliseconds}ms',
+        '[AppController] blockedNumbersController.initialize (server) took: ${stopwatchBlocked.elapsedMilliseconds}ms',
       );
 
       // 3. 통화 기록 읽기 및 로컬 저장 (await)
       _initializationMessage = '통화 기록 로딩 중...';
       log('[AppController] Refreshing call logs (local save only)...');
       final stopwatchCallLog = Stopwatch()..start();
-      final callLogsToUpload =
-          await callLogController.refreshCallLogs(); // 로컬 저장 후 목록 반환
+      await callLogController.refreshCallLogs(); // await으로 호출 (로컬 저장 완료)
       log(
         '[AppController] callLogController.refreshCallLogs (local) took: ${stopwatchCallLog.elapsedMilliseconds}ms',
       );
@@ -313,28 +312,20 @@ class AppController {
       _initializationMessage = 'SMS 기록 로딩 중...';
       log('[AppController] Refreshing SMS logs (local save only)...');
       final stopwatchSms = Stopwatch()..start();
-      final smsToUpload = await smsController.refreshSms(); // 로컬 저장 후 목록 반환
+      await smsController.refreshSms(); // await으로 호출 (로컬 저장 완료)
       log(
         '[AppController] smsController.refreshSms (local) took: ${stopwatchSms.elapsedMilliseconds}ms',
       );
 
       // 5. 백그라운드 동기화/업로드 요청
-      _initializationMessage = '백그라운드 동기화 요청 중...';
-      log('[AppController] Requesting background sync/uploads...');
+      _initializationMessage = '백그라운드 작업 요청 중...';
+      log('[AppController] Requesting background tasks...');
       final service = FlutterBackgroundService();
       if (await service.isRunning()) {
-        // 통화 기록 업로드 요청 (데이터 전달 안함, 백그라운드에서 Hive 읽음)
-        service.invoke('uploadCallLogsNow'); // 새 이벤트 이름
-        // SMS 업로드 요청 (데이터 전달 안함)
-        service.invoke('uploadSmsLogsNow'); // 새 이벤트 이름
-        // 연락처 동기화 요청 (기존 유지)
+        service.invoke('uploadCallLogsNow');
         service.invoke('startContactSyncNow');
-        // 차단 목록 동기화 요청 (기존 유지)
-        service.invoke('syncBlockedLists');
       } else {
-        log(
-          '[AppController] Background service not running, cannot invoke sync tasks.',
-        );
+        log('[AppController] Background service not running.');
       }
       log('[AppController] Invoked background tasks.');
 
