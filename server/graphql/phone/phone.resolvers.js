@@ -245,30 +245,30 @@ module.exports = {
          throw new UserInputError('전화번호 입력이 필요합니다.');
       }
 
-      // 정규화된 번호로 검색 (클라이언트에서 정규화해서 보낸다고 가정)
-      const normalizedPhoneNumber = phoneNumber.trim(); // 추가 정규화 필요 시 적용
-
+      const normalizedPhoneNumber = phoneNumber.trim();
       const phoneDoc = await PhoneNumber.findOne({ phoneNumber: normalizedPhoneNumber }).lean();
-      if (!phoneDoc || !phoneDoc.records || phoneDoc.records.length === 0) {
-        return null; // 해당 번호 정보 없음
-      }
+      if (!phoneDoc || !phoneDoc.records || phoneDoc.records.length === 0) return null;
 
-      // 해당 유저의 레코드 찾기 (userId 기준)
       const userRecord = phoneDoc.records.find(
         (r) => r.userId && String(r.userId) === String(user._id)
       );
+      if (!userRecord) return null;
 
-      if (!userRecord) {
-         return null; // 사용자 레코드 없음
-      }
-
-      // createdAt을 String으로 변환 (스키마 타입 일치)
+      // createdAt 변환
+      let createdAtString = userRecord.createdAt;
       if (userRecord.createdAt instanceof Date) {
-         userRecord.createdAt = userRecord.createdAt.toISOString();
+         createdAtString = userRecord.createdAt.toISOString();
       }
 
-      // console.log('[Phone.Resolvers] getPhoneRecord found for user:', userRecord);
-      return userRecord; // Record 타입과 필드 일치
+      // 반환 객체에 phoneNumber 필드 추가 (올바른 구문)
+      return {
+         // userRecord의 모든 필드를 복사
+         ...(userRecord),
+         // phoneNumber 필드 추가
+         phoneNumber: phoneDoc.phoneNumber,
+         // 변환된 createdAt 사용 (혹시 userRecord에 Date 객체가 남아있을 경우 대비)
+         createdAt: createdAtString,
+      };
     },
   },
 };

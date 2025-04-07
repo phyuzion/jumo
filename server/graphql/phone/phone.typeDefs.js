@@ -10,6 +10,7 @@ module.exports = gql`
     memo: String
     type: Int
     createdAt: String
+    phoneNumber: String # phoneNumber 필드 추가 (Nullable 또는 Non-nullable?)
   }
 
   type PhoneNumber {
