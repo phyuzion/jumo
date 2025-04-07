@@ -32,17 +32,10 @@ async function checkAdminValid(tokenData) {
 }
 
 async function checkUserValid(tokenData) {
-  console.log("[DEBUG] checkUserValid called");
-  const startTime = Date.now();
-
   if (!tokenData?.userId) {
     throw new AuthenticationError('로그인이 필요합니다.');
   }
   const user = await User.findById(tokenData.userId);
-
-  const duration = Date.now() - startTime;
-  console.log(`[TIMER] User.findById took: ${duration}ms`);
-
   if (!user) {
     throw new ForbiddenError('유효하지 않은 유저입니다.');
   }
