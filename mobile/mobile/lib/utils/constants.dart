@@ -1,6 +1,6 @@
 import 'package:intl/intl.dart';
 
-const String APP_VERSION = '0.0.9';
+const String APP_VERSION = '0.1.0';
 const String APP_NAME = 'KOL_PHONE';
 const String APP_DOWNLOAD_LINK =
     'https://jumo-vs8e.onrender.com/download/app.apk';
