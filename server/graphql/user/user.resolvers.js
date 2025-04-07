@@ -133,15 +133,8 @@ module.exports = {
     },
 
     getUserBlockNumbers: async (_, __, { tokenData }) => {
-      console.time('getUserBlockNumbers_Total'); // 전체 시간 측정 시작
-      console.time('checkUserValid_Call');
-      const user = await checkUserValid(tokenData); // 내부 User.findById 시간 측정은 이미 추가됨
-      console.timeEnd('checkUserValid_Call');
-      console.time('ReturnBlockList');
-      const blockList = user.blockList || [];
-      console.timeEnd('ReturnBlockList');
-      console.timeEnd('getUserBlockNumbers_Total'); // 전체 시간 측정 종료
-      return blockList;
+      const user = await checkUserValid(tokenData);
+      return user.blockList || [];
     },
   },
 
