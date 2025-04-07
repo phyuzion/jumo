@@ -6,6 +6,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/io_client.dart'; // <-- IOClient
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
+import 'package:mobile/models/blocked_history.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -58,10 +59,25 @@ class GraphQLClientManager {
     }
   }
 
-  /// 로그아웃 → 토큰 제거 후 DeciderScreen 으로 이동
+  /// 로그아웃 (Hive 데이터 삭제)
   static Future<void> logout() async {
-    await _authBox.clear();
-    log('[GraphQL] Cleared auth box on logout.');
+    log('[GraphQL] Logging out and clearing user data...');
+    // 필요한 Box들을 가져와서 clear 호출 (타입 지정 없이)
+
+    try {
+      await Hive.box('auth').clear();
+      await Hive.box('notifications').clear();
+      await Hive.box('last_sync_state').clear();
+      await Hive.box<BlockedHistory>('blocked_history').clear();
+      await Hive.box('call_logs').clear();
+      await Hive.box('sms_logs').clear();
+      await Hive.box('display_noti_ids').clear();
+      await Hive.box('blocked_numbers').clear();
+
+      log('[GraphQL] Cleared user-specific Hive boxes.');
+    } catch (e) {
+      log('[GraphQL] Error clearing Hive boxes during logout: $e');
+    }
 
     NavigationController.goToDecider();
   }

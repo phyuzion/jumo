@@ -6,16 +6,16 @@ import 'package:call_e_log/call_log.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/utils/constants.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 
 class CallLogController {
   static const storageKey = 'call_logs';
   Box get _callLogBox => Hive.box(storageKey);
 
-  /// 통화 목록 새로 읽어서 -> 로컬 DB(Hive)에 저장 -> 백그라운드 서비스에 업로드 요청
-  Future<void> refreshCallLogs() async {
-    final stopwatch = Stopwatch()..start(); // 전체 시간 측정 시작
-    log('[CallLogController] Refreshing call logs...');
+  /// 통화 목록 새로 읽어서 -> 로컬 DB(Hive)에 저장하고 이벤트 발생
+  Future<List<Map<String, dynamic>>> refreshCallLogs() async {
+    final stopwatch = Stopwatch()..start();
+    log('[CallLogController] Refreshing call logs and saving locally...');
+    List<Map<String, dynamic>> newList = []; // 반환용
     try {
       final stepWatch = Stopwatch()..start(); // 단계별 시간 측정
       final callEntries = await CallLog.get();
@@ -28,15 +28,13 @@ class CallLogController {
       final entriesToProcess = callEntries.take(takeCount);
 
       stepWatch.start();
-      final newList = <Map<String, dynamic>>[];
       for (final e in entriesToProcess) {
-        final map = {
-          'number': normalizePhone(e.number ?? ''),
-          'callType': e.callType?.name ?? '',
-          'timestamp': localEpochToUtcEpoch(e.timestamp ?? 0),
-        };
-        if ((map['number'] as String).isNotEmpty) {
-          newList.add(map);
+        if (e.number != null && e.number!.isNotEmpty) {
+          newList.add({
+            'number': normalizePhone(e.number!),
+            'callType': e.callType?.name ?? '',
+            'timestamp': localEpochToUtcEpoch(e.timestamp ?? 0),
+          });
         }
       }
       log(
@@ -53,29 +51,20 @@ class CallLogController {
       stepWatch.stop();
 
       appEventBus.fire(CallLogUpdatedEvent());
-
-      final logsForServer = _prepareLogsForServer(newList);
-      if (logsForServer.isNotEmpty) {
-        final service = FlutterBackgroundService();
-        if (await service.isRunning()) {
-          log('[CallLogController] Invoking uploadCallLogs...');
-          service.invoke('uploadCallLogs', {'logs': logsForServer});
-        } else {
-          log('[CallLogController] Background service not running for upload.');
-        }
-      }
     } catch (e, st) {
       log('refreshCallLogs error: $e\n$st');
     } finally {
       stopwatch.stop();
       log(
-        '[CallLogController] Total refreshCallLogs took: ${stopwatch.elapsedMilliseconds}ms',
+        '[CallLogController] Total refreshCallLogs (local save) took: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
+    return newList; // 저장된 목록 반환 (업로드 요청 시 사용 가능)
   }
 
-  /// 서버 전송용 데이터 준비
-  List<Map<String, dynamic>> _prepareLogsForServer(
+  /// 서버 전송용 데이터 준비 헬퍼 (백그라운드 서비스에서 사용할 수 있도록 public 또는 static으로 변경하거나, 로직 복제)
+  /// 여기서는 static 으로 변경
+  static List<Map<String, dynamic>> prepareLogsForServer(
     List<Map<String, dynamic>> localList,
   ) {
     return localList.map((m) {

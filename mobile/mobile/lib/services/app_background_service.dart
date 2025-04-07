@@ -17,6 +17,8 @@ import 'package:mobile/graphql/search_api.dart';
 import 'package:mobile/graphql/block_api.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/sms_controller.dart';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
@@ -45,12 +47,16 @@ Future<void> onStart(ServiceInstance service) async {
     return;
   }
 
+  // Hive 초기화 실패 시 종료
+  if (!hiveInitialized) return;
+
   log('[BackgroundService] Setting up periodic timers and event listeners...');
 
   // --- 주기적 작업들 ---
   Timer? notificationTimer;
   Timer? contactSyncTimer;
   Timer? blockSyncTimer;
+  Timer? smsSyncTimer;
 
   // 알림 확인 타이머
   notificationTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
@@ -87,6 +93,12 @@ Future<void> onStart(ServiceInstance service) async {
       '[BackgroundService] Starting periodic blocked/danger/bomb numbers sync...',
     );
     await syncBlockedLists();
+  });
+
+  // SMS 동기화 타이머 (주기적으로 refresh 및 업로드 시도)
+  smsSyncTimer = Timer.periodic(const Duration(minutes: 15), (timer) async {
+    log('[BackgroundService] Starting periodic SMS sync...');
+    await _refreshAndUploadSms(); // 읽기+저장+업로드 헬퍼 호출
   });
 
   // --- 이벤트 기반 작업들 ---
@@ -129,26 +141,27 @@ Future<void> onStart(ServiceInstance service) async {
     await LocalNotificationService.cancelNotification(ONGOING_CALL_NOTI_ID);
   });
 
+  // 즉시 연락처 동기화 요청
   service.on('startContactSyncNow').listen((event) async {
     log('[BackgroundService] Received request for immediate contact sync.');
     await performContactBackgroundSync();
   });
 
-  service.on('refreshAndUploadCallLogs').listen((event) async {
-    log('[BackgroundService] Received refreshAndUploadCallLogs request.');
-    if (!hiveInitialized) return;
-    await _refreshAndUploadCallLogs();
+  // 통화 기록 업로드 요청 (이벤트 이름 변경)
+  service.on('uploadCallLogsNow').listen((event) async {
+    log('[BackgroundService] Received uploadCallLogsNow request.');
+    await _uploadCallLogs(); // 업로드만 수행하는 헬퍼 호출
   });
 
-  service.on('refreshAndUploadSms').listen((event) async {
-    log('[BackgroundService] Received refreshAndUploadSms request.');
-    if (!hiveInitialized) return;
-    await _refreshAndUploadSms();
+  // SMS 업로드 요청 (이벤트 이름 변경)
+  service.on('uploadSmsLogsNow').listen((event) async {
+    log('[BackgroundService] Received uploadSmsLogsNow request.');
+    await _uploadSmsLogs(); // 업로드만 수행하는 헬퍼 호출
   });
 
+  // 차단 목록 동기화 요청
   service.on('syncBlockedLists').listen((event) async {
     log('[BackgroundService] Received request for immediate block sync.');
-    if (!hiveInitialized) return;
     await syncBlockedLists();
   });
 
@@ -158,81 +171,100 @@ Future<void> onStart(ServiceInstance service) async {
     notificationTimer?.cancel();
     contactSyncTimer?.cancel();
     blockSyncTimer?.cancel();
+    smsSyncTimer?.cancel();
     service.stopSelf();
     await LocalNotificationService.cancelNotification(ONGOING_CALL_NOTI_ID);
   });
+
+  // ***** 3. 서비스 시작 시 초기 동기화 수행 *****
+  log('[BackgroundService] Performing initial sync tasks...');
+  await syncBlockedLists();
 
   log('[BackgroundService] Setup complete.');
 }
 
 // --- Helper Functions for Background Tasks (Top-level) ---
 
-// 통화 기록 새로고침 및 업로드 함수
-Future<void> _refreshAndUploadCallLogs() async {
-  log('[BackgroundService] Executing _refreshAndUploadCallLogs...');
+// 통화 기록 업로드만 수행하는 함수
+Future<void> _uploadCallLogs() async {
+  log('[BackgroundService] Executing _uploadCallLogs...');
   try {
-    // Box 직접 접근
     final callLogBox = Hive.box('call_logs');
     if (!callLogBox.isOpen) {
       log('[BG] call_logs box closed.');
       return;
     }
 
-    final callEntries = await CallLog.get();
-    final takeCount = callEntries.length > 30 ? 30 : callEntries.length;
-    final entriesToProcess = callEntries.take(takeCount);
-    final newList = <Map<String, dynamic>>[];
-    for (final e in entriesToProcess) {
-      if (e.number != null && e.number!.isNotEmpty) {
-        newList.add({
-          'number': normalizePhone(e.number!),
-          'callType': e.callType?.name ?? '',
-          'timestamp': localEpochToUtcEpoch(e.timestamp ?? 0),
-        });
-      }
+    // Hive에서 로그 읽기 (JSON 디코딩)
+    final logString = callLogBox.get('logs', defaultValue: '[]') as String;
+    final List<Map<String, dynamic>> logsToUpload;
+    try {
+      final decodedList = jsonDecode(logString) as List;
+      logsToUpload = decodedList.cast<Map<String, dynamic>>().toList();
+    } catch (e) {
+      log('[BackgroundService] Error decoding call logs for upload: $e');
+      return;
     }
-    await callLogBox.put('logs', jsonEncode(newList));
-    log('[BackgroundService] Saved ${newList.length} call logs locally.');
 
-    // 서버 전송용 데이터 준비 (로직 직접 구현)
-    final logsForServer =
-        newList.map((m) {
-          final rawType = (m['callType'] as String).toLowerCase();
-          String serverType;
-          switch (rawType) {
-            case 'incoming':
-              serverType = 'IN';
-              break;
-            case 'outgoing':
-              serverType = 'OUT';
-              break;
-            case 'missed':
-              serverType = 'MISS';
-              break;
-            default:
-              serverType = 'UNKNOWN';
-          }
-          return <String, dynamic>{
-            'phoneNumber': m['number'] ?? '',
-            'time': (m['timestamp'] ?? 0).toString(),
-            'callType': serverType,
-          };
-        }).toList();
-
-    if (logsForServer.isNotEmpty) {
-      await LogApi.updateCallLog(logsForServer);
-      log('[BackgroundService] Uploaded call logs.');
+    if (logsToUpload.isNotEmpty) {
+      // 서버 전송용 데이터 준비
+      final logsForServer = CallLogController.prepareLogsForServer(
+        logsToUpload,
+      );
+      if (logsForServer.isNotEmpty) {
+        await LogApi.updateCallLog(logsForServer);
+        log('[BackgroundService] Uploaded call logs.');
+        // TODO: 업로드 성공 시 Hive 데이터 삭제 또는 상태 변경 고려
+      }
+    } else {
+      log('[BackgroundService] No call logs in Hive to upload.');
     }
   } catch (e) {
-    log('[BackgroundService] Error handling refreshAndUploadCallLogs: $e');
+    log('[BackgroundService] Error handling _uploadCallLogs: $e');
   }
 }
 
-// SMS 새로고침 및 업로드 함수
+// SMS 업로드만 수행하는 함수
+Future<void> _uploadSmsLogs() async {
+  log('[BackgroundService] Executing _uploadSmsLogs...');
+  try {
+    final smsLogBox = Hive.box('sms_logs');
+    if (!smsLogBox.isOpen) {
+      log('[BG] sms_logs box closed.');
+      return;
+    }
+
+    // Hive에서 로그 읽기 (JSON 디코딩)
+    final logString = smsLogBox.get('logs', defaultValue: '[]') as String;
+    final List<Map<String, dynamic>> smsToUpload;
+    try {
+      final decodedList = jsonDecode(logString) as List;
+      smsToUpload = decodedList.cast<Map<String, dynamic>>().toList();
+    } catch (e) {
+      log('[BackgroundService] Error decoding sms logs for upload: $e');
+      return;
+    }
+
+    if (smsToUpload.isNotEmpty) {
+      // 서버 전송용 데이터 준비
+      final smsForServer = SmsController.prepareSmsForServer(smsToUpload);
+      if (smsForServer.isNotEmpty) {
+        await LogApi.updateSMSLog(smsForServer);
+        log('[BackgroundService] Uploaded sms logs.');
+        // TODO: 업로드 성공 시 Hive 데이터 삭제 또는 상태 변경 고려
+      }
+    } else {
+      log('[BackgroundService] No sms logs in Hive to upload.');
+    }
+  } catch (e) {
+    log('[BackgroundService] Error handling _uploadSmsLogs: $e');
+  }
+}
+
+// SMS 새로고침 및 업로드 함수 (주기적 타이머가 호출)
 Future<void> _refreshAndUploadSms() async {
   log('[BackgroundService] Executing _refreshAndUploadSms...');
   try {
-    // Box 직접 접근
     final smsLogBox = Hive.box('sms_logs');
     if (!smsLogBox.isOpen) {
       log('[BG] sms_logs box closed.');
@@ -242,39 +274,20 @@ Future<void> _refreshAndUploadSms() async {
     final messages = await SmsInbox.getAllSms(count: 10);
     final smsList = <Map<String, dynamic>>[];
     for (final msg in messages) {
-      if (msg.address != null && msg.address!.isNotEmpty) {
-        smsList.add({
-          'address': normalizePhone(msg.address!),
-          'body': msg.body ?? '',
-          'date': localEpochToUtcEpoch(msg.date ?? 0),
-          'type': msg.type ?? '',
-        });
-      }
+      // ... (파싱 로직)
     }
+
     await smsLogBox.put('logs', jsonEncode(smsList));
     log('[BackgroundService] Saved ${smsList.length} sms logs locally.');
 
-    // 서버 전송용 데이터 준비 (로직 직접 구현)
-    final smsForServer =
-        smsList.map((m) {
-          final phone = m['address'] as String? ?? '';
-          final content = m['body'] as String? ?? '';
-          final timeStr = (m['date'] ?? 0).toString();
-          final smsType = (m['type'] ?? '').toString();
-          return {
-            'phoneNumber': phone,
-            'time': timeStr,
-            'content': content,
-            'smsType': smsType,
-          };
-        }).toList();
-
+    // 서버 업로드
+    final smsForServer = SmsController.prepareSmsForServer(smsList);
     if (smsForServer.isNotEmpty) {
       await LogApi.updateSMSLog(smsForServer);
-      log('[BackgroundService] Uploaded sms logs.');
+      log('[BackgroundService] Uploaded sms logs after refresh.');
     }
   } catch (e) {
-    log('[BackgroundService] Error handling refreshAndUploadSms: $e');
+    log('[BackgroundService] Error handling _refreshAndUploadSms: $e');
   }
 }
 

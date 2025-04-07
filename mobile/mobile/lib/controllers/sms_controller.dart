@@ -52,7 +52,7 @@ class SmsController {
       stepWatch.stop();
 
       // 서버 업로드 요청 (백그라운드)
-      final smsForServer = _prepareSmsForServer(smsList);
+      final smsForServer = prepareSmsForServer(smsList);
       if (smsForServer.isNotEmpty) {
         final service = FlutterBackgroundService();
         if (await service.isRunning()) {
@@ -72,15 +72,15 @@ class SmsController {
     }
   }
 
-  /// 서버 전송용 데이터 준비
-  List<Map<String, dynamic>> _prepareSmsForServer(
+  /// 서버 전송용 데이터 준비 (static으로 변경)
+  static List<Map<String, dynamic>> prepareSmsForServer(
     List<Map<String, dynamic>> localSms,
   ) {
     return localSms.map((m) {
       final phone = m['address'] as String? ?? '';
       final content = m['body'] as String? ?? '';
       final timeStr = (m['date'] ?? 0).toString(); // epoch(int) -> string
-      final smsType = (m['type'] ?? '').toString(); // TODO: 서버 요구 타입으로 변환?
+      final smsType = (m['type'] ?? '').toString();
 
       return {
         'phoneNumber': phone,

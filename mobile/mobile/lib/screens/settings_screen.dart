@@ -562,7 +562,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             onTap: () async {
               final appController = context.read<AppController>();
               await appController.cleanupOnLogout();
-              GraphQLClientManager.logout;
+              await GraphQLClientManager.logout();
             },
           ),
         ],

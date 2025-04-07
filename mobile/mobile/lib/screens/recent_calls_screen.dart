@@ -13,7 +13,7 @@ import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'dart:developer';
-import 'package:mobile/utils/app_event_bus.dart'; // 이벤트 버스 임포트 복구
+import 'package:flutter_background_service/flutter_background_service.dart'; // 추가
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -28,13 +28,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   bool _isDefaultDialer = false;
   final _scrollController = ScrollController();
   int? _expandedIndex;
-  double _scrollPosition = 0.0;
   bool _isLoading = true; // 로딩 상태 추가
 
   List<Map<String, dynamic>> _callLogs = [];
   // 연락처 정보 캐시 (Key: 정규화된 전화번호)
   Map<String, PhoneBookModel> _contactInfoCache = {};
-  StreamSubscription? _eventSub; // 이벤트 구독 변수 복구
+  StreamSubscription? _callLogRefreshSub; // 변경: 변수명 명확화
 
   @override
   void initState() {
@@ -42,20 +41,16 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     WidgetsBinding.instance.addObserver(this);
     _loadCallsAndContacts(); // 통화기록 & 연락처 로드
     _checkDefaultDialer();
-    _scrollController.addListener(() {
-      _scrollPosition = _scrollController.position.pixels;
-    });
-    // 이벤트 구독 복구: 통화 기록 업데이트 시 화면 다시 로드
-    _eventSub = appEventBus.on<CallLogUpdatedEvent>().listen((_) {
-      log('[RecentCallsScreen] Received CallLogUpdatedEvent, reloading...');
-      _loadCallsAndContacts();
-    });
+    // _scrollController.addListener(() { ... }); // 제거
+
+    // 백그라운드 서비스 이벤트 구독
+    _listenForBackgroundUpdates();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _eventSub?.cancel(); // 구독 해제 추가
+    _callLogRefreshSub?.cancel(); // 구독 해제
     _scrollController.dispose();
     super.dispose();
   }
@@ -65,8 +60,8 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       _checkDefaultDialer();
-      // 필요 시 _loadCallsAndContacts() 호출하여 UI 갱신
-      _loadCallsAndContacts(); // 포그라운드 복귀 시 항상 갱신
+      // 포그라운드 복귀 시 데이터 다시 로드
+      _loadCallsAndContacts();
     }
   }
 
@@ -122,6 +117,20 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     final isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
     if (!mounted) return;
     setState(() => _isDefaultDialer = isDefault);
+  }
+
+  // 백그라운드 이벤트 리스너 설정
+  void _listenForBackgroundUpdates() {
+    final service = FlutterBackgroundService();
+    _callLogRefreshSub?.cancel(); // 이전 구독 취소
+    _callLogRefreshSub = service.on('callLogsRefreshed').listen((event) {
+      log('[RecentCallsScreen] Received callLogsRefreshed event. Reloading...');
+      if (mounted) {
+        // 단순히 다시 로드하여 화면 갱신
+        _loadCallsAndContacts();
+      }
+    });
+    // TODO: 다른 필요한 백그라운드 이벤트 구독 추가 가능
   }
 
   @override
