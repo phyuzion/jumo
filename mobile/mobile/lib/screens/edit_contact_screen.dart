@@ -160,22 +160,38 @@ class _EditContactScreenState extends State<EditContactScreen> {
     _showLoadingDialog();
 
     try {
-      if (isNew) {
-        await _insertDeviceContact(name, phone);
-      } else {
+      String?
+      deviceContactId; // To potentially store the ID after insert/update
+
+      // Check if we have a valid initialContactId to determine update vs insert
+      final bool isUpdateOperation =
+          widget.initialContactId != null &&
+          widget.initialContactId!.isNotEmpty;
+
+      if (isUpdateOperation) {
+        // Update existing device contact
         await _updateDeviceContact(widget.initialContactId, name);
+        deviceContactId = widget.initialContactId; // Keep the existing ID
+      } else {
+        // Insert new device contact
+        deviceContactId = await _insertDeviceContact(name, phone);
+        // Note: phone number field (_phoneCtrl) should be editable in this case, handled by `enabled: isNew` in build method.
+        // We might need to ensure _phoneCtrl.text is used for the API upsert below as well.
       }
 
+      // --- Upsert to SERVER ---
+      // Use the potentially updated or newly inserted contact details
       final recordToUpsert = {
-        'phoneNumber': phone,
-        'name': name,
+        'phoneNumber': phone, // Make sure 'phone' comes from _phoneCtrl.text
+        'name': name, // Make sure 'name' comes from _nameCtrl.text
         'memo': memo.isNotEmpty ? memo : '',
         'type': _type,
         'createdAt': DateTime.now().toUtc().toIso8601String(),
+        // Consider adding 'deviceId': deviceContactId if your backend needs it
       };
       await PhoneRecordsApi.upsertPhoneRecords([recordToUpsert]);
 
-      Navigator.pop(context);
+      Navigator.pop(context); // Pop loading dialog
 
       if (!mounted) return;
       Navigator.pop(context, true);

@@ -1,16 +1,18 @@
 // lib/graphql/client.dart
 import 'dart:async'; // TimeoutException 사용 위해 추가
 import 'dart:developer';
-import 'dart:io'; // <-- HttpClient
 import 'package:hive_ce/hive.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:http/io_client.dart'; // <-- IOClient
+import 'package:dio/dio.dart';
+import 'package:gql_dio_link/gql_dio_link.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/models/blocked_history.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
+const String kGraphQLHostname = 'jumo-vs8e.onrender.com';
+const String kGraphQLPath = '/graphql';
 
 /// GraphQL 통신 공통 로직
 class GraphQLClientManager {
@@ -63,8 +65,6 @@ class GraphQLClientManager {
   /// 로그아웃 (Hive 데이터 삭제)
   static Future<void> logout() async {
     log('[GraphQL] Logging out and clearing user data...');
-    // 필요한 Box들을 가져와서 clear 호출 (타입 지정 없이)
-
     try {
       await Hive.box('auth').clear();
       await Hive.box('notifications').clear();
@@ -74,44 +74,87 @@ class GraphQLClientManager {
       await Hive.box('sms_logs').clear();
       await Hive.box('display_noti_ids').clear();
       await Hive.box('blocked_numbers').clear();
-
       log('[GraphQL] Cleared user-specific Hive boxes.');
     } catch (e) {
       log('[GraphQL] Error clearing Hive boxes during logout: $e');
     }
-
     NavigationController.goToDecider();
   }
 
-  /// 내부 GraphQLClient 생성
-  /// - 여기에서 HttpClient + IOClient로 타임아웃을 늘려서 TimeoutException을 완화
+  // --- 싱글톤 및 초기화 로직 ---
+  static GraphQLClient? _clientInstance;
+  static Dio? _dioInstance;
+
+  // client getter (동기 방식 복구)
   static GraphQLClient get client {
-    // 1) HttpClient 구성: 연결/유휴 타임아웃을 원하는 만큼 늘린다 (예: 30초)
-    final httpClient =
-        HttpClient()
-          ..connectionTimeout = const Duration(seconds: 30)
-          ..idleTimeout = const Duration(seconds: 30);
+    if (_clientInstance != null) return _clientInstance!;
 
-    // 2) IOClient 생성 -> HttpLink 에 주입
-    final ioClient = IOClient(httpClient);
+    log('[GraphQL] Initializing GraphQL client (first time)...');
 
-    final httpLink = HttpLink(
+    // Dio 클라이언트 생성 (한 번만)
+    _dioInstance ??= Dio(
+      BaseOptions(
+        // baseUrl 제거
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        sendTimeout: const Duration(seconds: 30),
+      ),
+    );
+
+    // HttpClientAdapter 설정 제거 (SSL 오류 처리 제거)
+    // (_dioInstance!.httpClientAdapter as IOHttpClientAdapter).createHttpClient = () { ... };
+
+    // 인터셉터 설정 (한 번만)
+    if (_dioInstance!.interceptors.whereType<InterceptorsWrapper>().isEmpty) {
+      _dioInstance!.interceptors.add(
+        InterceptorsWrapper(
+          onRequest: (options, handler) {
+            final token = accessToken;
+            if (token != null)
+              options.headers['Authorization'] = 'Bearer $token';
+            options.extra['startTime'] = Stopwatch()..start();
+            // 상세 로그 필요 시 활성화
+            // log('[DioInterceptor] Requesting: ${options.method} ${options.uri} Headers: ${options.headers}');
+            return handler.next(options);
+          },
+          onResponse: (response, handler) {
+            final stopwatch =
+                response.requestOptions.extra['startTime'] as Stopwatch?;
+            if (stopwatch != null) {
+              stopwatch.stop();
+              log(
+                '[DioInterceptor] Response: ${response.statusCode} took: ${stopwatch.elapsedMilliseconds}ms URI: ${response.requestOptions.uri}',
+              );
+            }
+            return handler.next(response);
+          },
+          onError: (DioException e, handler) {
+            final stopwatch = e.requestOptions.extra['startTime'] as Stopwatch?;
+            if (stopwatch != null) {
+              stopwatch.stop();
+              log(
+                '[DioInterceptor] Error took: ${stopwatch.elapsedMilliseconds}ms URI: ${e.requestOptions.uri}',
+              );
+            }
+            log('[DioInterceptor] Error: ${e.type} - ${e.message}');
+            return handler.next(e);
+          },
+        ),
+      );
+      log('[GraphQL] Dio interceptor added.');
+    }
+
+    // gql_dio_link 사용 (원래 엔드포인트)
+    final link = DioLink(
       kGraphQLEndpoint,
-      httpClient: ioClient, // 중요!
+      client: _dioInstance!,
+    ); // Dio 인스턴스 전달
+
+    _clientInstance = GraphQLClient(cache: GraphQLCache(), link: link);
+    log(
+      '[GraphQL] GraphQL client initialized successfully using endpoint: $kGraphQLEndpoint',
     );
-
-    final authLink = AuthLink(
-      // 토큰 있으면 Authorization: Bearer xxx
-      getToken: () {
-        final token = accessToken;
-        if (token == null) return null;
-        return 'Bearer $token';
-      },
-    );
-
-    final link = authLink.concat(httpLink);
-
-    return GraphQLClient(cache: GraphQLCache(), link: link);
+    return _clientInstance!;
   }
 
   /// 자동 로그인 정보 저장 함수 추가
