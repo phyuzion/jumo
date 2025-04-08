@@ -1,4 +1,5 @@
 // lib/graphql/client.dart
+import 'dart:async'; // TimeoutException 사용 위해 추가
 import 'dart:developer';
 import 'dart:io'; // <-- HttpClient
 import 'package:hive_ce/hive.dart';
@@ -128,35 +129,49 @@ class GraphQLClientManager {
   /// 헬퍼: GraphQL Exception 핸들링
   ///  - 서버 GraphQLError가 있을 경우, 메시지 추출
   static Future<void> handleExceptions(QueryResult result) async {
-    // result.data가 null이면 그냥 리턴 (예외 아님)
-    if (result.data == null) {
-      return;
-    }
+    log(
+      '[GraphQL] handleExceptions called. Exception object: ${result.exception}',
+    ); // 예외 객체 직접 로깅
 
-    if (result.hasException) {
-      log('[GraphQL] handleExceptions: ${result.exception}');
-      // 타임아웃 에러는 무시
-      if (result.exception?.linkException.toString().contains(
-            'TimeoutException',
-          ) ==
-          true) {
-        return;
+    // result.hasException 대신 result.exception 존재 여부로 판단
+    if (result.exception != null) {
+      final exceptionString = result.exception.toString();
+      log('[GraphQL] Exception details: $exceptionString'); // 예외 상세 내용 로깅
+
+      // TimeoutException 문자열 포함 여부로 더 확실하게 체크
+      if (exceptionString.contains('TimeoutException')) {
+        log(
+          '[GraphQL] TimeoutException detected (via string search), ignoring.',
+        );
+        return; // 타임아웃은 무시하고 종료
       }
 
+      // --- 기존 로그인 필요 및 기타 오류 처리 ---
       if (result.exception?.graphqlErrors.isNotEmpty == true) {
         final msg = result.exception!.graphqlErrors.first.message;
         if (msg.contains('로그인이 필요합니다')) {
-          log('new login start');
-          tryAutoLogin();
+          log(
+            '[GraphQL] Authentication error detected, attempting auto-login...',
+          );
+          await tryAutoLogin();
+          return; // 로그인 시도 후 종료
         }
-        throw Exception(msg);
+        log('[GraphQL] GraphQL Error: $msg');
+        // throw Exception(msg);
       } else if (result.exception?.linkException != null) {
-        // 네트워크/서버접속 에러, Timeout 등
         final linkErr = result.exception!.linkException.toString();
-        throw Exception('GraphQL LinkException: $linkErr');
+        log('[GraphQL] LinkException: $linkErr');
+        // throw Exception('GraphQL LinkException: $linkErr');
       } else {
-        throw Exception('GraphQL unknown exception');
+        log('[GraphQL] Unknown GraphQL exception: ${result.exception}');
+        // throw Exception('GraphQL unknown exception');
       }
+      // --- 오류 처리 끝 ---
+    } else if (result.data == null) {
+      log('[GraphQL] handleExceptions: result.data is null, but no exception.');
+    } else {
+      // 예외 없고 데이터도 있는 정상 케이스
+      log('[GraphQL] handleExceptions: No exception detected.');
     }
   }
 }

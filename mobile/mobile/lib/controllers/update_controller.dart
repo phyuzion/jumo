@@ -1,5 +1,6 @@
 // update_controller.dart
 
+import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -34,7 +35,7 @@ class UpdateController {
     final url = Uri.parse(APP_DOWNLOAD_LINK);
     log('Downloading APK from $APP_DOWNLOAD_LINK ...');
     try {
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(const Duration(seconds: 60));
       if (response.statusCode == 200) {
         final directory = await getExternalStorageDirectory();
         if (directory != null) {
@@ -55,6 +56,8 @@ class UpdateController {
       } else {
         log('Failed to download APK. Status code: ${response.statusCode}');
       }
+    } on TimeoutException catch (e) {
+      log('Error downloading and installing APK: $e');
     } catch (e) {
       log('Error downloading and installing APK: $e');
     }
