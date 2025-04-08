@@ -39,26 +39,21 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    log(
-      '[RecentCallsScreen] initState: Calling initial _loadCallsAndContacts...',
-    );
-    _loadCallsAndContacts();
+    _loadCallsAndContacts(); // 초기 로드
     _checkDefaultDialer();
     _scrollController.addListener(() {
       /* ... */
     });
 
+    // CallLogUpdatedEvent 구독 복구
     _callLogUpdateSub = appEventBus.on<CallLogUpdatedEvent>().listen((_) {
       log('[RecentCallsScreen] Received CallLogUpdatedEvent. Reloading...');
       if (mounted) {
-        log(
-          '[RecentCallsScreen] Widget is mounted, calling _loadCallsAndContacts...',
-        );
-        _loadCallsAndContacts();
-      } else {
-        log('[RecentCallsScreen] Widget not mounted, skipping reload.');
+        _loadCallsAndContacts(); // 데이터 다시 로드
       }
     });
+    // 백그라운드 서비스 리스너 제거
+    // _listenForBackgroundUpdates();
   }
 
   @override
@@ -81,42 +76,30 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   // 통화기록과 연락처 정보를 함께 로드
   Future<void> _loadCallsAndContacts() async {
-    log('[RecentCallsScreen] _loadCallsAndContacts started.');
-    if (!mounted) {
-      log(
-        '[RecentCallsScreen] _loadCallsAndContacts: Widget not mounted, returning.',
-      );
-      return;
+    if (!mounted) return;
+    // 로딩 상태 변경은 한 번만 (이미 로딩 중이면 무시)
+    if (!_isLoading) {
+      setState(() {
+        _isLoading = true;
+      });
     }
-    setState(() {
-      _isLoading = true;
-    });
 
     try {
-      log('[RecentCallsScreen] Reading saved call logs...');
+      // 1. 통화 기록 로드 (로컬 저장소)
       final logs = _callLogController.getSavedCallLogs();
-      log('[RecentCallsScreen] Found ${logs.length} saved call logs.');
 
-      log('[RecentCallsScreen] Loading local contacts...');
+      // 2. 연락처 정보 로드 (ContactsController 사용, 비동기)
       final contactsCtrl = context.read<ContactsController>();
       final contacts = await contactsCtrl.getLocalContacts();
-      log('[RecentCallsScreen] Loaded ${contacts.length} local contacts.');
 
-      log('[RecentCallsScreen] Building contact cache...');
+      // 3. 연락처 정보 캐시 업데이트 (전화번호 기준 Map)
       _contactInfoCache = {for (var c in contacts) c.phoneNumber: c};
 
-      if (!mounted) {
-        log(
-          '[RecentCallsScreen] _loadCallsAndContacts: Widget not mounted after async operations, returning.',
-        );
-        return;
-      }
+      if (!mounted) return;
       setState(() {
-        _callLogs = logs;
+        _callLogs = logs; // 통화 기록 상태 업데이트
         _isLoading = false;
-        log(
-          '[RecentCallsScreen] setState called with updated logs and contacts.',
-        );
+        // 스크롤 위치 복원 제거 (새로고침 시 상단으로)
       });
     } catch (e) {
       log('[RecentCallsScreen] Error loading calls and contacts: $e');
@@ -128,8 +111,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
           context,
         ).showSnackBar(const SnackBar(content: Text('최근 기록을 불러오는데 실패했습니다.')));
       }
-    } finally {
-      log('[RecentCallsScreen] _loadCallsAndContacts finished.');
     }
   }
 
