@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:hive_ce/hive.dart'; // Hive 추가
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
+import 'package:mobile/controllers/app_controller.dart';
+import 'package:provider/provider.dart'; // Provider 임포트 추가
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -65,14 +67,30 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('전화번호를 인식할수 없습니다. 앱을 재시작해주세요.');
       }
 
-      // 로그인 호출 (내부에서 Hive에 토큰 저장)
+      // 로그인 호출
       await UserApi.userLogin(
         loginId: loginId,
         password: password,
         phoneNumber: _myNumber,
       );
 
-      // 아이디/비번 기억하기 체크 시 Hive에 저장
+      // ***** 로그인 후 초기화 수행 *****
+      try {
+        log('[LoginScreen] Login success, initializing post-login data...');
+        final appController = context.read<AppController>();
+        await appController.initializePostLoginData();
+        log('[LoginScreen] Post-login initialization complete.');
+      } catch (e) {
+        log('[LoginScreen] Error during post-login initialization: $e');
+        // 초기화 실패 시 오류 처리 (예: 사용자에게 알림)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('초기화 실패: $e')));
+        setState(() => _loading = false); // 로딩 중단
+        return; // 홈 화면 이동 중단
+      }
+
+      // 아이디/비번 기억하기
       if (_rememberMe) {
         await GraphQLClientManager.saveLoginCredentials(
           loginId,
@@ -80,7 +98,6 @@ class _LoginScreenState extends State<LoginScreen> {
           _myNumber,
         );
       } else {
-        // 체크 해제 시 저장된 정보 삭제 (선택적)
         await _authBox.delete('savedLoginId');
         await _authBox.delete('savedPassword');
       }
@@ -90,7 +107,10 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
-      if (mounted) setState(() => _loading = false);
+      // 로딩 상태 해제는 try 블록 내부에서 처리하거나 여기서 한 번 더 확인
+      if (mounted && _loading) {
+        setState(() => _loading = false);
+      }
     }
   }
 

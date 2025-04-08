@@ -6,6 +6,7 @@ import 'package:call_e_log/call_log.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class CallLogController {
   static const storageKey = 'call_logs';
@@ -16,6 +17,7 @@ class CallLogController {
   Future<void> refreshCallLogs() async {
     final stopwatch = Stopwatch()..start();
     log('[CallLogController] Refreshing call logs and saving locally...');
+    List<Map<String, dynamic>> savedList = []; // 저장된 목록 저장용
     try {
       final callEntries = await CallLog.get();
       final takeCount = callEntries.length > 30 ? 30 : callEntries.length;
@@ -33,6 +35,7 @@ class CallLogController {
 
       // Hive 저장
       await _callLogBox.put('logs', jsonEncode(newList));
+      savedList = newList; // 저장 성공 시 목록 저장
       log(
         '[CallLogController] Saved ${newList.length} call logs locally to Hive.',
       );
@@ -47,6 +50,23 @@ class CallLogController {
       log(
         '[CallLogController] Total refreshCallLogs (local save) took: ${stopwatch.elapsedMilliseconds}ms',
       );
+    }
+
+    // ***** 서버 업로드 요청 (백그라운드) *****
+    if (savedList.isNotEmpty) {
+      final service = FlutterBackgroundService();
+      // 서비스 실행 여부 확인 후 invoke
+      if (await service.isRunning()) {
+        log(
+          '[CallLogController] Invoking uploadCallLogsNow to background service...',
+        );
+        service.invoke('uploadCallLogsNow'); // 데이터 전달 없이 요청만 보냄
+      } else {
+        log(
+          '[CallLogController] Background service not running, skipping upload request.',
+        );
+        // TODO: 서비스 미실행 시 업로드 큐잉 고려
+      }
     }
   }
 

@@ -41,8 +41,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    _initializePostLogin();
-
     NativeDefaultDialerMethods.notifyNativeAppInitialized();
     log('[HomeScreen] Native app initialized notification sent.');
 
@@ -102,19 +100,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       builder: (context) => const NotificationDialog(),
     ).then((_) {
       _loadNotificationCount();
-    });
-  }
-
-  Future<void> _initializePostLogin() async {
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (mounted) {
-        try {
-          final appController = context.read<AppController>();
-          await appController.initializePostLoginData();
-        } catch (e) {
-          log('[HomeScreen] Error initializing post-login data: $e');
-        }
-      }
     });
   }
 

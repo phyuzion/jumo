@@ -37,11 +37,29 @@ class _DeciderScreenState extends State<DeciderScreen> {
     final ok = await appController.checkEssentialPermissions();
 
     if (ok) {
-      // Hive에서 loginStatus 확인
       final isLoggedIn =
           _authBox.get('loginStatus', defaultValue: false) as bool;
       if (isLoggedIn) {
-        Navigator.pushReplacementNamed(context, '/home');
+        // ***** 이미 로그인된 경우, 홈 이동 전에 초기화 *****
+        try {
+          log(
+            '[DeciderScreen] Already logged in, initializing post-login data...',
+          );
+          // AppController 인스턴스 다시 가져오기 (Provider 통해)
+          final appCtrl = context.read<AppController>();
+          await appCtrl.initializePostLoginData();
+          log('[DeciderScreen] Post-login initialization complete.');
+          if (!mounted) return; // 초기화 중 위젯 unmount 될 수 있음
+          Navigator.pushReplacementNamed(context, '/home');
+        } catch (e) {
+          log('[DeciderScreen] Error initializing post-login data: $e');
+          // 초기화 실패 시 로그인 화면으로 보낼 수도 있음
+          setState(() => _checking = false); // 로딩 중단
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('초기화 실패: $e')));
+          // Navigator.pushReplacementNamed(context, '/login');
+        }
       } else {
         String myNumber = '';
         try {
