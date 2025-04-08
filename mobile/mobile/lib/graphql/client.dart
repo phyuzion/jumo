@@ -110,8 +110,9 @@ class GraphQLClientManager {
         InterceptorsWrapper(
           onRequest: (options, handler) {
             final token = accessToken;
-            if (token != null)
+            if (token != null) {
               options.headers['Authorization'] = 'Bearer $token';
+            }
             options.extra['startTime'] = Stopwatch()..start();
             // 상세 로그 필요 시 활성화
             // log('[DioInterceptor] Requesting: ${options.method} ${options.uri} Headers: ${options.headers}');

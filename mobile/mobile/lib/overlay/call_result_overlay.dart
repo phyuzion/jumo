@@ -3,7 +3,7 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 

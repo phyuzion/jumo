@@ -332,7 +332,7 @@ class AppController {
       // 6. 앱 업데이트 확인
       _initializationMessage = '업데이트 확인 중...';
       final stopwatchUpdate = Stopwatch()..start();
-      await checkUpdate();
+      // await checkUpdate(); // <-- 앱 시작 시 업데이트 확인 제거
       log(
         '[AppController] checkUpdate (post-login) took: ${stopwatchUpdate.elapsedMilliseconds}ms',
       );

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
