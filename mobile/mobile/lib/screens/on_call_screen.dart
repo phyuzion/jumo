@@ -84,12 +84,24 @@ class _OnCallScreenState extends State<OnCallScreen> {
 
   /// 통화 종료
   Future<void> _hangUp() async {
-    await NativeMethods.hangUpCall();
+    log('[OnCallScreen] Hang up button pressed.');
+    try {
+      await NativeMethods.hangUpCall();
+    } catch (e) {
+      log('[OnCallScreen] Error calling native hangUpCall: $e');
+    }
+
     if (widget.connected) {
       final service = FlutterBackgroundService();
-      service.invoke('stopCallTimer');
+      if (await service.isRunning()) {
+        service.invoke('stopCallTimer');
+      }
     }
-    if (!mounted) return;
+
+    if (mounted) {
+      log('[OnCallScreen] Navigating back to home after hang up.');
+      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
+    }
   }
 
   String _formatDuration(int seconds) {

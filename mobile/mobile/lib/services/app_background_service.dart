@@ -91,12 +91,12 @@ Future<void> onStart(ServiceInstance service) async {
     await performContactBackgroundSync();
   });
 
-  // 차단 목록 동기화 타이머 (1시간 유지)
+  // 차단 목록 동기화 타이머
   blockSyncTimer = Timer.periodic(const Duration(hours: 1), (timer) async {
     log(
       '[BackgroundService] Starting periodic blocked/danger/bomb numbers sync...',
     );
-    await syncBlockedLists();
+    await syncBlockedLists(); // 주기적으로 모든 목록 동기화
   });
 
   // SMS 동기화 타이머 (15분 유지)
@@ -167,10 +167,6 @@ Future<void> onStart(ServiceInstance service) async {
     service.stopSelf();
     await LocalNotificationService.cancelNotification(ONGOING_CALL_NOTI_ID);
   });
-
-  // ***** 3. 서비스 시작 시 초기 동기화 수행 *****
-  log('[BackgroundService] Performing initial sync tasks...');
-  await syncBlockedLists();
 
   log('[BackgroundService] Setup complete.');
 }
@@ -249,33 +245,30 @@ Future<void> _refreshAndUploadSms() async {
   }
 }
 
-// 차단 목록 관련 동기화 함수 (위험/콜폭 번호만 처리하도록 수정)
+// 차단 목록 관련 동기화 함수 (모든 목록 처리)
 Future<void> syncBlockedLists() async {
-  log('[BackgroundService] Executing periodic sync for Danger/Bomb lists...');
-  // Box 직접 접근
+  log('[BackgroundService] Executing syncBlockedLists (User, Danger, Bomb)...');
   final settingsBox = Hive.box('settings');
-  // final blockedNumbersBox = Hive.box('blocked_numbers'); // 사용자 목록 동기화는 여기서 안 함
-  // final dangerNumbersBox = Hive.box('danger_numbers'); // 사용 시 열기 확인 필요
-  // final bombNumbersBox = Hive.box('bomb_numbers'); // 사용 시 열기 확인 필요
+  final blockedNumbersBox = Hive.box('blocked_numbers');
+  // TODO: danger_numbers, bomb_numbers Box 필요 시 열기 확인 추가
 
-  // if (!settingsBox.isOpen) { // Box 열림 확인
-  //    log('[BackgroundService] Settings box not open for syncBlockedLists.');
-  //    return;
-  // }
-  // 안전을 위해 isBoxOpen은 유지하거나, onStart에서 열림 보장 가정
-  if (!settingsBox.isOpen) {
-    log(
-      '[BackgroundService] Settings box is not open. Aborting syncBlockedLists.',
-    );
+  if (!settingsBox.isOpen || !blockedNumbersBox.isOpen) {
+    log('[BackgroundService] Required boxes not open for syncBlockedLists.');
     return;
   }
 
   try {
-    // 1. 사용자 차단 목록 동기화 제거
-    // final serverNumbers = await BlockApi.getBlockedNumbers();
-    // ... (Hive 저장 로직 제거)
+    // 1. 서버에서 사용자 차단 목록 가져와 Hive 업데이트
+    log('[BackgroundService] Syncing user blocked numbers...');
+    final serverNumbers = await BlockApi.getBlockedNumbers();
+    final numbersToSave = serverNumbers.map((n) => normalizePhone(n)).toList();
+    await blockedNumbersBox.clear();
+    await blockedNumbersBox.addAll(numbersToSave);
+    log(
+      '[BackgroundService] Synced user blocked numbers: ${numbersToSave.length}',
+    );
 
-    // 2. 위험 번호 업데이트 (유지)
+    // 2. 위험 번호 업데이트
     final isAutoBlockDanger = settingsBox.get(
       'isAutoBlockDanger',
       defaultValue: false,
@@ -289,7 +282,7 @@ Future<void> syncBlockedLists() async {
       log('[BackgroundService] Synced danger numbers: ${dangerNumbers.length}');
     }
 
-    // 3. 콜폭 번호 업데이트 (유지)
+    // 3. 콜폭 번호 업데이트
     final isBombBlocked = settingsBox.get(
       'isBombCallsBlocked',
       defaultValue: false,
@@ -307,7 +300,8 @@ Future<void> syncBlockedLists() async {
         '[BackgroundService] Synced bomb call numbers: ${bombNumbers.length}',
       );
     }
+    log('[BackgroundService] syncBlockedLists finished.');
   } catch (e) {
-    log('[BackgroundService] Error during syncBlockedLists (danger/bomb): $e');
+    log('[BackgroundService] Error during syncBlockedLists: $e');
   }
 }

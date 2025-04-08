@@ -76,6 +76,14 @@ class UserApi {
     await authBox.put('userValidUntil', userData['validUntil'] ?? '');
     await authBox.put('userRegion', userData['region'] ?? '');
     await authBox.put('userGrade', userData['grade'] ?? '');
+    // ***** loginId 저장 추가 *****
+    if (userData.containsKey('loginId')) {
+      await authBox.put('loginId', userData['loginId']);
+      log('[UserApi] Saved loginId to Hive: ${userData['loginId']}');
+    } else {
+      log('[UserApi] Warning: loginId not found in userLogin response.');
+    }
+
     // 자동 로그인을 위해 ID/PW/번호 저장 (GraphQLClientManager 함수 사용)
     await GraphQLClientManager.saveLoginCredentials(
       loginId,

@@ -157,9 +157,16 @@ class _SettingsScreenState extends State<SettingsScreen>
       ).showSnackBar(const SnackBar(content: Text('팝업 권한 허용됨')));
     } else {
       setState(() => _overlayGranted = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('팝업 권한 거부됨')));
+      // (선택적) 사용자 안내 메시지
+      if (mounted) {
+        // 스낵바 사용 전 mounted 확인
+        ScaffoldMessenger.of(context).showSnackBar(
+          // 문자열 리터럴을 큰따옴표로 수정
+          const SnackBar(
+            content: Text("'다른 앱 위에 표시' 권한 설정 화면으로 이동합니다. 권한을 허용해주세요."),
+          ),
+        );
+      }
     }
   }
 
@@ -252,18 +259,18 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  // Hive에서 사용자 정보 로드 메소드 추가
+  // Hive에서 사용자 정보 로드
   void _loadUserInfo() {
     // 기본값을 사용하여 안전하게 로드
     _phoneNumber = _authBox.get('myNumber', defaultValue: '(unknown)');
-    _loginId = _authBox.get('savedLoginId', defaultValue: '(no id)');
+    // 'savedLoginId' 대신 'loginId' 키 사용
+    _loginId = _authBox.get('loginId', defaultValue: '(no id)');
     _userName = _authBox.get('userName', defaultValue: '(no name)');
     _userRegion = _authBox.get('userRegion', defaultValue: '(no region)');
     _userGrade = _authBox.get('userGrade', defaultValue: '일반');
     final rawValidUntil =
         _authBox.get('userValidUntil', defaultValue: '') as String;
     _validUntil = formatDateString(rawValidUntil);
-    // setState는 initState에서 불필요
   }
 
   @override

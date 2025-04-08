@@ -50,12 +50,17 @@ android {
         
         // getByName("release")로 가져와서 설정
         getByName("release") {
-            // signingConfigs["release"] 가능, or signingConfigs.getByName("release")
             signingConfig = signingConfigs.getByName("release")
             isShrinkResources = false
 
+            // ProGuard/R8 설정 추가
+            isMinifyEnabled = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"), 
+                "proguard-rules.pro"
+            )
         }
-        // getByName("debug") { ... } // debug는 자동 서명
+        // getByName("debug") { isMinifyEnabled = false } // 디버그 빌드는 보통 비활성화
     }
 }
 

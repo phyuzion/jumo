@@ -134,6 +134,7 @@ class GraphQLClientManager {
     }
 
     if (result.hasException) {
+      log('[GraphQL] handleExceptions: ${result.exception}');
       // 타임아웃 에러는 무시
       if (result.exception?.linkException.toString().contains(
             'TimeoutException',

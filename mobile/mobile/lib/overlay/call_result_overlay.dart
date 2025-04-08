@@ -49,7 +49,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
     }
     await FlutterOverlayWindow.showOverlay(
       enableDrag: true,
-      alignment: OverlayAlignment.center,
+      alignment: OverlayAlignment.bottomCenter,
       height: WindowSize.matchParent,
       width: WindowSize.matchParent,
       overlayTitle: title,
@@ -103,7 +103,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
     }
 
     // 최대 높이 제한 (화면의 80%로)
-    baseHeight = baseHeight.clamp(0.1, 0.8);
+    baseHeight = baseHeight.clamp(0.1, 0.6);
 
     return Material(
       color: Colors.transparent,
