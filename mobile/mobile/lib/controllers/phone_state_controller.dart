@@ -78,8 +78,12 @@ class PhoneStateController {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
     log('[PhoneState] Is default dialer: $isDef');
 
-    // 기본 전화앱이 *아닌* 경우에도 로그 갱신 및 업로드 요청
+    // 기본 전화앱이 *아닌* 경우
     if (!isDef) {
+      // ***** OS가 통화 기록을 저장할 시간을 벌기 위해 약간의 지연 추가 *****
+      log('[PhoneState] Waiting a moment for call log to be written...');
+      await Future.delayed(const Duration(seconds: 2)); // 예: 2초 지연
+
       log('[PhoneState] Not default dialer, refreshing call logs locally...');
       // 1. 로컬 Hive 저장 및 UI 업데이트 이벤트 발생
       await callLogController.refreshCallLogs();
@@ -95,13 +99,9 @@ class PhoneStateController {
         log(
           '[PhoneState] Background service not running, cannot request call log upload.',
         );
-        // TODO: 서비스 미실행 시 업로드 큐 처리 등 고려
       }
     } else {
-      // 기본 전화앱인 경우, NavigationController의 onCallEnded에서 처리됨
-      log(
-        '[PhoneState] Is default dialer, skipping log refresh here (handled by NavigationController).',
-      );
+      log('[PhoneState] Is default dialer, skipping log refresh here.');
     }
     // 번호 없는 경우는 무시 (이미 앞 단계에서 체크됨)
   }

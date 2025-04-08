@@ -38,6 +38,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   @override
   void initState() {
     super.initState();
+    log('[RecentCallsScreen] initState called.'); // initState 시작 로그
     WidgetsBinding.instance.addObserver(this);
     _loadCallsAndContacts(); // 초기 로드
     _checkDefaultDialer();
@@ -45,15 +46,22 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
       /* ... */
     });
 
-    // CallLogUpdatedEvent 구독 복구
+    // CallLogUpdatedEvent 구독
     _callLogUpdateSub = appEventBus.on<CallLogUpdatedEvent>().listen((_) {
-      log('[RecentCallsScreen] Received CallLogUpdatedEvent. Reloading...');
+      // ***** 이벤트 수신 로그 *****
+      log('[RecentCallsScreen] Received CallLogUpdatedEvent.');
       if (mounted) {
+        log(
+          '[RecentCallsScreen] Widget is mounted, calling _loadCallsAndContacts...',
+        );
         _loadCallsAndContacts(); // 데이터 다시 로드
+      } else {
+        log(
+          '[RecentCallsScreen] Warning: Widget not mounted when receiving event.',
+        );
       }
     });
-    // 백그라운드 서비스 리스너 제거
-    // _listenForBackgroundUpdates();
+    log('[RecentCallsScreen] Subscribed to CallLogUpdatedEvent.'); // 구독 완료 로그
   }
 
   @override
@@ -76,33 +84,77 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   // 통화기록과 연락처 정보를 함께 로드
   Future<void> _loadCallsAndContacts() async {
-    if (!mounted) return;
-    // 로딩 상태 변경은 한 번만 (이미 로딩 중이면 무시)
+    final stopwatch = Stopwatch()..start(); // 전체 함수 시간 측정
+    log('[RecentCallsScreen] _loadCallsAndContacts started.');
+    if (!mounted) {
+      log(
+        '[RecentCallsScreen] _loadCallsAndContacts: Widget not mounted at start, aborting.',
+      );
+      return;
+    }
+    // 로딩 상태 변경 (이미 로딩 중이면 로그만 남김)
     if (!_isLoading) {
       setState(() {
         _isLoading = true;
       });
+    } else {
+      log(
+        '[RecentCallsScreen] _loadCallsAndContacts: Already in loading state.',
+      );
     }
 
     try {
-      // 1. 통화 기록 로드 (로컬 저장소)
-      final logs = _callLogController.getSavedCallLogs();
-
-      // 2. 연락처 정보 로드 (ContactsController 사용, 비동기)
       final contactsCtrl = context.read<ContactsController>();
+      final callLogCtrl = context.read<CallLogController>();
+
+      // 1. 통화 기록 로드 (Hive - 동기)
+      final stepwatch = Stopwatch()..start();
+      log('[RecentCallsScreen] Loading call logs from Hive...');
+      final logs = callLogCtrl.getSavedCallLogs();
+      stepwatch.stop();
+      log(
+        '[RecentCallsScreen] Loaded ${logs.length} call logs from Hive in ${stepwatch.elapsedMilliseconds}ms.',
+      );
+      stepwatch.reset();
+
+      // 2. 연락처 정보 로드 (비동기)
+      log('[RecentCallsScreen] Loading local contacts...');
+      stepwatch.start();
       final contacts = await contactsCtrl.getLocalContacts();
+      stepwatch.stop();
+      log(
+        '[RecentCallsScreen] Loaded ${contacts.length} contacts in ${stepwatch.elapsedMilliseconds}ms.',
+      );
+      stepwatch.reset();
 
-      // 3. 연락처 정보 캐시 업데이트 (전화번호 기준 Map)
+      // 3. 연락처 정보 캐시 업데이트
+      log('[RecentCallsScreen] Updating contact cache...');
+      stepwatch.start();
       _contactInfoCache = {for (var c in contacts) c.phoneNumber: c};
+      stepwatch.stop();
+      log(
+        '[RecentCallsScreen] Updated contact cache in ${stepwatch.elapsedMilliseconds}ms.',
+      );
 
-      if (!mounted) return;
+      // 비동기 작업 후 마운트 상태 재확인
+      if (!mounted) {
+        log(
+          '[RecentCallsScreen] _loadCallsAndContacts: Widget not mounted after async operations.',
+        );
+        stopwatch.stop(); // 함수 종료 전 시간 측정 중지
+        return;
+      }
+
+      log('[RecentCallsScreen] Calling setState with ${logs.length} logs...');
       setState(() {
-        _callLogs = logs; // 통화 기록 상태 업데이트
+        _callLogs = logs;
         _isLoading = false;
-        // 스크롤 위치 복원 제거 (새로고침 시 상단으로)
       });
-    } catch (e) {
-      log('[RecentCallsScreen] Error loading calls and contacts: $e');
+      log(
+        '[RecentCallsScreen] setState finished. _callLogs length is now: ${_callLogs.length}',
+      ); // setState 후 상태 확인 로그
+    } catch (e, st) {
+      log('[RecentCallsScreen] Error loading calls and contacts: $e\n$st');
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -111,6 +163,11 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
           context,
         ).showSnackBar(const SnackBar(content: Text('최근 기록을 불러오는데 실패했습니다.')));
       }
+    } finally {
+      stopwatch.stop(); // finally 블록으로 이동
+      log(
+        '[RecentCallsScreen] _loadCallsAndContacts finished in ${stopwatch.elapsedMilliseconds}ms.',
+      );
     }
   }
 
@@ -130,6 +187,14 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   @override
   Widget build(BuildContext context) {
+    // ***** build 메소드 호출 로그 추가 *****
+    log(
+      '[RecentCallsScreen] build called. _isLoading: $_isLoading, _callLogs count: ${_callLogs.length}',
+    );
+
+    final data = _callLogs; // 필터링된 데이터 사용 확인
+    log('[RecentCallsScreen] build: filtered data count: ${data.length}');
+
     return Scaffold(
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(40),
@@ -154,9 +219,17 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                 ? const Center(child: CircularProgressIndicator())
                 : ListView.builder(
                   controller: _scrollController,
-                  itemCount: _callLogs.length,
+                  // ***** itemCount 로그 추가 *****
+                  itemCount: data.length, // itemCount 확인
                   itemBuilder: (context, index) {
-                    final call = _callLogs[index];
+                    // ***** itemBuilder 호출 로그 (일부만) *****
+                    if (index < 3) {
+                      // 너무 많은 로그 방지
+                      log(
+                        '[RecentCallsScreen] itemBuilder called for index: $index',
+                      );
+                    }
+                    final call = data[index];
                     final number = call['number'] as String? ?? '';
                     final callType = call['callType'] as String? ?? '';
                     final ts = call['timestamp'] as int? ?? 0;
