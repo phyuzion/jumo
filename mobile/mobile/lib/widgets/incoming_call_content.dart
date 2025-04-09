@@ -46,14 +46,14 @@ class IncomingCallContent extends StatelessWidget {
 
     return Column(
       children: [
-        // --- 상단 정보 (패딩 최소화) ---
+        // --- 상단 정보 (패딩 최소화, 폰트 크기 다시 키움) ---
         Padding(
           padding: const EdgeInsets.only(top: 16.0, bottom: 4.0), // 상단 패딩 줄임
           child: Text(
             displayName,
             style: const TextStyle(
               color: Colors.black,
-              fontSize: 18, // 크기 약간 줄임
+              fontSize: 24, // <<< 다시 키움
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
@@ -65,8 +65,8 @@ class IncomingCallContent extends StatelessWidget {
             number,
             style: const TextStyle(
               color: Colors.black54,
-              fontSize: 13,
-            ), // 크기 약간 줄임
+              fontSize: 16, // <<< 다시 키움
+            ),
           ),
         ),
 

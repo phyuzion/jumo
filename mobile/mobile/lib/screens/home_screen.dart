@@ -39,8 +39,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   CallState _currentCallState = CallState.idle;
   String _currentNumber = '';
   String _currentCallerName = '';
-  int _currentDuration = 0;
   bool _isCallPopupVisible = false;
+  bool _isConnectedForTest = false; // <<< Active 상태 테스트 위한 연결 상태 변수
   // TODO: Provider/Notifier로 상태 관리 이전하고, 백그라운드 서비스 이벤트 리스너 추가하여 상태 업데이트
 
   final _searchController = TextEditingController();
@@ -142,23 +142,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  // <<< 팝업 토글 함수 (임시: Incoming 상태 테스트용) >>>
+  // <<< 팝업 토글 함수 (상태 순환 테스트 확장 + Ended 상태 유지) >>>
   void _toggleCallPopup() {
     setState(() {
-      // 현재 상태가 이미 incoming이면 idle로, 아니면 incoming으로 설정
-      if (_currentCallState == CallState.incoming) {
-        _currentCallState = CallState.idle;
-        _currentNumber = '';
-        _currentCallerName = '';
-        _isCallPopupVisible = false; // idle이면 팝업 닫기
-      } else {
-        _currentCallState = CallState.incoming;
-        _currentNumber = '010-8923-6835'; // 임시 번호
-        _currentCallerName = '테스트 수신자'; // 임시 이름
-        _isCallPopupVisible = !_isCallPopupVisible; // 팝업 상태 토글
+      int currentStateIndex = CallState.values.indexOf(_currentCallState);
+      int nextStateIndex = currentStateIndex;
+      bool nextConnected = _isConnectedForTest;
+      bool nextPopupVisible = _isCallPopupVisible; // 현재 팝업 상태 유지 기본값
+
+      // 상태 순환 로직 변경
+      if (_currentCallState == CallState.idle) {
+        nextStateIndex = CallState.values.indexOf(CallState.incoming);
+        nextConnected = false;
+        nextPopupVisible = true; // Incoming 시 팝업 열기
+      } else if (_currentCallState == CallState.incoming) {
+        nextStateIndex = CallState.values.indexOf(CallState.active);
+        nextConnected = false;
+        nextPopupVisible = true; // Active 시 팝업 유지
+      } else if (_currentCallState == CallState.active &&
+          !_isConnectedForTest) {
+        nextConnected = true;
+        nextPopupVisible = true; // 팝업 유지
+      } else if (_currentCallState == CallState.active && _isConnectedForTest) {
+        nextStateIndex = CallState.values.indexOf(CallState.ended);
+        nextConnected = false;
+        nextPopupVisible = true; // <<< Ended 상태에서도 팝업 유지 >>>
+      } else if (_currentCallState == CallState.ended) {
+        // <<< Ended 상태에서 한번 더 누르면 Idle로 + 팝업 닫기 >>>
+        nextStateIndex = CallState.values.indexOf(CallState.idle);
+        nextConnected = false;
+        nextPopupVisible = false;
       }
+
+      _currentCallState = CallState.values[nextStateIndex];
+      _isConnectedForTest = nextConnected;
+      _isCallPopupVisible = nextPopupVisible; // <<< 업데이트된 팝업 상태 적용
+
+      // 상태에 따른 더미 데이터 설정 (ended 상태 데이터 유지)
+      switch (_currentCallState) {
+        case CallState.idle:
+          _currentNumber = '';
+          _currentCallerName = '';
+          // _isCallPopupVisible = false; // 위에서 이미 설정됨
+          break;
+        case CallState.incoming:
+          _currentNumber = '010-7777-7777';
+          _currentCallerName = '테스트 수신자';
+          // _isCallPopupVisible = true; // 위에서 이미 설정됨
+          break;
+        case CallState.active:
+          _currentNumber = '010-3333-4444';
+          _currentCallerName = '통화 테스트';
+          // _isCallPopupVisible = true; // 위에서 이미 설정됨
+          break;
+        case CallState.ended:
+          // 번호와 이름은 active 상태에서 유지됨
+          // _currentNumber = '010-3333-4444';
+          // _currentCallerName = '통화 테스트';
+          // _isCallPopupVisible = true; // 위에서 이미 설정됨
+          break;
+      }
+
       log(
-        '[HomeScreen] Test state set to: $_currentCallState, Popup: $_isCallPopupVisible',
+        '[HomeScreen] Test state set to: $_currentCallState, Connected: $_isConnectedForTest, Popup: $_isCallPopupVisible',
       );
     });
   }
@@ -350,7 +396,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             callState: _currentCallState,
             number: _currentNumber,
             callerName: _currentCallerName,
-            duration: _currentDuration,
+            connected: _isConnectedForTest,
             onClosePopup: _toggleCallPopup,
           ),
         ),
@@ -365,6 +411,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               number: _currentNumber,
               callerName: _currentCallerName,
               isPopupVisible: _isCallPopupVisible,
+              connected: _isConnectedForTest,
               onTogglePopup: _toggleCallPopup,
             ),
           ),

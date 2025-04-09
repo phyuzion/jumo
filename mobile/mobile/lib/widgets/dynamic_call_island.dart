@@ -9,6 +9,7 @@ class DynamicCallIsland extends StatefulWidget {
   final String callerName;
   final bool isPopupVisible; // 팝업 표시 여부 (버튼 비활성화 등에 사용될 수 있음)
   final VoidCallback onTogglePopup; // 팝업 토글 콜백
+  final bool connected; // <<< 추가
 
   const DynamicCallIsland({
     super.key,
@@ -17,6 +18,7 @@ class DynamicCallIsland extends StatefulWidget {
     required this.callerName,
     required this.isPopupVisible,
     required this.onTogglePopup,
+    required this.connected, // <<< 추가
   });
 
   @override
@@ -30,23 +32,30 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
   @override
   void initState() {
     super.initState();
-    _updateTimerBasedOnState(widget.callState);
+    _updateTimerBasedOnState(
+      widget.callState == CallState.active && widget.connected,
+    );
   }
 
   @override
   void didUpdateWidget(DynamicCallIsland oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.callState != widget.callState) {
-      log('[Island] CallState changed: ${widget.callState}');
-      _updateTimerBasedOnState(widget.callState);
+    if (oldWidget.callState != widget.callState ||
+        oldWidget.connected != widget.connected) {
+      log(
+        '[Island] State/Connected changed: ${widget.callState} / ${widget.connected}',
+      );
+      _updateTimerBasedOnState(
+        widget.callState == CallState.active && widget.connected,
+      );
       if (widget.callState == CallState.ended) {
         // TODO: Implement 30-second timer to revert to idle state?
       }
     }
   }
 
-  void _updateTimerBasedOnState(CallState state) {
-    if (state == CallState.active) {
+  void _updateTimerBasedOnState(bool shouldRunTimer) {
+    if (shouldRunTimer) {
       _startCallTimer();
     } else {
       _stopCallTimer();
@@ -57,7 +66,7 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
     _stopCallTimer();
     _callDuration = 0;
     _callTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted && widget.callState == CallState.active) {
+      if (mounted && widget.callState == CallState.active && widget.connected) {
         setState(() {
           _callDuration++;
         });
@@ -147,7 +156,9 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
         leadingIcon = Icons.phone_in_talk;
         barContent = _buildBarContent(
           leadingIcon,
-          "통화 중 (${_formatDuration(_callDuration)})",
+          widget.connected
+              ? "통화 중 (${_formatDuration(_callDuration)})"
+              : "연결 중...",
           widget.callerName,
           widget.number,
         );

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/screens/home_screen.dart'; // CallState enum 사용 위해 임시 임포트 (나중에 분리)
-import 'package:mobile/screens/dialer_screen.dart';
+import 'package:mobile/widgets/dialer_content.dart'; // <<< 새 위젯 임포트
 import 'dart:developer';
 import 'package:mobile/widgets/incoming_call_content.dart'; // <<< 새 위젯 임포트
+import 'package:mobile/widgets/on_call_contents.dart'; // <<< 새 위젯 임포트
+import 'package:mobile/widgets/call_ended_content.dart'; // <<< 새 위젯 임포트
 import 'package:mobile/controllers/contacts_controller.dart'; // <<< 컨트롤러 임포트
 import 'package:mobile/controllers/search_records_controller.dart'; // <<< 컨트롤러 임포트
 import 'package:mobile/models/search_result_model.dart'; // <<< 모델 임포트
@@ -16,7 +18,7 @@ class FloatingCallWidget extends StatefulWidget {
   final CallState callState;
   final String number; // 초기 번호 (이름 조회 전)
   final String callerName; // 외부에서 받은 이름 (업데이트될 수 있음)
-  final int duration; // 통화 시간 등 필요 데이터
+  final bool connected; // <<< 추가
   final VoidCallback onClosePopup; // 팝업 닫기 콜백
 
   const FloatingCallWidget({
@@ -25,7 +27,7 @@ class FloatingCallWidget extends StatefulWidget {
     required this.callState,
     required this.number,
     required this.callerName,
-    required this.duration,
+    required this.connected, // <<< 추가
     required this.onClosePopup,
   });
 
@@ -40,16 +42,10 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   SearchResultModel? _searchResult;
   String _loadedCallerName = ''; // 로드된 이름 저장
 
-  // <<< 타이머 관련 변수 추가 >>>
-  Timer? _callTimer;
-  int _internalDuration = 0;
-
   @override
   void initState() {
     super.initState();
     _loadedCallerName = widget.callerName;
-    // <<< initState에서도 타이머 상태 업데이트 호출 >>>
-    _updateTimerBasedOnState(widget.callState);
     if (widget.isVisible && widget.callState == CallState.incoming) {
       _loadIncomingData();
     }
@@ -58,10 +54,6 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   @override
   void didUpdateWidget(FloatingCallWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    if (oldWidget.callState != widget.callState) {
-      _updateTimerBasedOnState(widget.callState);
-    }
 
     // <<< 데이터 로딩 조건 수정 >>>
     bool needsLoad = false;
@@ -100,46 +92,6 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
     if (needsLoad) {
       _loadIncomingData();
     }
-  }
-
-  // <<< 타이머 상태 업데이트 함수 추가 >>>
-  void _updateTimerBasedOnState(CallState state) {
-    if (state == CallState.active) {
-      _startCallTimer();
-    } else {
-      _stopCallTimer();
-    }
-  }
-
-  // <<< 타이머 시작 함수 추가 >>>
-  void _startCallTimer() {
-    _stopCallTimer();
-    _internalDuration = 0;
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted && widget.callState == CallState.active) {
-        setState(() {
-          _internalDuration++;
-        });
-      } else {
-        timer.cancel();
-      }
-    });
-    log('[FloatingCallWidget] Call timer started.');
-  }
-
-  // <<< 타이머 중지 함수 추가 >>>
-  void _stopCallTimer() {
-    _callTimer?.cancel();
-    _callTimer = null;
-    _internalDuration = 0;
-    log('[FloatingCallWidget] Call timer stopped.');
-  }
-
-  // <<< dispose에 타이머 중지 추가 >>>
-  @override
-  void dispose() {
-    _stopCallTimer();
-    super.dispose();
   }
 
   // <<< 데이터 로딩 함수 (재진입 방지 추가) >>>
@@ -202,31 +154,36 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
     Widget popupContent;
     switch (widget.callState) {
       case CallState.idle:
-        popupContent = DialerScreen();
+        popupContent = DialerContent();
         break;
       case CallState.incoming:
-        // <<< IncomingCallContent에 로딩 상태와 데이터 전달 >>>
         popupContent = IncomingCallContent(
-          callerName: _loadedCallerName, // 로드된 이름 사용
+          callerName: _loadedCallerName,
           number: widget.number,
           searchResult: _searchResult,
           isLoading: _isLoading,
           error: _error,
-          // TODO: Add onAccept/onReject callbacks if needed
+          // TODO: Add onAccept/onReject callbacks
         );
         break;
       case CallState.active:
-        popupContent = Center(
-          child: Text(
-            "On Call UI Placeholder: ${_loadedCallerName.isNotEmpty ? _loadedCallerName : widget.callerName} (${widget.number}) - $_internalDuration s",
-          ),
+        popupContent = OnCallContents(
+          callerName:
+              _loadedCallerName.isNotEmpty
+                  ? _loadedCallerName
+                  : widget.callerName,
+          number: widget.number,
+          connected: widget.connected,
         );
         break;
       case CallState.ended:
-        popupContent = Center(
-          child: Text(
-            "Ended UI Placeholder: ${_loadedCallerName.isNotEmpty ? _loadedCallerName : widget.callerName} (${widget.number})",
-          ),
+        popupContent = CallEndedContent(
+          callerName:
+              _loadedCallerName.isNotEmpty
+                  ? _loadedCallerName
+                  : widget.callerName,
+          number: widget.number,
+          reason: 'ended', // TODO: 실제 종료 이유(예: missed) 전달 필요
         );
         break;
       default:
