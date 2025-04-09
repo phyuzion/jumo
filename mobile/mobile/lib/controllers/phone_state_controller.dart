@@ -5,33 +5,70 @@ import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter/services.dart';
+import 'package:mobile/models/phone_book_model.dart';
+import 'package:mobile/utils/constants.dart';
 
-class PhoneStateController {
-  final GlobalKey<NavigatorState> navKey;
+class PhoneStateController with WidgetsBindingObserver {
+  final GlobalKey<NavigatorState> navigatorKey;
   final CallLogController callLogController;
-  PhoneStateController(this.navKey, this.callLogController);
+  final ContactsController contactsController;
 
-  StreamSubscription<PhoneState>? _subscription;
+  PhoneStateController(
+    this.navigatorKey,
+    this.callLogController,
+    this.contactsController,
+  ) {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  StreamSubscription<PhoneState>? _phoneStateSubscription;
 
   void startListening() {
-    _subscription = PhoneState.stream.listen((event) async {
+    _phoneStateSubscription = PhoneState.stream.listen((event) async {
+      final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
+      if (isDef) return;
+
+      String? number = event.number;
+      String callerName = '';
+
+      if (number != null && number.isNotEmpty) {
+        callerName = await getContactName(number);
+      }
+
       switch (event.status) {
         case PhoneStateStatus.NOTHING:
           _onNothing();
+          if (number != null && number.isNotEmpty) {
+            notifyServiceCallState('onCallEnded', number, callerName);
+          }
           break;
         case PhoneStateStatus.CALL_INCOMING:
-          if (event.number != null && event.number != '') {
-            await _onIncoming(event.number);
+          if (number != null && number.isNotEmpty) {
+            await _onIncoming(number);
+            notifyServiceCallState('onIncomingNumber', number, callerName);
           }
           break;
         case PhoneStateStatus.CALL_STARTED:
+          if (number != null && number.isNotEmpty) {
+            await _onCallStarted(number);
+            notifyServiceCallState(
+              'onCall',
+              number,
+              callerName,
+              connected: true,
+            );
+          }
           break;
         case PhoneStateStatus.CALL_ENDED:
-          if (event.number != null && event.number != '') {
-            await _onCallEnded(event.number);
+          if (number != null && number.isNotEmpty) {
+            await _onCallEnded(number);
+            notifyServiceCallState('onCallEnded', number, callerName);
           }
           break;
       }
@@ -39,15 +76,14 @@ class PhoneStateController {
   }
 
   void stopListening() {
-    _subscription?.cancel();
-    _subscription = null;
+    _phoneStateSubscription?.cancel();
+    _phoneStateSubscription = null;
   }
 
   void _onNothing() {
     log('[PhoneState] NOTHING');
   }
 
-  // PhoneStateController._onIncoming
   Future<void> _onIncoming(String? number) async {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
 
@@ -70,6 +106,19 @@ class PhoneStateController {
       log('showOverlay done');
     }
     log('[PhoneState] not default => overlay shown for $number');
+
+    if (number != null && number.isNotEmpty) {
+      final callerName = await getContactName(number);
+      notifyServiceCallState('onIncomingNumber', number, callerName);
+    }
+  }
+
+  Future<void> _onCallStarted(String? number) async {
+    log('[PhoneState] callStarted for number: $number');
+    if (number != null && number.isNotEmpty) {
+      final callerName = await getContactName(number);
+      notifyServiceCallState('onCall', number, callerName, connected: true);
+    }
   }
 
   Future<void> _onCallEnded(String? number) async {
@@ -78,17 +127,13 @@ class PhoneStateController {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
     log('[PhoneState] Is default dialer: $isDef');
 
-    // 기본 전화앱이 *아닌* 경우
     if (!isDef) {
-      // ***** OS가 통화 기록을 저장할 시간을 벌기 위해 약간의 지연 추가 *****
       log('[PhoneState] Waiting a moment for call log to be written...');
-      await Future.delayed(const Duration(seconds: 2)); // 예: 2초 지연
+      await Future.delayed(const Duration(seconds: 2));
 
       log('[PhoneState] Not default dialer, refreshing call logs locally...');
-      // 1. 로컬 Hive 저장 및 UI 업데이트 이벤트 발생
       await callLogController.refreshCallLogs();
 
-      // 2. 백그라운드 서비스에 서버 업로드 요청
       final service = FlutterBackgroundService();
       if (await service.isRunning()) {
         log(
@@ -103,6 +148,87 @@ class PhoneStateController {
     } else {
       log('[PhoneState] Is default dialer, skipping log refresh here.');
     }
-    // 번호 없는 경우는 무시 (이미 앞 단계에서 체크됨)
+
+    if (number != null && number.isNotEmpty) {
+      final callerName = await getContactName(number);
+      notifyServiceCallState('onCallEnded', number, callerName);
+    }
+  }
+
+  void notifyServiceCallState(
+    String stateMethod,
+    String number,
+    String callerName, {
+    bool? connected,
+  }) {
+    final service = FlutterBackgroundService();
+    String state;
+    switch (stateMethod) {
+      case 'onIncomingNumber':
+        state = 'incoming';
+        break;
+      case 'onCall':
+        state = 'active';
+        break;
+      case 'onCallEnded':
+        state = 'ended';
+        break;
+      default:
+        state = 'unknown';
+    }
+
+    if (state == 'unknown') {
+      log(
+        '[PhoneStateController] Unknown stateMethod $stateMethod, not invoking service.',
+      );
+      return;
+    }
+
+    log(
+      '[PhoneStateController] Invoking service: callStateChanged - state: $state, number: $number, name: $callerName',
+    );
+    service.invoke('callStateChanged', {
+      'state': state,
+      'number': number,
+      'callerName': callerName.isNotEmpty ? callerName : '알 수 없음',
+    });
+  }
+
+  void _processIncomingCall(String number, String callerName) async {
+    // Implementation of _processIncomingCall method
+  }
+
+  void _processCallStart(String number, String callerName) async {
+    // Implementation of _processCallStart method
+  }
+
+  void _processCallEnd(String number) async {
+    // Implementation of _processCallEnd method
+  }
+
+  Future<String> getContactName(String phoneNumber) async {
+    final normalizedNumber = normalizePhone(phoneNumber);
+    try {
+      final List<PhoneBookModel> contacts =
+          await contactsController.getLocalContacts();
+      final contact = contacts.firstWhere(
+        (c) => c.phoneNumber == normalizedNumber,
+        orElse: () => PhoneBookModel(contactId: '', name: '', phoneNumber: ''),
+      );
+
+      if (contact.name.isNotEmpty && contact.name != '(No Name)') {
+        return contact.name;
+      }
+    } catch (e) {
+      log(
+        '[PhoneStateController] Error getting contact name for $normalizedNumber: $e',
+      );
+    }
+    return '';
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Implementation of didChangeAppLifecycleState method
   }
 }

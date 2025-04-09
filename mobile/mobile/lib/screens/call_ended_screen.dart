@@ -44,12 +44,6 @@ class _CallEndedScreen extends State<CallEndedScreen> {
   Future<void> _stopOnCallNoti() async {
     final service = FlutterBackgroundService();
     service.invoke('stopCallTimer');
-    await LocalNotificationService.cancelNotification(
-      1234,
-    ); // Incoming call noti
-    await LocalNotificationService.cancelNotification(
-      9999,
-    ); // Ongoing call noti
   }
 
   Future<void> _showMissedCallNotification() async {

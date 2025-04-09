@@ -5,61 +5,82 @@ import 'package:provider/provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/phone_state_controller.dart';
 
 class NavigationController {
   static final navKey = GlobalKey<NavigatorState>();
 
   static Future<void> init(
+    PhoneStateController phoneStateController,
     BlockedNumbersController blockedNumbersController,
   ) async {
     // 네이티브 -> Flutter 이벤트 핸들러
     NativeMethods.setMethodCallHandler((call) async {
+      // <<< 핸들러 내부로 로직 이동 >>>
+      String number = '';
+      String callerName = '';
+      final callArgs = call.arguments;
+      if (callArgs != null) {
+        if (callArgs is Map) {
+          number = callArgs['number'] as String? ?? '';
+        } else if (callArgs is String) {
+          number = callArgs;
+        }
+      }
+      if (number.isNotEmpty) {
+        callerName = await phoneStateController.getContactName(number);
+      }
+
+      // <<< 백그라운드 서비스에 상태 알림 (메소드 이름 변경 필요) >>>
+      if (number.isNotEmpty) {
+        phoneStateController.notifyServiceCallState(
+          // <<< public 메소드 호출
+          call.method,
+          number,
+          callerName,
+          connected:
+              (call.method == 'onCall' && callArgs is Map)
+                  ? (callArgs['connected'] as bool? ?? false)
+                  : null,
+        );
+      }
+      // <<< 로직 이동 끝 >>>
+
       switch (call.method) {
         case 'onIncomingNumber':
-          final number = call.arguments as String;
-          // 차단된 번호인지 비동기 확인
           if (await blockedNumbersController.isNumberBlockedAsync(
             number,
             addHistory: true,
           )) {
-            // 차단된 번호면 전화 거절
             await NativeMethods.rejectCall();
             return;
           }
           goToIncoming(number);
           break;
         case 'onCall':
-          final map = call.arguments as Map?; // or Map<String,dynamic>
+          final map = call.arguments as Map?;
           if (map != null) {
-            final number = map['number'] as String? ?? '';
             final connected = map['connected'] as bool? ?? false;
-            // 사용 로직
             goToOnCall(number, connected);
           }
           break;
         case 'onCallEnded':
-          final map = call.arguments as Map?; // or Map<String,dynamic>
+          final map = call.arguments as Map?;
           if (map != null) {
-            final endedNumber = map['number'] as String? ?? '';
             final reason = map['reason'] as String? ?? '';
 
-            // 차단된 번호인지 비동기 확인
             if (await blockedNumbersController.isNumberBlockedAsync(
-              endedNumber,
-              addHistory: false, // 통화 종료 시에는 이력 추가 안 함
+              number,
+              addHistory: false,
             )) {
-              // 차단된 번호였으면 콜로그만 업데이트하고 종료 화면 안 감
               final ctx = navKey.currentContext;
               if (ctx != null) {
                 final callLogController = ctx.read<CallLogController>();
-                // refreshCallLogs는 비동기일 수 있으므로 await 추가 (구현 확인 필요)
                 await callLogController.refreshCallLogs();
               }
               return;
             }
-
-            // 사용 로직
-            goToCallEnded(endedNumber, reason);
+            goToCallEnded(number, reason);
           }
           break;
       }
@@ -67,26 +88,20 @@ class NavigationController {
   }
 
   static void goToDecider() {
-    // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;
     if (ctx == null) return;
-    // "pushNamed"로 -> 뒤로가기 시 이전화면
     Navigator.of(ctx).pushReplacementNamed('/decider');
   }
 
   static void goToIncoming(String number) {
-    // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;
     if (ctx == null) return;
-    // "pushNamed"로 -> 뒤로가기 시 이전화면
     Navigator.of(ctx).pushNamed('/incoming', arguments: number);
   }
 
   static void goToOnCall(String number, bool connected) {
-    // 기본 전화앱 시나리오에서 수신
     final ctx = navKey.currentContext;
     if (ctx == null) return;
-    // "pushNamed"로 -> 뒤로가기 시 이전화면
     Navigator.of(ctx).pushReplacementNamed(
       '/onCall',
       arguments: {'number': number, 'connected': connected},
@@ -94,11 +109,8 @@ class NavigationController {
   }
 
   static void goToCallEnded(String endedNumber, String reason) {
-    // 기본 전화앱 시나리오에서 종료
     final ctx = navKey.currentContext;
     if (ctx == null) return;
-    // 종료화면은 OnCall→CallEnded 치환이 일반적 → pushReplacementNamed
-
     Navigator.of(ctx).pushReplacementNamed(
       '/callEnded',
       arguments: {'number': endedNumber, 'reason': reason},

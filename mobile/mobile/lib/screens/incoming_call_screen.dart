@@ -31,23 +31,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     super.initState();
     _loadContactName();
     _loadSearchData();
-    _showInitialIncomingNotification();
-  }
-
-  Future<void> _showInitialIncomingNotification() async {
-    await LocalNotificationService.showIncomingCallNotification(
-      id: 1234,
-      callerName: '',
-      phoneNumber: widget.incomingNumber,
-    );
-  }
-
-  Future<void> _updateIncomingNotification(String name) async {
-    await LocalNotificationService.showIncomingCallNotification(
-      id: 1234,
-      callerName: name,
-      phoneNumber: widget.incomingNumber,
-    );
   }
 
   Future<void> _loadSearchData() async {
@@ -95,7 +78,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         setState(() {
           _displayName = contact!.name;
         });
-        _updateIncomingNotification(contact.name);
       }
     } catch (e) {
       log('[IncomingCallScreen] Error loading contact name: $e');
@@ -104,12 +86,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
 
   Future<void> _acceptCall() async {
     await NativeMethods.acceptCall();
-    await LocalNotificationService.cancelNotification(1234);
   }
 
   Future<void> _rejectCall() async {
     await NativeMethods.rejectCall();
-    await LocalNotificationService.cancelNotification(1234);
   }
 
   @override

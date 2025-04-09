@@ -100,9 +100,13 @@ void main() async {
   final phoneStateController = PhoneStateController(
     NavigationController.navKey,
     callLogContoller,
+    contactsController,
   );
   // NavigationController 초기화는 컨트롤러 생성 후
-  await NavigationController.init(blockedNumbersController);
+  await NavigationController.init(
+    phoneStateController,
+    blockedNumbersController,
+  );
   final appController = AppController(
     phoneStateController,
     contactsController,

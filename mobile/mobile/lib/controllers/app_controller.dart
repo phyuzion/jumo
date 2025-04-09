@@ -19,6 +19,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 
+// <<< 포그라운드 서비스 알림 ID 상수 추가 >>>
+const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
+
 class AppController {
   final PhoneStateController phoneStateController;
   final ContactsController contactsController;
@@ -137,21 +140,15 @@ class AppController {
       await removeExpiredNotifications();
     });
 
-    // 통화 UI 업데이트 이벤트 리스너 제거
-    // service.on('updateCallUI').listen((event) {
-    //    // TODO: 통화 중 화면에 시간 업데이트 등 이벤트 전달
-    // });
-
     // 안드로이드/iOS 설정
     await service.configure(
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         autoStartOnBoot: false,
         autoStart: false,
-        isForegroundMode: false,
-        notificationChannelId: 'jumo_data_sync_channel',
-        initialNotificationTitle: 'JUMO 서비스',
-        initialNotificationContent: '데이터 동기화 및 통화 서비스 실행 중',
+        isForegroundMode: true,
+        notificationChannelId: 'jumo_foreground_service_channel',
+        foregroundServiceNotificationId: FOREGROUND_SERVICE_NOTIFICATION_ID,
       ),
       iosConfiguration: IosConfiguration(autoStart: false),
     );

@@ -3,9 +3,11 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
+import 'dart:ui'; // DartPluginRegistrant 사용 위해 추가
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:flutter_background_service_android/flutter_background_service_android.dart'; // AndroidServiceInstance 사용 위해 추가
+import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <<< Local Notifications 임포트 추가
 import 'package:mobile/graphql/notification_api.dart';
-import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/graphql/log_api.dart';
 import 'package:hive_ce/hive.dart';
@@ -19,9 +21,20 @@ import 'package:mobile/utils/constants.dart';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
+import 'package:mobile/controllers/app_controller.dart'; // <<< FOREGROUND_SERVICE_NOTIFICATION_ID 사용 위해 추가
+
+const int CALL_STATUS_NOTIFICATION_ID = 1111; // 통화 상태 알림 전용 ID
+const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
+  // <<< DartPluginRegistrant 초기화 >>>
+  DartPluginRegistrant.ensureInitialized();
+
+  // <<< FlutterLocalNotificationsPlugin 인스턴스 생성 >>>
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
   // ***** 1. Hive 초기화 및 Box 열기 *****
   bool hiveInitialized = false;
   try {
@@ -106,43 +119,67 @@ Future<void> onStart(ServiceInstance service) async {
   });
 
   // --- 이벤트 기반 작업들 ---
-  String? ongoingNumber;
-  String? ongoingName;
-  int ongoingSeconds = 0;
-  Timer? callTimer;
-  const ONGOING_CALL_NOTI_ID = 9999;
 
-  service.on('startCallTimer').listen((event) async {
-    final phoneNumber = event?['phoneNumber'] as String? ?? '';
-    final callerName = event?['callerName'] as String? ?? '';
+  // <<< 통화 상태 변경 리스너 (수정됨) >>>
+  service.on('callStateChanged').listen((event) async {
+    final state = event?['state'] as String?;
+    final number = event?['number'] as String?;
+    final callerName = event?['callerName'] as String?;
 
-    log('[BackgroundService] startCallTimer => $phoneNumber');
-
-    ongoingNumber = phoneNumber;
-    ongoingName = callerName.isNotEmpty ? callerName : '';
-    ongoingSeconds = 0;
-
-    await LocalNotificationService.showOngoingCallNotification(
-      id: ONGOING_CALL_NOTI_ID,
-      callerName: ongoingName ?? '',
-      phoneNumber: ongoingNumber ?? '',
+    log(
+      '[BackgroundService] Received callStateChanged: state=$state, number=$number, name=$callerName',
     );
-    callTimer?.cancel();
-    callTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      ongoingSeconds++;
 
-      service.invoke('updateCallUI', {
-        'elapsed': ongoingSeconds,
-        'phoneNumber': ongoingNumber,
-      });
-    });
-  });
+    if (state != null && number != null && callerName != null) {
+      String title = 'KOLPON 보호 중'; // 기본값
+      String content = '실시간 통화 감지 및 데이터 동기화'; // 기본값
 
-  service.on('stopCallTimer').listen((event) async {
-    log('[BackgroundService] stopCallTimer');
-    callTimer?.cancel();
-    callTimer = null;
-    await LocalNotificationService.cancelNotification(ONGOING_CALL_NOTI_ID);
+      switch (state) {
+        case 'incoming':
+          title = '전화 수신 중';
+          content = '발신: $callerName ($number)';
+          break;
+        case 'active':
+          title = '통화 중';
+          content = '$callerName ($number)';
+          break;
+        case 'ended':
+          // 기본값으로 복원 (아래에서 처리)
+          break;
+        default:
+          log('[BackgroundService] Unknown call state received: $state');
+          return;
+      }
+
+      // <<< 포그라운드 알림 내용 업데이트 (Local Notifications 사용) >>>
+      if (service is AndroidServiceInstance) {
+        if (await service.isForegroundService()) {
+          log(
+            '[BackgroundService] Updating foreground notification (ID: $FOREGROUND_SERVICE_NOTIFICATION_ID): Title=$title, Content=$content',
+          );
+          flutterLocalNotificationsPlugin.show(
+            FOREGROUND_SERVICE_NOTIFICATION_ID, // AppController에 정의된 ID 사용
+            title,
+            content,
+            const NotificationDetails(
+              android: AndroidNotificationDetails(
+                FOREGROUND_SERVICE_CHANNEL_ID, // 채널 ID
+                'KOLPON 서비스 상태', // 채널 이름
+                icon: 'ic_bg_service_small', // 알림 아이콘 (res/drawable에 필요)
+                ongoing: true,
+                autoCancel: false,
+                importance: Importance.low,
+                priority: Priority.low,
+                playSound: false,
+                enableVibration: false,
+                onlyAlertOnce: true,
+              ),
+            ),
+          );
+        }
+      }
+      // <<< 업데이트 로직 끝 >>>
+    }
   });
 
   // 즉시 연락처 동기화 요청
@@ -159,13 +196,13 @@ Future<void> onStart(ServiceInstance service) async {
 
   service.on('stopService').listen((event) async {
     log('[BackgroundService] stopService event received');
-    callTimer?.cancel();
+    // 타이머 등 정리
     notificationTimer?.cancel();
     contactSyncTimer?.cancel();
     blockSyncTimer?.cancel();
     smsSyncTimer?.cancel();
+
     service.stopSelf();
-    await LocalNotificationService.cancelNotification(ONGOING_CALL_NOTI_ID);
   });
 
   log('[BackgroundService] Setup complete.');
