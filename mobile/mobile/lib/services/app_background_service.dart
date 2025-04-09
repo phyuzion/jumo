@@ -65,9 +65,10 @@ Future<void> onStart(ServiceInstance service) async {
       if (service is AndroidServiceInstance) {
         if (await service.isForegroundService()) {
           // <<< 저장된 최신 정보 사용 >>>
-          String title = '통화 중';
+          String title =
+              '통화중... (${_formatDurationBackground(ongoingSeconds)})';
           String content =
-              '$_currentCallerNameForTimer ($_currentNumberForTimer) (${_formatDurationBackground(ongoingSeconds)})';
+              '$_currentCallerNameForTimer ($_currentNumberForTimer)';
           String payload = 'active:$_currentNumberForTimer';
 
           // <<< 알림 업데이트 show() 호출 수정 >>>
@@ -134,6 +135,34 @@ Future<void> onStart(ServiceInstance service) async {
   // Hive 초기화 실패 시 종료
   if (!hiveInitialized) return;
 
+  // <<< 서비스 시작 시 초기 알림 설정 >>>
+  if (service is AndroidServiceInstance) {
+    if (await service.isForegroundService()) {
+      log('[BackgroundService] Setting initial foreground notification.');
+      flutterLocalNotificationsPlugin.show(
+        FOREGROUND_SERVICE_NOTIFICATION_ID,
+        'KOLPON 감지 중', // 초기 제목
+        '실시간 통화 감지 중', // 초기 내용
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            FOREGROUND_SERVICE_CHANNEL_ID,
+            'KOLPON 서비스 상태',
+            icon: 'ic_bg_service_small',
+            ongoing: true,
+            autoCancel: false,
+            importance: Importance.low,
+            priority: Priority.low,
+            playSound: false,
+            enableVibration: false,
+            onlyAlertOnce: true,
+          ),
+        ),
+        payload: 'idle', // 초기 페이로드
+      );
+    }
+  }
+  // <<< 초기 알림 설정 끝 >>>
+
   log('[BackgroundService] Setting up periodic timers and event listeners...');
 
   // --- 주기적 작업들 ---
@@ -169,14 +198,14 @@ Future<void> onStart(ServiceInstance service) async {
     }
   });
 
-  // 연락처 동기화 타이머 (10분 유지)
-  contactSyncTimer = Timer.periodic(const Duration(minutes: 10), (timer) async {
+  // 연락처 동기화 타이머 (1일)
+  contactSyncTimer = Timer.periodic(const Duration(days: 1), (timer) async {
     log('[BackgroundService] Starting periodic contact sync...');
     await performContactBackgroundSync();
   });
 
   // 차단 목록 동기화 타이머
-  blockSyncTimer = Timer.periodic(const Duration(hours: 1), (timer) async {
+  blockSyncTimer = Timer.periodic(const Duration(days: 1), (timer) async {
     log(
       '[BackgroundService] Starting periodic blocked/danger/bomb numbers sync...',
     );
@@ -216,8 +245,8 @@ Future<void> onStart(ServiceInstance service) async {
     }
 
     if (state != null) {
-      String title = 'KOLPON 보호 중';
-      String content = '실시간 통화 감지 및 데이터 동기화';
+      String title = 'KOLPON 감지 중';
+      String content = '실시간 통화 감지 중';
       String payload = 'idle';
 
       switch (state) {
@@ -234,8 +263,8 @@ Future<void> onStart(ServiceInstance service) async {
           payload = 'active:$number';
           break;
         case 'ended':
-          title = 'KOLPON 보호 중'; // 종료 시 기본으로 복원
-          content = '실시간 통화 감지 및 데이터 동기화';
+          title = 'KOLPON 감지 중'; // 종료 시 기본으로 복원
+          content = '실시간 통화 감지 중';
           payload = 'idle';
           break;
         default:

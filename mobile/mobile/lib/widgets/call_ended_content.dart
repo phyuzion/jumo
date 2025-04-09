@@ -91,8 +91,11 @@ class CallEndedContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // <<< 전달받은 reason 값 로깅 추가 >>>
+    log('[CallEndedContent] Received reason: $reason');
     final displayName = callerName.isNotEmpty ? callerName : number;
 
+    // <<< 상태 메시지 및 색상 결정 로직 추가 >>>
     String statusMessage;
     Color statusColor;
     if (reason == 'missed') {
@@ -128,12 +131,12 @@ class CallEndedContent extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(bottom: 16.0),
           child: Text(
-            statusMessage,
+            statusMessage, // <<< 계산된 메시지 사용
             style: TextStyle(
               fontSize: 18,
               color: statusColor,
               fontWeight: FontWeight.w500,
-            ),
+            ), // <<< 계산된 색상 사용
           ),
         ),
 

@@ -190,7 +190,10 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
                   ? _loadedCallerName
                   : widget.callerName,
           number: widget.number,
-          reason: 'ended', // TODO: 실제 종료 이유(예: missed) 전달 필요
+          reason: context.read<CallStateProvider>().callEndReason,
+        );
+        log(
+          '[FloatingCallWidget] Passing reason to CallEndedContent: ${context.read<CallStateProvider>().callEndReason}',
         );
         break;
       default:

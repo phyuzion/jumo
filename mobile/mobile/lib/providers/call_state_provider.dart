@@ -3,6 +3,8 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/services/local_notification_service.dart';
 
 // 통화 상태 enum 정의 (HomeScreen에서 가져옴 - 여기서 관리하는 것이 더 적절)
 enum CallState { idle, incoming, active, ended }
@@ -33,7 +35,11 @@ class CallStateProvider with ChangeNotifier {
   int get duration => _duration;
   bool get isConnected => _isConnected;
   bool get isPopupVisible => _isPopupVisible;
-  String get callEndReason => _callEndReason;
+  String get callEndReason {
+    log('[Provider] Getting callEndReason: $_callEndReason');
+    return _callEndReason;
+  }
+
   bool get isMuted => _isMuted;
   bool get isHold => _isHold;
   bool get isSpeakerOn => _isSpeakerOn;
@@ -42,15 +48,15 @@ class CallStateProvider with ChangeNotifier {
   // 생성자 수정
   CallStateProvider(this.phoneStateController);
 
-  // 상태 업데이트 메소드 수정
-  void updateCallState({
+  // 상태 업데이트 메소드 수정 (async 추가)
+  Future<void> updateCallState({
     required CallState state,
     String number = '',
     String callerName = '',
     bool isConnected = false,
     String reason = '',
     int duration = 0, // <<< duration 파라미터 추가
-  }) {
+  }) async {
     log(
       '[Provider] Received update: $state, Num: $number, Name: $callerName, Connected: $isConnected, Reason: $reason',
     );
@@ -69,9 +75,10 @@ class CallStateProvider with ChangeNotifier {
         _isConnected != isConnected ||
         _callEndReason != reason ||
         _duration != duration;
+    bool durationChanged = (state == CallState.active && _duration != duration);
 
     // 이름 조회 필요 시 또는 상태 변경 시 업데이트
-    if (shouldFetchName || stateChanged) {
+    if (shouldFetchName || stateChanged || durationChanged) {
       _callState = state;
       _number = number;
       _isConnected = isConnected;
@@ -79,17 +86,39 @@ class CallStateProvider with ChangeNotifier {
       _callerName = finalCallerName; // 일단 받은 이름으로 설정 (비어있을 수 있음)
       _duration = duration; // <<< 전달받은 duration으로 업데이트
 
+      // <<< 기본 전화 앱 여부 확인 >>>
+      bool isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
+      log('[Provider] Is default dialer: $isDefault');
+
       // 상태에 따른 팝업 및 타이머 관리
       if (_callState == CallState.incoming ||
           (_callState == CallState.active)) {
-        _isPopupVisible = true; // 전화 오거나 통화 중이면 팝업 자동 표시
-        _cancelEndedStateTimer(); // ended 타이머 취소
+        if (isDefault) {
+          _isPopupVisible = true;
+          _cancelEndedStateTimer();
+        } else {
+          _isPopupVisible = false;
+        }
       } else if (_callState == CallState.ended) {
-        _isPopupVisible = true; // <<< 수정: 팝업 열기 (Ended 내용 표시)
-        _startEndedStateTimer(); // idle 전환 타이머 시작
+        if (isDefault) {
+          _isPopupVisible = true;
+          _startEndedStateTimer();
+          // <<< 부재중 알림 호출 추가 >>>
+          if (_callEndReason == 'missed') {
+            log('[Provider] Showing missed call notification for $_number');
+            // ID는 적절히 설정 (예: 번호 해시코드 사용 또는 고유 ID 생성)
+            final notificationId = _number.hashCode;
+            LocalNotificationService.showMissedCallNotification(
+              id: notificationId,
+              callerName: _callerName,
+              phoneNumber: _number,
+            );
+          }
+        } else {
+          _isPopupVisible = false;
+        }
       } else {
-        // idle
-        _isPopupVisible = false; // idle이면 팝업 닫기
+        _isPopupVisible = false;
         _cancelEndedStateTimer();
       }
 

@@ -313,22 +313,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
-        Positioned(
-          top: 60,
-          bottom: panelBottomPosition + 70,
-          left: 16.0,
-          right: 16.0,
-          child: FloatingCallWidget(
-            isVisible: isPopupVisible,
-            callState: callState,
-            number: number,
-            callerName: callerName,
-            connected: isConnected,
-            duration: duration,
-            onClosePopup: _toggleCallPopup,
-            onHangUp: _handleHangUp,
+        if (_isDefaultDialer)
+          Positioned(
+            top: 60,
+            bottom: panelBottomPosition + 70,
+            left: 16.0,
+            right: 16.0,
+            child: FloatingCallWidget(
+              isVisible: isPopupVisible,
+              callState: callState,
+              number: number,
+              callerName: callerName,
+              connected: isConnected,
+              duration: duration,
+              onClosePopup: _toggleCallPopup,
+              onHangUp: _handleHangUp,
+            ),
           ),
-        ),
         if (_isDefaultDialer)
           Positioned(
             bottom: 70.0,
