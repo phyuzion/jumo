@@ -160,9 +160,13 @@ class PhoneStateController with WidgetsBindingObserver {
     String number,
     String callerName, {
     bool? connected,
+    String? reason,
   }) {
     final service = FlutterBackgroundService();
     String state;
+    bool isConnectedValue = connected ?? false;
+    String reasonValue = reason ?? '';
+
     switch (stateMethod) {
       case 'onIncomingNumber':
         state = 'incoming';
@@ -185,12 +189,14 @@ class PhoneStateController with WidgetsBindingObserver {
     }
 
     log(
-      '[PhoneStateController] Invoking service: callStateChanged - state: $state, number: $number, name: $callerName',
+      '[PhoneStateController] Invoking service: callStateChanged - state: $state, number: $number, name: $callerName, connected: $isConnectedValue, reason: $reasonValue',
     );
     service.invoke('callStateChanged', {
       'state': state,
       'number': number,
       'callerName': callerName.isNotEmpty ? callerName : '알 수 없음',
+      'connected': isConnectedValue,
+      'reason': reasonValue,
     });
   }
 

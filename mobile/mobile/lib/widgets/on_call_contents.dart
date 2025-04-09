@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:developer';
-// TODO: Import NativeMethods for button actions
+import 'package:mobile/services/native_methods.dart';
 // TODO: Import constants if needed (normalizePhone etc.)
 
 // OnCallScreen의 핵심 UI를 담당하는 위젯
@@ -9,12 +9,14 @@ class OnCallContents extends StatefulWidget {
   final String callerName;
   final String number;
   final bool connected; // 통화 연결 상태
+  final VoidCallback onHangUp; // 통화 종료 콜백
 
   const OnCallContents({
     super.key,
     required this.callerName,
     required this.number,
     required this.connected,
+    required this.onHangUp,
   });
 
   @override
@@ -86,31 +88,37 @@ class _OnCallContentsState extends State<OnCallContents> {
     return "$minutes:$secs";
   }
 
-  // --- 버튼 액션 핸들러 (임시) ---
+  // --- 버튼 액션 핸들러 (NativeMethods 호출 및 콜백 연결) ---
   Future<void> _toggleMute() async {
-    // TODO: Call NativeMethods.toggleMute(!isMuted);
-    setState(() => isMuted = !isMuted);
+    final newVal = !isMuted;
+    await NativeMethods.toggleMute(newVal);
+    if (mounted) setState(() => isMuted = newVal);
     log('[OnCallContents] Mute toggled: $isMuted');
   }
 
   Future<void> _toggleHold() async {
-    // TODO: Call NativeMethods.toggleHold(!isHold);
-    setState(() => isHold = !isHold);
+    final newVal = !isHold;
+    await NativeMethods.toggleHold(newVal);
+    if (mounted) setState(() => isHold = newVal);
     log('[OnCallContents] Hold toggled: $isHold');
   }
 
   Future<void> _toggleSpeaker() async {
-    // TODO: Call NativeMethods.toggleSpeaker(!isSpeakerOn);
-    setState(() => isSpeakerOn = !isSpeakerOn);
+    final newVal = !isSpeakerOn;
+    await NativeMethods.toggleSpeaker(newVal);
+    if (mounted) setState(() => isSpeakerOn = newVal);
     log('[OnCallContents] Speaker toggled: $isSpeakerOn');
   }
 
   Future<void> _hangUp() async {
     log('[OnCallContents] Hang up tapped');
-    // TODO: Call NativeMethods.hangUpCall();
-    // TODO: Notify state change (e.g., call ended)
-    _stopCallTimer(); // 타이머 중지
-    // TODO: Close popup (via callback?)
+    try {
+      await NativeMethods.hangUpCall();
+    } catch (e) {
+      log('[OnCallContents] Error hanging up: $e');
+    }
+    _stopCallTimer();
+    widget.onHangUp();
   }
   // --- 버튼 액션 핸들러 끝 ---
 

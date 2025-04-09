@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/screens/home_screen.dart'; // CallState enum 사용 위해 임시 임포트 (나중에 분리)
 import 'dart:async'; // Timer 사용 위해 (통화 시간)
 import 'dart:developer'; // 로그
@@ -48,9 +49,6 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
       _updateTimerBasedOnState(
         widget.callState == CallState.active && widget.connected,
       );
-      if (widget.callState == CallState.ended) {
-        // TODO: Implement 30-second timer to revert to idle state?
-      }
     }
   }
 
@@ -108,84 +106,88 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
     Color targetBarColor = Theme.of(context).colorScheme.secondary;
     Widget barContent;
     IconData leadingIcon = Icons.error;
-    bool showExpandButton = false;
+    bool isPopupVisible = widget.isPopupVisible; // 가독성 위해 변수 사용
 
-    // 상태에 따른 바/버튼 모양 및 내용 결정
-    switch (widget.callState) {
-      case CallState.idle:
-        targetBarHeight = barHeightIdle;
-        targetBarWidth = fabSize;
-        targetBorderRadius = BorderRadius.circular(fabSize / 2);
-        if (widget.isPopupVisible) {
-          targetBarColor = Colors.grey.shade700;
-          barContent = Icon(
-            Icons.keyboard_arrow_down,
-            color: Colors.white,
-            size: fabSize * 0.6,
-          );
-        } else {
+    // <<< 팝업이 보일 때는 항상 닫기 버튼 표시 >>>
+    if (isPopupVisible) {
+      targetBarHeight = barHeightIdle; // 원형 버튼 크기
+      targetBarWidth = fabSize;
+      targetBorderRadius = BorderRadius.circular(fabSize / 2);
+      targetBarColor = Colors.grey.shade700; // 닫기 버튼 색상
+      barContent = Icon(
+        Icons.keyboard_arrow_down,
+        color: Colors.white,
+        size: fabSize * 0.6,
+      );
+    }
+    // <<< 팝업이 안 보일 때만 상태별 UI 표시 >>>
+    else {
+      // 상태에 따른 바/버튼 모양 및 내용 결정
+      switch (widget.callState) {
+        case CallState.idle:
+          targetBarHeight = barHeightIdle;
+          targetBarWidth = fabSize;
+          targetBorderRadius = BorderRadius.circular(fabSize / 2);
           targetBarColor = Colors.black;
           barContent = Icon(
             Icons.dialpad,
             color: Colors.white,
             size: fabSize * 0.6,
           );
-        }
-        showExpandButton = true;
-        break;
-      case CallState.incoming:
-        targetBarHeight = barHeightActive;
-        targetBarWidth =
-            MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
-        targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
-        targetBarColor = Colors.green;
-        leadingIcon = Icons.call;
-        barContent = _buildBarContent(
-          leadingIcon,
-          "전화 수신 중",
-          widget.callerName,
-          widget.number,
-        );
-        break;
-      case CallState.active:
-        targetBarHeight = barHeightActive;
-        targetBarWidth =
-            MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
-        targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
-        targetBarColor = Colors.black;
-        leadingIcon = Icons.phone_in_talk;
-        barContent = _buildBarContent(
-          leadingIcon,
-          widget.connected
-              ? "통화 중 (${_formatDuration(_callDuration)})"
-              : "연결 중...",
-          widget.callerName,
-          widget.number,
-        );
-        break;
-      case CallState.ended:
-        targetBarHeight = barHeightActive;
-        targetBarWidth =
-            MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
-        targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
-        targetBarColor = Colors.grey;
-        leadingIcon = Icons.check_circle_outline;
-        barContent = _buildBarContent(
-          leadingIcon,
-          "통화 종료",
-          widget.callerName,
-          widget.number,
-        );
-        // TODO: Add timer logic here to revert to idle after 30 seconds
-        break;
+          break;
+        case CallState.incoming:
+          targetBarHeight = barHeightActive;
+          targetBarWidth =
+              MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
+          targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
+          targetBarColor = Colors.green;
+          leadingIcon = Icons.call;
+          barContent = _buildBarContent(
+            leadingIcon,
+            "전화 수신 중",
+            widget.callerName,
+            widget.number,
+          );
+          break;
+        case CallState.active:
+          targetBarHeight = barHeightActive;
+          targetBarWidth =
+              MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
+          targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
+          targetBarColor = Colors.black;
+          leadingIcon = Icons.phone_in_talk;
+          barContent = _buildBarContent(
+            leadingIcon,
+            widget.connected
+                ? "통화 중 (${_formatDuration(_callDuration)})"
+                : "연결 중...",
+            widget.callerName,
+            widget.number,
+          );
+          break;
+        case CallState.ended:
+          targetBarHeight = barHeightActive;
+          targetBarWidth =
+              MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
+          targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
+          targetBarColor = Colors.grey;
+          leadingIcon = Icons.check_circle_outline;
+          barContent = _buildBarContent(
+            leadingIcon,
+            "통화 종료",
+            widget.callerName,
+            widget.number,
+          );
+          break;
+      }
     }
 
     // AnimatedContainer가 버튼/바 역할
     return GestureDetector(
-      onTap: widget.onTogglePopup, // 모든 상태에서 탭하면 팝업 토글 콜백 호출
+      onTap: widget.onTogglePopup,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
+        curve: Curves.easeInOut, // <<< 커브 변경 (easeOutBack -> easeInOut) 부드럽게
         width: targetBarWidth,
         height: targetBarHeight,
         decoration: BoxDecoration(
@@ -202,9 +204,8 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            // 탭 효과
             borderRadius: targetBorderRadius,
-            onTap: widget.onTogglePopup, // InkWell에도 onTap 설정
+            onTap: widget.onTogglePopup,
             child: Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: targetBarWidth == fabSize ? 0 : 12.0,
@@ -215,10 +216,10 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
                   transitionBuilder: (child, animation) {
                     return FadeTransition(opacity: animation, child: child);
                   },
+                  // <<< 키 값을 isPopupVisible 상태도 포함하도록 수정 >>>
                   child: barContent,
                   key: ValueKey(
-                    widget.callState.toString() +
-                        widget.isPopupVisible.toString(),
+                    widget.callState.toString() + isPopupVisible.toString(),
                   ),
                 ),
               ),

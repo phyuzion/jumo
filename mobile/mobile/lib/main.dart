@@ -24,6 +24,7 @@ import 'package:mobile/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'dart:developer';
+import 'dart:async';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart'
@@ -31,6 +32,7 @@ import 'package:flutter_quill/flutter_quill.dart'
 import 'package:mobile/models/blocked_history.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mobile/services/local_notification_service.dart';
+import 'package:mobile/providers/call_state_provider.dart';
 
 /// 오버레이 전용 엔트리
 @pragma('vm:entry-point')
@@ -136,6 +138,11 @@ void main() async {
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
         ),
+        ChangeNotifierProvider(
+          create:
+              (context) =>
+                  CallStateProvider(context.read<PhoneStateController>()),
+        ),
       ],
       child: MyAppStateful(initialRoutePayload: initialRoutePayload),
     ),
@@ -153,6 +160,8 @@ class MyAppStateful extends StatefulWidget {
 
 class _MyAppStatefulState extends State<MyAppStateful>
     with WidgetsBindingObserver {
+  StreamSubscription? _updateUiCallStateSub;
+
   @override
   void initState() {
     super.initState();
@@ -160,6 +169,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAppController();
       _handleInitialPayload();
+      _listenToBackgroundService();
     });
   }
 
@@ -178,13 +188,91 @@ class _MyAppStatefulState extends State<MyAppStateful>
     final payload = widget.initialRoutePayload;
     if (payload != null) {
       log('[_MyAppStatefulState] Handling initial payload: $payload');
-      LocalNotificationService.handlePayloadNavigation(payload);
+      final provider = context.read<CallStateProvider>();
+      final parts = payload.split(':');
+      if (parts.length < 1) return;
+      final typeStr = parts[0];
+      final number = parts.length > 1 ? parts[1] : '';
+
+      CallState? initialState;
+      bool initialConnected = false;
+      String initialReason = '';
+
+      try {
+        initialState = CallState.values.byName(typeStr);
+        if (initialState == CallState.active) {
+          initialConnected = true;
+        } else if (initialState == CallState.ended) {
+          initialReason = 'missed';
+        }
+      } catch (e) {
+        log('[_MyAppStatefulState] Error parsing initial CallState: $e');
+        initialState = null;
+      }
+
+      if (initialState != null && initialState != CallState.idle) {
+        log(
+          '[_MyAppStatefulState] Setting initial call state from payload: $initialState',
+        );
+        provider.updateCallState(
+          state: initialState,
+          number: number,
+          callerName: '',
+          isConnected: initialConnected,
+          reason: initialReason,
+        );
+      } else {
+        log(
+          '[_MyAppStatefulState] Initial payload is idle or invalid, starting normally.',
+        );
+      }
     }
+  }
+
+  void _listenToBackgroundService() {
+    final service = FlutterBackgroundService();
+    _updateUiCallStateSub = service.on('updateUiCallState').listen((event) {
+      if (!mounted) return;
+      final stateStr = event?['state'] as String?;
+      final number = event?['number'] as String? ?? '';
+      final callerName = event?['callerName'] as String? ?? '';
+      final isConnected = event?['connected'] as bool? ?? false;
+      final reason = event?['reason'] as String? ?? '';
+
+      CallState? newState;
+      try {
+        if (stateStr != null) {
+          newState = CallState.values.byName(stateStr);
+        }
+      } catch (e) {
+        log('[_MyAppStatefulState] Error parsing CallState: $e');
+        newState = null;
+      }
+
+      if (newState != null) {
+        log(
+          '[_MyAppStatefulState] Received UI state update from background: $newState',
+        );
+        context.read<CallStateProvider>().updateCallState(
+          state: newState,
+          number: number,
+          callerName: callerName,
+          isConnected: isConnected,
+          reason: reason,
+        );
+      } else {
+        log(
+          '[_MyAppStatefulState] Received invalid state from background: $stateStr',
+        );
+      }
+    });
+    log('[_MyAppStatefulState] Listening to background service UI updates.');
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _updateUiCallStateSub?.cancel();
     super.dispose();
   }
 

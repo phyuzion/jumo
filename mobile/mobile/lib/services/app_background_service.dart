@@ -125,9 +125,11 @@ Future<void> onStart(ServiceInstance service) async {
     final state = event?['state'] as String?;
     final number = event?['number'] as String?;
     final callerName = event?['callerName'] as String?;
+    final isConnected = event?['connected'] as bool?;
+    final reason = event?['reason'] as String?;
 
     log(
-      '[BackgroundService] Received callStateChanged: state=$state, number=$number, name=$callerName',
+      '[BackgroundService] Received callStateChanged: state=$state, number=$number, name=$callerName, connected=$isConnected, reason=$reason',
     );
 
     if (state != null && number != null && callerName != null) {
@@ -181,6 +183,17 @@ Future<void> onStart(ServiceInstance service) async {
           );
         }
       }
+
+      // <<< UI 스레드로 상태 업데이트 이벤트 보내기 >>>
+      log('[BackgroundService] Invoking UI update: updateUiCallState');
+      service.invoke('updateUiCallState', {
+        'state': state, // 'incoming', 'active', 'ended' 등
+        'number': number,
+        'callerName': callerName,
+        'connected': isConnected, // active 상태의 연결 여부
+        'reason': reason, // ended 상태의 종료 이유
+      });
+      // <<< invoke 호출 끝 >>>
     }
   });
 

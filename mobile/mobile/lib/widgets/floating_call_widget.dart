@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/screens/home_screen.dart'; // CallState enum 사용 위해 임시 임포트 (나중에 분리)
 import 'package:mobile/widgets/dialer_content.dart'; // <<< 새 위젯 임포트
 import 'dart:developer';
@@ -20,6 +21,7 @@ class FloatingCallWidget extends StatefulWidget {
   final String callerName; // 외부에서 받은 이름 (업데이트될 수 있음)
   final bool connected; // <<< 추가
   final VoidCallback onClosePopup; // 팝업 닫기 콜백
+  final VoidCallback onHangUp; // <<< 추가
 
   const FloatingCallWidget({
     super.key,
@@ -29,6 +31,7 @@ class FloatingCallWidget extends StatefulWidget {
     required this.callerName,
     required this.connected, // <<< 추가
     required this.onClosePopup,
+    required this.onHangUp, // <<< 추가
   });
 
   @override
@@ -174,6 +177,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
                   : widget.callerName,
           number: widget.number,
           connected: widget.connected,
+          onHangUp: widget.onHangUp, // <<< 콜백 전달
         );
         break;
       case CallState.ended:

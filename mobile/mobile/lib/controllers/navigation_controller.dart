@@ -42,78 +42,39 @@ class NavigationController {
               (call.method == 'onCall' && callArgs is Map)
                   ? (callArgs['connected'] as bool? ?? false)
                   : null,
+          reason:
+              (call.method == 'onCallEnded' && callArgs is Map)
+                  ? (callArgs['reason'] as String? ?? '')
+                  : '',
         );
       }
       // <<< 로직 이동 끝 >>>
 
-      switch (call.method) {
-        case 'onIncomingNumber':
-          if (await blockedNumbersController.isNumberBlockedAsync(
-            number,
-            addHistory: true,
-          )) {
-            await NativeMethods.rejectCall();
-            return;
-          }
-          goToIncoming(number);
-          break;
-        case 'onCall':
-          final map = call.arguments as Map?;
-          if (map != null) {
-            final connected = map['connected'] as bool? ?? false;
-            goToOnCall(number, connected);
-          }
-          break;
-        case 'onCallEnded':
-          final map = call.arguments as Map?;
-          if (map != null) {
-            final reason = map['reason'] as String? ?? '';
-
-            if (await blockedNumbersController.isNumberBlockedAsync(
-              number,
-              addHistory: false,
-            )) {
-              final ctx = navKey.currentContext;
-              if (ctx != null) {
-                final callLogController = ctx.read<CallLogController>();
-                await callLogController.refreshCallLogs();
-              }
-              return;
-            }
-            goToCallEnded(number, reason);
-          }
-          break;
+      // <<< 차단 로직은 여기서 처리? 또는 Provider에서? (우선 유지 후 검토) >>>
+      if (call.method == 'onIncomingNumber') {
+        if (await blockedNumbersController.isNumberBlockedAsync(
+          number,
+          addHistory: true,
+        )) {
+          log(
+            '[NavigationController] Incoming call blocked for $number, rejecting call.',
+          );
+          await NativeMethods.rejectCall();
+          return;
+        }
       }
     });
   }
 
+  // <<< goToDecider 함수 복원 >>>
   static void goToDecider() {
     final ctx = navKey.currentContext;
     if (ctx == null) return;
     Navigator.of(ctx).pushReplacementNamed('/decider');
   }
 
-  static void goToIncoming(String number) {
-    final ctx = navKey.currentContext;
-    if (ctx == null) return;
-    Navigator.of(ctx).pushNamed('/incoming', arguments: number);
-  }
-
-  static void goToOnCall(String number, bool connected) {
-    final ctx = navKey.currentContext;
-    if (ctx == null) return;
-    Navigator.of(ctx).pushReplacementNamed(
-      '/onCall',
-      arguments: {'number': number, 'connected': connected},
-    );
-  }
-
-  static void goToCallEnded(String endedNumber, String reason) {
-    final ctx = navKey.currentContext;
-    if (ctx == null) return;
-    Navigator.of(ctx).pushReplacementNamed(
-      '/callEnded',
-      arguments: {'number': endedNumber, 'reason': reason},
-    );
-  }
+  // <<< 다른 goTo... 함수들은 주석 처리 유지 >>>
+  // static void goToIncoming(String number) { ... }
+  // static void goToOnCall(String number, bool connected) { ... }
+  // static void goToCallEnded(String endedNumber, String reason) { ... }
 }

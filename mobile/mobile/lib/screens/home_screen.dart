@@ -15,11 +15,7 @@ import 'dart:developer';
 import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/dynamic_call_island.dart';
 import 'package:mobile/widgets/floating_call_widget.dart';
-
-// <<< 새로운 커스텀 위젯 임포트 (파일 생성 후) >>>
-// import 'package:mobile/widgets/dynamic_call_interface.dart';
-// <<< 임시 상태 정의 (추후 별도 파일/Notifier로 분리) >>>
-enum CallState { idle, incoming, active, ended }
+import 'package:mobile/providers/call_state_provider.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -34,14 +30,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _notificationCount = 0;
   StreamSubscription? _notificationSub;
   bool _isDefaultDialer = false;
-
-  // <<< 통화 상태 및 팝업 표시 상태 관리 >>>
-  CallState _currentCallState = CallState.idle;
-  String _currentNumber = '';
-  String _currentCallerName = '';
-  bool _isCallPopupVisible = false;
-  bool _isConnectedForTest = false; // <<< Active 상태 테스트 위한 연결 상태 변수
-  // TODO: Provider/Notifier로 상태 관리 이전하고, 백그라운드 서비스 이벤트 리스너 추가하여 상태 업데이트
 
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
@@ -71,19 +59,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _loadNotificationCount();
       }
     });
-
-    // TODO: Listen to background service event ('updateUiCallState') here
-    // FlutterBackgroundService().on('updateUiCallState').listen((event) {
-    //   setState(() {
-    //      _currentCallState = parseState(event?['state']);
-    //      _currentNumber = event?['number'] ?? '';
-    //      // ... etc ...
-    //      if (_currentCallState == CallState.ended) {
-    //         _isCallPopupVisible = false; // 통화 종료 시 팝업 자동 닫기
-    //         // TODO: 30초 후 idle 상태로 변경 타이머?
-    //      }
-    //   });
-    // });
   }
 
   @override
@@ -142,77 +117,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  // <<< 팝업 토글 함수 (상태 순환 테스트 확장 + Ended 상태 유지) >>>
   void _toggleCallPopup() {
-    setState(() {
-      int currentStateIndex = CallState.values.indexOf(_currentCallState);
-      int nextStateIndex = currentStateIndex;
-      bool nextConnected = _isConnectedForTest;
-      bool nextPopupVisible = _isCallPopupVisible; // 현재 팝업 상태 유지 기본값
+    context.read<CallStateProvider>().togglePopup();
+    log('[HomeScreen] Popup toggle requested.');
+  }
 
-      // 상태 순환 로직 변경
-      if (_currentCallState == CallState.idle) {
-        nextStateIndex = CallState.values.indexOf(CallState.incoming);
-        nextConnected = false;
-        nextPopupVisible = true; // Incoming 시 팝업 열기
-      } else if (_currentCallState == CallState.incoming) {
-        nextStateIndex = CallState.values.indexOf(CallState.active);
-        nextConnected = false;
-        nextPopupVisible = true; // Active 시 팝업 유지
-      } else if (_currentCallState == CallState.active &&
-          !_isConnectedForTest) {
-        nextConnected = true;
-        nextPopupVisible = true; // 팝업 유지
-      } else if (_currentCallState == CallState.active && _isConnectedForTest) {
-        nextStateIndex = CallState.values.indexOf(CallState.ended);
-        nextConnected = false;
-        nextPopupVisible = true; // <<< Ended 상태에서도 팝업 유지 >>>
-      } else if (_currentCallState == CallState.ended) {
-        // <<< Ended 상태에서 한번 더 누르면 Idle로 + 팝업 닫기 >>>
-        nextStateIndex = CallState.values.indexOf(CallState.idle);
-        nextConnected = false;
-        nextPopupVisible = false;
-      }
-
-      _currentCallState = CallState.values[nextStateIndex];
-      _isConnectedForTest = nextConnected;
-      _isCallPopupVisible = nextPopupVisible; // <<< 업데이트된 팝업 상태 적용
-
-      // 상태에 따른 더미 데이터 설정 (ended 상태 데이터 유지)
-      switch (_currentCallState) {
-        case CallState.idle:
-          _currentNumber = '';
-          _currentCallerName = '';
-          // _isCallPopupVisible = false; // 위에서 이미 설정됨
-          break;
-        case CallState.incoming:
-          _currentNumber = '010-7777-7777';
-          _currentCallerName = '테스트 수신자';
-          // _isCallPopupVisible = true; // 위에서 이미 설정됨
-          break;
-        case CallState.active:
-          _currentNumber = '010-3333-4444';
-          _currentCallerName = '통화 테스트';
-          // _isCallPopupVisible = true; // 위에서 이미 설정됨
-          break;
-        case CallState.ended:
-          // 번호와 이름은 active 상태에서 유지됨
-          // _currentNumber = '010-3333-4444';
-          // _currentCallerName = '통화 테스트';
-          // _isCallPopupVisible = true; // 위에서 이미 설정됨
-          break;
-      }
-
-      log(
-        '[HomeScreen] Test state set to: $_currentCallState, Connected: $_isConnectedForTest, Popup: $_isCallPopupVisible',
-      );
-    });
+  void _handleHangUp() {
+    log('[HomeScreen] Handling hang up...');
+    context.read<CallStateProvider>().updateCallState(state: CallState.ended);
   }
 
   @override
   Widget build(BuildContext context) {
     final appController = context.watch<AppController>();
-    // <<< AppBar 정의 (높이 계산 위해 먼저 정의) >>>
+    final callStateProvider = context.watch<CallStateProvider>();
+    final callState = callStateProvider.callState;
+    final number = callStateProvider.number;
+    final callerName = callStateProvider.callerName;
+    final isConnected = callStateProvider.isConnected;
+    final isPopupVisible = callStateProvider.isPopupVisible;
+
     final appBar = AppBar(
       backgroundColor: Colors.white,
       elevation: 0,
@@ -307,7 +231,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
 
-    // <<< 필요한 높이/마진 값 계산 >>>
     final double appBarHeight =
         appBar.preferredSize.height +
         (appBar.bottom?.preferredSize.height ?? 0);
@@ -319,14 +242,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         fixedButtonBottomMargin + fabSize + panelMarginAboveButton;
     final double statusBarHeight = MediaQuery.of(context).padding.top;
 
-    // <<< 최상위를 Stack으로 변경 >>>
     return Stack(
       children: [
-        // --- 1. 기본 Scaffold UI ---
         Scaffold(
           appBar: appBar,
           body: Stack(
-            // 로딩 인디케이터 등 Scaffold body 내용
             children: [
               _screens[_currentIndex],
               ValueListenableBuilder<bool>(
@@ -384,34 +304,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ],
           ),
         ),
-
-        // --- 2. 팝업 패널 (FloatingCallWidget) ---
         Positioned(
           top: 60,
           bottom: panelBottomPosition + 70,
           left: 16.0,
           right: 16.0,
           child: FloatingCallWidget(
-            isVisible: _isCallPopupVisible,
-            callState: _currentCallState,
-            number: _currentNumber,
             callerName: _currentCallerName,
-            connected: _isConnectedForTest,
+            isVisible: isPopupVisible,
+            callState: callState,
+            number: number,
+            callerName: callerName,
+            connected: isConnected,
             onClosePopup: _toggleCallPopup,
+            onHangUp: _handleHangUp,
           ),
         ),
-
-        // --- 3. 하단 버튼/바 (DynamicCallIsland) ---
         if (_isDefaultDialer)
           Positioned(
             bottom: 70.0,
             right: 16.0,
             child: DynamicCallIsland(
-              callState: _currentCallState,
-              number: _currentNumber,
-              callerName: _currentCallerName,
-              isPopupVisible: _isCallPopupVisible,
-              connected: _isConnectedForTest,
+              callState: callState,
+              number: number,
+              callerName: callerName,
+              isPopupVisible: isPopupVisible,
+              connected: isConnected,
               onTogglePopup: _toggleCallPopup,
             ),
           ),

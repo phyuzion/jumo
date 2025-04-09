@@ -168,7 +168,7 @@ class LocalNotificationService {
     log('[LocalNotification] Canceled all notifications.');
   }
 
-  // 페이로드 처리 및 네비게이션 함수 (public으로 변경)
+  // <<< 페이로드 처리 및 네비게이션 함수 (수정) >>>
   static void handlePayloadNavigation(String payload) {
     final parts = payload.split(':');
     if (parts.length < 1) return;
@@ -176,34 +176,23 @@ class LocalNotificationService {
     final type = parts[0];
     final number = parts.length > 1 ? parts[1] : '';
 
-    final currentContext = NavigationController.navKey.currentContext;
-    if (currentContext == null) {
-      log('[LocalNotification] Cannot navigate: Navigator context is null.');
-      return;
-    }
+    log('[LocalNotification] Handling payload: type=$type, number=$number');
 
-    log(
-      '[LocalNotification] Navigating based on payload: type=$type, number=$number',
-    );
+    // <<< 네비게이션 로직 제거 >>>
+    // Provider 업데이트는 앱 실행 시 main.dart에서 처리하거나,
+    // 앱 실행 중에는 _listenToBackgroundService에서 처리되므로 여기서 직접 호출 불필요.
 
-    // 이미 해당 화면에 있는지 확인하는 로직 추가하면 더 좋음
-
-    switch (type) {
-      case 'incoming':
-        NavigationController.goToIncoming(number);
-        break;
-      case 'active':
-        NavigationController.goToOnCall(number, true);
-        break;
-      case 'missed':
-        NavigationController.goToCallEnded(number, 'missed');
-        break;
-      case 'idle':
-        // 기본 상태 알림 탭 시 동작 정의 (예: 홈으로 가거나 아무것도 안 함)
-        // Navigator.pushNamedAndRemoveUntil(currentContext, '/home', (route) => false);
-        break;
-      default:
-        log('[LocalNotification] Unknown payload type: $type');
-    }
+    // final currentContext = NavigationController.navKey.currentContext;
+    // if (currentContext == null) {
+    //   log('[LocalNotification] Cannot navigate: Navigator context is null.');
+    //   return;
+    // }
+    // log('[LocalNotification] Navigating based on payload: type=$type, number=$number');
+    // switch (type) {
+    //   case 'incoming':
+    //     NavigationController.goToIncoming(number);
+    //     break;
+    //   // ... (다른 case)
+    // }
   }
 }
