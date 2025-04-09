@@ -5,7 +5,7 @@ import 'package:mobile/models/today_record.dart';
 import 'package:mobile/utils/constants.dart';
 
 class SearchResultWidget extends StatefulWidget {
-  final SearchResultModel searchResult;
+  final SearchResultModel? searchResult;
   final ScrollController? scrollController;
   final bool ignorePointer;
 
@@ -25,10 +25,11 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
 
   @override
   Widget build(BuildContext context) {
+    final phoneNumberModel = widget.searchResult?.phoneNumberModel;
+    final todayRecords = widget.searchResult?.todayRecords ?? [];
+
     // 타입 컬러
-    final typeColor = _pickColorForType(
-      widget.searchResult.phoneNumberModel?.type ?? 0,
-    );
+    final typeColor = _pickColorForType(phoneNumberModel?.type ?? 0);
 
     return Column(
       children: [
@@ -36,30 +37,27 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
         // (1) 상단 헤더부: phoneNumber + type 또는 신규 번호 메시지
         // -----------------------------
         Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.grey.shade200,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          color: Colors.grey.shade100,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              if (widget.searchResult.phoneNumberModel != null) ...[
+              if (phoneNumberModel != null) ...[
                 // Type 서클
                 CircleAvatar(
                   backgroundColor: typeColor,
-                  radius: 20,
+                  radius: 16,
                   child: Text(
-                    '${widget.searchResult.phoneNumberModel?.type ?? 0}',
-                    style: const TextStyle(color: Colors.white, fontSize: 18),
+                    '${phoneNumberModel.type}',
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
                   ),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(width: 12),
                 // 전화번호 (굵게)
                 Expanded(
                   child: Text(
-                    widget.searchResult.phoneNumberModel?.phoneNumber ?? '',
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    phoneNumberModel.phoneNumber,
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ),
               ] else ...[
@@ -69,9 +67,9 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
                     child: Text(
                       '신규 번호입니다',
                       style: TextStyle(
-                        fontSize: 24,
+                        fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: Colors.grey.shade700,
+                        color: Colors.grey.shade600,
                       ),
                     ),
                   ),
@@ -83,7 +81,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
         // 구분선
         const Divider(
           color: Colors.grey,
-          thickness: 0.5,
+          thickness: 0.3,
           indent: 16.0,
           endIndent: 16.0,
           height: 0,
@@ -97,11 +95,15 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
                   ? IgnorePointer(
                     child: ListView.separated(
                       controller: widget.scrollController,
+                      shrinkWrap: true,
+                      physics: const ClampingScrollPhysics(),
+                      primary: false,
+                      padding: EdgeInsets.zero,
                       itemCount: _calculateItemCount(),
                       separatorBuilder: (context, index) {
                         return const Divider(
                           color: Colors.grey,
-                          thickness: 0.5,
+                          thickness: 0.3,
                           indent: 16.0,
                           endIndent: 16.0,
                           height: 0,
@@ -114,11 +116,15 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
                   )
                   : ListView.separated(
                     controller: widget.scrollController,
+                    shrinkWrap: true,
+                    physics: const ClampingScrollPhysics(),
+                    primary: false,
+                    padding: EdgeInsets.zero,
                     itemCount: _calculateItemCount(),
                     separatorBuilder: (context, index) {
                       return const Divider(
                         color: Colors.grey,
-                        thickness: 0.5,
+                        thickness: 0.3,
                         indent: 16.0,
                         endIndent: 16.0,
                         height: 0,
@@ -135,8 +141,8 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
 
   // 아이템 개수 계산 메서드
   int _calculateItemCount() {
-    final todayRecords = widget.searchResult.todayRecords ?? [];
-    final phoneRecords = widget.searchResult.phoneNumberModel?.records ?? [];
+    final todayRecords = widget.searchResult?.todayRecords ?? [];
+    final phoneRecords = widget.searchResult?.phoneNumberModel?.records ?? [];
 
     // TodayRecord 섹션 헤더
     int count = todayRecords.isNotEmpty ? 1 : 0;
@@ -172,16 +178,20 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
 
   // itemBuilder 수정
   Widget _buildItem(BuildContext context, int index) {
-    final todayRecords = widget.searchResult.todayRecords ?? [];
-    final phoneRecords = widget.searchResult.phoneNumberModel?.records ?? [];
+    final todayRecords = widget.searchResult?.todayRecords ?? [];
+    final phoneRecords = widget.searchResult?.phoneNumberModel?.records ?? [];
 
     // TodayRecord 섹션 헤더
     if (todayRecords.isNotEmpty && index == 0) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Text(
           '최근 통화',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade700,
+          ),
         ),
       );
     }
@@ -210,11 +220,15 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
     // PhoneRecord 섹션 헤더
     final phoneSectionStart = _calculatePhoneSectionStart();
     if (index == phoneSectionStart) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Text(
           '검색 결과',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade700,
+          ),
         ),
       );
     }
@@ -230,7 +244,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
 
   // PhoneRecord 섹션 시작 인덱스 계산
   int _calculatePhoneSectionStart() {
-    final todayRecords = widget.searchResult.todayRecords ?? [];
+    final todayRecords = widget.searchResult?.todayRecords ?? [];
     if (todayRecords.isEmpty) return 0;
 
     int count = 1; // 섹션 헤더
@@ -258,89 +272,84 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
     final timeStr = formatTimeOnly(r.createdAt);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: IntrinsicHeight(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // 왼쪽 userType 서클
-            CircleAvatar(
-              backgroundColor: userTypeColor,
-              radius: 16,
-              child: Text(
-                r.userType.length > 2 ? r.userType.substring(0, 2) : r.userType,
-                style: const TextStyle(color: Colors.white, fontSize: 13),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          CircleAvatar(
+            backgroundColor: userTypeColor,
+            radius: 12,
+            child: Text(
+              r.userType.length > 2 ? r.userType.substring(0, 2) : r.userType,
+              style: const TextStyle(color: Colors.white, fontSize: 10),
             ),
-            const SizedBox(width: 12),
-
-            // 가운데(이름, userName, 메모)
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    r.name.isNotEmpty ? r.name : '(이름 없음)',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (r.userName.isNotEmpty)
-                    Text(
-                      r.userName,
-                      style: const TextStyle(fontSize: 13, color: Colors.grey),
-                    ),
-                  if (r.memo.isNotEmpty)
-                    Text(
-                      r.memo,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 14),
-                    ),
-                ],
-              ),
-            ),
-
-            const SizedBox(width: 12),
-
-            // 오른쪽: type 서클 + 시간
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  backgroundColor: recordTypeColor,
-                  radius: 16,
-                  child: Text(
-                    '${r.type}',
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
+                Text(
+                  r.name.isNotEmpty ? r.name : '(이름 없음)',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                const SizedBox(width: 8),
-                // 시간
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      yearStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    Text(
-                      dateStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                    Text(
-                      timeStr,
-                      style: const TextStyle(fontSize: 12, color: Colors.grey),
-                    ),
-                  ],
-                ),
+                if (r.userName.isNotEmpty) ...[
+                  SizedBox(height: 0),
+                  Text(
+                    r.userName,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
+                ],
+                if (r.memo.isNotEmpty) ...[
+                  SizedBox(height: 1),
+                  Text(
+                    r.memo,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ],
               ],
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              CircleAvatar(
+                backgroundColor: recordTypeColor,
+                radius: 12,
+                child: Text(
+                  '${r.type}',
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    yearStr,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  Text(
+                    dateStr,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                  Text(
+                    timeStr,
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -380,65 +389,52 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(iconData, color: iconColor, size: 30),
-
-          // 왼쪽: userType 서클
-          const SizedBox(width: 12),
-
-          // 가운데: 아이콘 + 이름
+          Icon(iconData, color: iconColor, size: 22),
+          const SizedBox(width: 8),
           Expanded(
-            child: Row(
-              children: [
-                const SizedBox(width: 8),
-                Text(
-                  r.userName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+            child: Text(
+              r.userName,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-
-          const SizedBox(width: 12),
-
+          const SizedBox(width: 8),
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               CircleAvatar(
                 backgroundColor: userTypeColor,
-                radius: 16,
+                radius: 12,
                 child: Text(
                   r.userType,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  style: const TextStyle(color: Colors.white, fontSize: 10),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 4),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
                     yearStr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                   Text(
                     dateStr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                   Text(
                     timeStr,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    style: const TextStyle(fontSize: 11, color: Colors.grey),
                   ),
                 ],
               ),
             ],
           ),
-          // 오른쪽: 날짜/시간
         ],
       ),
     );
