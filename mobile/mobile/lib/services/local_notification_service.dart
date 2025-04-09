@@ -2,6 +2,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:developer';
+import 'package:flutter/material.dart'; // NavigatorState 사용 위해 추가
+import 'package:mobile/controllers/navigation_controller.dart'; // NavigationController 사용 위해 추가
 
 // NavigatorKey 등 활용하려면 import
 // import 'package:mobile/controllers/navigation_controller.dart';
@@ -19,7 +21,22 @@ class LocalNotificationService {
     const initSettings = InitializationSettings(android: androidInit);
 
     // 알림 탭 콜백
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      // <<< 알림 탭 콜백 (앱 실행 중) >>>
+      onDidReceiveNotificationResponse: (
+        NotificationResponse notificationResponse,
+      ) async {
+        log(
+          '[LocalNotification] Notification tapped (foreground): Payload=${notificationResponse.payload}',
+        );
+        if (notificationResponse.payload != null) {
+          handlePayloadNavigation(notificationResponse.payload!);
+        }
+      },
+      // <<< 백그라운드 알림 탭 콜백 (선택 사항) >>>
+      // onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    );
 
     // >>> 포그라운드 서비스 전용 채널 추가
     const AndroidNotificationChannel foregroundChannel =
@@ -117,26 +134,25 @@ class LocalNotificationService {
     required String phoneNumber,
   }) async {
     const androidDetails = AndroidNotificationDetails(
-      'missed_call_channel_id',
+      'missed_call_channel_id', // 부재중 전용 채널 (생성 필요)
       'Missed Call',
       channelDescription: '부재중 전화 알림',
-      importance: Importance.max,
+      importance: Importance.high,
       priority: Priority.high,
-      playSound: true,
-      icon: 'missed_icon',
+      // icon: 'missed_icon', // 필요 시 아이콘 지정
     );
     final details = NotificationDetails(android: androidDetails);
-
-    final title = '부재중 전화가 있습니다.';
+    final title = '부재중 전화';
     final body =
-        callerName.isNotEmpty ? '$callerName | $phoneNumber' : phoneNumber;
+        callerName.isNotEmpty ? '$callerName ($phoneNumber)' : phoneNumber;
+    final payload = 'missed:$phoneNumber'; // <<< payload 추가
 
     await _plugin.show(
       id,
       title,
       body,
       details,
-      payload: 'missed_call:$phoneNumber',
+      payload: payload, // <<< payload 전달
     );
   }
 
@@ -150,5 +166,44 @@ class LocalNotificationService {
   static Future<void> cancelAllNotifications() async {
     await _plugin.cancelAll();
     log('[LocalNotification] Canceled all notifications.');
+  }
+
+  // 페이로드 처리 및 네비게이션 함수 (public으로 변경)
+  static void handlePayloadNavigation(String payload) {
+    final parts = payload.split(':');
+    if (parts.length < 1) return;
+
+    final type = parts[0];
+    final number = parts.length > 1 ? parts[1] : '';
+
+    final currentContext = NavigationController.navKey.currentContext;
+    if (currentContext == null) {
+      log('[LocalNotification] Cannot navigate: Navigator context is null.');
+      return;
+    }
+
+    log(
+      '[LocalNotification] Navigating based on payload: type=$type, number=$number',
+    );
+
+    // 이미 해당 화면에 있는지 확인하는 로직 추가하면 더 좋음
+
+    switch (type) {
+      case 'incoming':
+        NavigationController.goToIncoming(number);
+        break;
+      case 'active':
+        NavigationController.goToOnCall(number, true);
+        break;
+      case 'missed':
+        NavigationController.goToCallEnded(number, 'missed');
+        break;
+      case 'idle':
+        // 기본 상태 알림 탭 시 동작 정의 (예: 홈으로 가거나 아무것도 안 함)
+        // Navigator.pushNamedAndRemoveUntil(currentContext, '/home', (route) => false);
+        break;
+      default:
+        log('[LocalNotification] Unknown payload type: $type');
+    }
   }
 }

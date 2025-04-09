@@ -29,6 +29,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
 import 'package:mobile/models/blocked_history.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:mobile/services/local_notification_service.dart';
 
 /// 오버레이 전용 엔트리
 @pragma('vm:entry-point')
@@ -64,6 +66,14 @@ void overlayMain() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  final NotificationAppLaunchDetails? notificationAppLaunchDetails =
+      await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+  final String? initialRoutePayload =
+      notificationAppLaunchDetails?.notificationResponse?.payload;
+  log('[main] App launched with payload: $initialRoutePayload');
 
   final appDocumentDir = await getApplicationDocumentsDirectory();
   await Hive.initFlutter(appDocumentDir.path);
@@ -127,14 +137,15 @@ void main() async {
           value: blockedNumbersController,
         ),
       ],
-      child: const MyAppStateful(),
+      child: MyAppStateful(initialRoutePayload: initialRoutePayload),
     ),
   );
 }
 
 // MyApp을 StatefulWidget으로 변경하여 라이프사이클 감지
 class MyAppStateful extends StatefulWidget {
-  const MyAppStateful({super.key});
+  final String? initialRoutePayload;
+  const MyAppStateful({super.key, this.initialRoutePayload});
 
   @override
   State<MyAppStateful> createState() => _MyAppStatefulState();
@@ -148,6 +159,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAppController();
+      _handleInitialPayload();
     });
   }
 
@@ -159,6 +171,14 @@ class _MyAppStatefulState extends State<MyAppStateful>
       } catch (e) {
         log('[MyAppStateful] Error initializing AppController: $e');
       }
+    }
+  }
+
+  void _handleInitialPayload() {
+    final payload = widget.initialRoutePayload;
+    if (payload != null) {
+      log('[_MyAppStatefulState] Handling initial payload: $payload');
+      LocalNotificationService.handlePayloadNavigation(payload);
     }
   }
 

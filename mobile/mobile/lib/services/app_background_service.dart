@@ -133,39 +133,41 @@ Future<void> onStart(ServiceInstance service) async {
     if (state != null && number != null && callerName != null) {
       String title = 'KOLPON 보호 중'; // 기본값
       String content = '실시간 통화 감지 및 데이터 동기화'; // 기본값
+      String payload = 'idle'; // <<< 기본 페이로드
 
       switch (state) {
         case 'incoming':
           title = '전화 수신 중';
           content = '발신: $callerName ($number)';
+          payload = 'incoming:$number'; // <<< incoming 페이로드 설정
           break;
         case 'active':
           title = '통화 중';
           content = '$callerName ($number)';
+          payload = 'active:$number'; // <<< active 페이로드 설정
           break;
         case 'ended':
-          // 기본값으로 복원 (아래에서 처리)
+          // 기본값으로 복원 (title, content, payload는 이미 기본값)
           break;
         default:
           log('[BackgroundService] Unknown call state received: $state');
           return;
       }
 
-      // <<< 포그라운드 알림 내용 업데이트 (Local Notifications 사용) >>>
       if (service is AndroidServiceInstance) {
         if (await service.isForegroundService()) {
           log(
-            '[BackgroundService] Updating foreground notification (ID: $FOREGROUND_SERVICE_NOTIFICATION_ID): Title=$title, Content=$content',
-          );
+            '[BackgroundService] Updating foreground notification (ID: $FOREGROUND_SERVICE_NOTIFICATION_ID): Title=$title, Content=$content, Payload=$payload',
+          ); // 로그 추가
           flutterLocalNotificationsPlugin.show(
-            FOREGROUND_SERVICE_NOTIFICATION_ID, // AppController에 정의된 ID 사용
+            FOREGROUND_SERVICE_NOTIFICATION_ID,
             title,
             content,
             const NotificationDetails(
               android: AndroidNotificationDetails(
-                FOREGROUND_SERVICE_CHANNEL_ID, // 채널 ID
-                'KOLPON 서비스 상태', // 채널 이름
-                icon: 'ic_bg_service_small', // 알림 아이콘 (res/drawable에 필요)
+                FOREGROUND_SERVICE_CHANNEL_ID,
+                'KOLPON 서비스 상태',
+                icon: 'ic_bg_service_small',
                 ongoing: true,
                 autoCancel: false,
                 importance: Importance.low,
@@ -175,10 +177,10 @@ Future<void> onStart(ServiceInstance service) async {
                 onlyAlertOnce: true,
               ),
             ),
+            payload: payload, // <<< payload 전달
           );
         }
       }
-      // <<< 업데이트 로직 끝 >>>
     }
   });
 
