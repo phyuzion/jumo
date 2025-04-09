@@ -63,47 +63,58 @@ class CallStateProvider with ChangeNotifier {
       '[Provider] Received update: $state, Num: $number, Name: $callerName, Connected: $isConnected, Reason: $reason',
     );
 
-    // 이름 조회 로직 추가
+    // 이름 조회 필요 여부 확인 (기존 로직)
     String finalCallerName = callerName;
     bool shouldFetchName =
         (state == CallState.incoming || state == CallState.active) &&
         number.isNotEmpty &&
         (callerName.isEmpty || callerName == '알 수 없음');
 
-    // 상태 변경 확인 (이름 제외)
-    bool stateChanged =
-        _callState != state ||
+    // <<< 상태 전환 여부 확인 (duration 제외) >>>
+    bool stateTransitioned = _callState != state;
+    // <<< 다른 정보 변경 여부 확인 >>>
+    bool infoChanged =
         _number != number ||
+        _callerName != callerName || // 이름 변경도 고려?
         _isConnected != isConnected ||
-        _callEndReason != reason ||
-        _duration != duration;
+        _callEndReason != reason;
+    // <<< Duration 변경 여부 >>>
     bool durationChanged = (state == CallState.active && _duration != duration);
 
-    // 이름 조회 필요 시 또는 상태 변경 시 업데이트
-    if (shouldFetchName || stateChanged || durationChanged) {
+    // 상태 업데이트 필요 여부 (상태 전환 또는 주요 정보 변경 시)
+    bool needsCoreUpdate = stateTransitioned || infoChanged;
+    // UI 업데이트 필요 여부 (위 조건 또는 duration 변경 시)
+    bool needsNotify = needsCoreUpdate || durationChanged || shouldFetchName;
+
+    if (!needsNotify) return; // 아무 변경 없으면 종료
+
+    if (needsCoreUpdate) {
       _callState = state;
       _number = number;
       _isConnected = isConnected;
       _callEndReason = reason;
-      _callerName = finalCallerName; // 일단 받은 이름으로 설정 (비어있을 수 있음)
-      _duration = duration; // <<< 전달받은 duration으로 업데이트
+      _callerName = finalCallerName;
+    }
+    // Duration은 active 상태일 때 항상 업데이트
+    if (state == CallState.active) {
+      _duration = duration;
+    }
 
-      // <<< 기본 전화 앱 여부 확인 >>>
+    // <<< 팝업/타이머 관리는 상태 *전환* 시에만 수행 >>>
+    if (stateTransitioned) {
+      log('[Provider] State transitioned from $_callState to $state');
       bool isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
       log('[Provider] Is default dialer: $isDefault');
 
-      // 상태에 따른 팝업 및 타이머 관리
-      if (_callState == CallState.incoming ||
-          (_callState == CallState.active)) {
+      if (_callState == CallState.incoming || _callState == CallState.active) {
         if (isDefault) {
           _isPopupVisible = true;
-          _cancelEndedStateTimer();
         } else {
           _isPopupVisible = false;
         }
+        _cancelEndedStateTimer();
       } else if (_callState == CallState.ended) {
-        log('[Provider] Ended state detected. Starting timer and processing.');
-        _isPopupVisible = false;
+        _isPopupVisible = true;
         _startEndedStateTimer();
         if (_callEndReason == 'missed') {
           log('[Provider] Showing missed call notification for $_number');
@@ -122,16 +133,16 @@ class CallStateProvider with ChangeNotifier {
           log('[Provider] Error refreshing call logs: $e');
         }
       } else {
+        // idle
         _isPopupVisible = false;
         _cancelEndedStateTimer();
       }
+    }
 
-      notifyListeners(); // 1차 알림 (이름 조회 전)
+    notifyListeners(); // 모든 필요한 업데이트 후 한번만 호출
 
-      // 이름 비동기 조회 및 2차 알림
-      if (shouldFetchName) {
-        _fetchAndUpdateCallerName(number);
-      }
+    if (shouldFetchName) {
+      _fetchAndUpdateCallerName(number);
     }
   }
 
