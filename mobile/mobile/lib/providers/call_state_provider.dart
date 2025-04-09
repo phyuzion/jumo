@@ -23,7 +23,8 @@ class CallStateProvider with ChangeNotifier {
   bool _isHold = false;
   bool _isSpeakerOn = false;
 
-  Timer? _endedStateTimer; // ended 상태 후 idle 전환 타이머
+  Timer? _endedStateTimer;
+  int _endedCountdownSeconds = 10; // <<< 카운트다운 변수 추가
 
   // Getters
   CallState get callState => _callState;
@@ -36,6 +37,7 @@ class CallStateProvider with ChangeNotifier {
   bool get isMuted => _isMuted;
   bool get isHold => _isHold;
   bool get isSpeakerOn => _isSpeakerOn;
+  int get endedCountdownSeconds => _endedCountdownSeconds; // <<< Getter 추가
 
   // 생성자 수정
   CallStateProvider(this.phoneStateController);
@@ -83,7 +85,7 @@ class CallStateProvider with ChangeNotifier {
         _isPopupVisible = true; // 전화 오거나 통화 중이면 팝업 자동 표시
         _cancelEndedStateTimer(); // ended 타이머 취소
       } else if (_callState == CallState.ended) {
-        _isPopupVisible = false; // 종료 시 팝업 즉시 닫기 (현재 HomeScreen 테스트 로직 기준)
+        _isPopupVisible = true; // <<< 수정: 팝업 열기 (Ended 내용 표시)
         _startEndedStateTimer(); // idle 전환 타이머 시작
       } else {
         // idle
@@ -126,26 +128,41 @@ class CallStateProvider with ChangeNotifier {
     // }
   }
 
-  // Ended 상태 후 Idle 전환 타이머 시작
+  // Ended 상태 후 Idle 전환 타이머 시작 (수정)
   void _startEndedStateTimer() {
-    _cancelEndedStateTimer(); // 이전 타이머 취소
-    log('[Provider] Starting ended state timer (10 seconds)...');
-    _endedStateTimer = Timer(const Duration(seconds: 10), () {
-      log('[Provider] Ended state timer finished. Reverting to idle.');
-      if (_callState == CallState.ended) {
-        // 타이머 도중 상태 변경 방지
+    _cancelEndedStateTimer();
+    _endedCountdownSeconds = 10; // <<< 카운트다운 초기화
+    log('[Provider] Starting ended state countdown timer...');
+    _endedStateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      // <<< periodic으로 변경
+      if (_callState != CallState.ended) {
+        // 중간에 상태 변경 시 타이머 중지
+        timer.cancel();
+        _endedStateTimer = null;
+        return;
+      }
+
+      if (_endedCountdownSeconds > 0) {
+        _endedCountdownSeconds--;
+        log('[Provider] Countdown: $_endedCountdownSeconds');
+        notifyListeners(); // 매초 UI 업데이트 알림
+      } else {
+        log('[Provider] Countdown finished. Reverting to idle.');
+        timer.cancel(); // 타이머 중지
+        _endedStateTimer = null;
         updateCallState(state: CallState.idle); // idle 상태로 변경
       }
     });
   }
 
-  // Ended 상태 타이머 취소
+  // Ended 상태 타이머 취소 (수정)
   void _cancelEndedStateTimer() {
     if (_endedStateTimer?.isActive ?? false) {
       _endedStateTimer!.cancel();
       log('[Provider] Canceled ended state timer.');
     }
     _endedStateTimer = null;
+    _endedCountdownSeconds = 10; // <<< 카운트다운 리셋
   }
 
   // <<< 버튼 상태 토글 메소드 (NativeMethods 호출 추가) >>>

@@ -11,6 +11,7 @@ class DynamicCallIsland extends StatefulWidget {
   final bool isPopupVisible; // 팝업 표시 여부 (버튼 비활성화 등에 사용될 수 있음)
   final VoidCallback onTogglePopup; // 팝업 토글 콜백
   final bool connected; // <<< 추가
+  final int endedCountdownSeconds; // <<< 추가
 
   const DynamicCallIsland({
     super.key,
@@ -20,6 +21,7 @@ class DynamicCallIsland extends StatefulWidget {
     required this.isPopupVisible,
     required this.onTogglePopup,
     required this.connected, // <<< 추가
+    required this.endedCountdownSeconds, // <<< 추가
   });
 
   @override
@@ -107,6 +109,7 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
     Widget barContent;
     IconData leadingIcon = Icons.error;
     bool isPopupVisible = widget.isPopupVisible; // 가독성 위해 변수 사용
+    bool showExpandButton = true; // <<< 종료 카운트다운 중에는 확장 버튼 숨김
 
     // <<< 팝업이 보일 때는 항상 닫기 버튼 표시 >>>
     if (isPopupVisible) {
@@ -147,6 +150,16 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
             "전화 수신 중",
             widget.callerName,
             widget.number,
+            trailingWidget: IconButton(
+              icon: Icon(
+                Icons.keyboard_arrow_up,
+                color: Colors.white,
+                size: 30,
+              ),
+              onPressed: widget.onTogglePopup,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(),
+            ),
           );
           break;
         case CallState.active:
@@ -163,6 +176,16 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
                 : "연결 중...",
             widget.callerName,
             widget.number,
+            trailingWidget: IconButton(
+              icon: Icon(
+                Icons.keyboard_arrow_up,
+                color: Colors.white,
+                size: 30,
+              ),
+              onPressed: widget.onTogglePopup,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(),
+            ),
           );
           break;
         case CallState.ended:
@@ -171,12 +194,49 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
               MediaQuery.of(context).size.width - (barPaddingHorizontal * 2);
           targetBorderRadius = BorderRadius.circular(targetBarHeight / 2);
           targetBarColor = Colors.grey;
-          leadingIcon = Icons.check_circle_outline;
+          Widget countdownWidget = SizedBox(
+            width: 30,
+            height: 30,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                CircularProgressIndicator(
+                  value: 1.0,
+                  color: Colors.white.withOpacity(0.3),
+                  strokeWidth: 2.0,
+                ),
+                CircularProgressIndicator(
+                  value: widget.endedCountdownSeconds / 10.0,
+                  color: Colors.white,
+                  strokeWidth: 2.0,
+                ),
+                Text(
+                  widget.endedCountdownSeconds.toString(),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          );
           barContent = _buildBarContent(
-            leadingIcon,
+            null,
             "통화 종료",
             widget.callerName,
             widget.number,
+            leadingWidget: countdownWidget,
+            trailingWidget: IconButton(
+              icon: Icon(
+                Icons.keyboard_arrow_up,
+                color: Colors.white,
+                size: 30,
+              ),
+              onPressed: widget.onTogglePopup,
+              padding: EdgeInsets.zero,
+              constraints: BoxConstraints(),
+            ),
           );
           break;
       }
@@ -230,20 +290,29 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
     );
   }
 
-  // 바 내용 생성 헬퍼 (Row 반환)
+  // 바 내용 생성 헬퍼 (trailingWidget 파라미터 추가)
   Widget _buildBarContent(
-    IconData leadingIcon,
+    IconData? leadingIcon,
     String status,
     String name,
-    String number,
-  ) {
+    String number, {
+    Widget? leadingWidget,
+    Widget? trailingWidget,
+  }) {
     String displayName = name.isNotEmpty ? name : "알 수 없음";
     Color iconColor = Colors.white;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center, // Row 내용 가운데 정렬
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Icon(leadingIcon, color: iconColor, size: 30),
+        Padding(
+          padding: const EdgeInsets.only(left: 8.0),
+          child:
+              leadingWidget ??
+              (leadingIcon != null
+                  ? Icon(leadingIcon, color: iconColor, size: 30)
+                  : SizedBox(width: 30)),
+        ),
         SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -270,7 +339,12 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
             ],
           ),
         ),
-        // <<< 확장 버튼(화살표) 제거 >>>
+        if (trailingWidget != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 4.0),
+            child: trailingWidget,
+          ),
+        if (trailingWidget == null) SizedBox(width: 42),
       ],
     );
   }

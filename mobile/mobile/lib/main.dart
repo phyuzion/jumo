@@ -58,7 +58,7 @@ void overlayMain() {
         return MediaQuery(
           data: MediaQuery.of(
             context,
-          ).copyWith(textScaler: TextScaler.linear(0.8)),
+          ).copyWith(textScaler: TextScaler.linear(1.0)),
           child: child!,
         );
       },

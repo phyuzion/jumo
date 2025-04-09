@@ -339,6 +339,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               callerName: callerName,
               isPopupVisible: isPopupVisible,
               connected: isConnected,
+              endedCountdownSeconds: callStateProvider.endedCountdownSeconds,
               onTogglePopup: _toggleCallPopup,
             ),
           ),
