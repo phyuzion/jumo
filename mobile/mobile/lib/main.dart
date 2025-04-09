@@ -140,8 +140,10 @@ void main() async {
         ),
         ChangeNotifierProvider(
           create:
-              (context) =>
-                  CallStateProvider(context.read<PhoneStateController>()),
+              (context) => CallStateProvider(
+                context.read<PhoneStateController>(),
+                context.read<CallLogController>(),
+              ),
         ),
       ],
       child: MyAppStateful(initialRoutePayload: initialRoutePayload),

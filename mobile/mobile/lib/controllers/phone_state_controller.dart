@@ -127,28 +127,6 @@ class PhoneStateController with WidgetsBindingObserver {
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
     log('[PhoneState] Is default dialer: $isDef');
 
-    if (!isDef) {
-      log('[PhoneState] Waiting a moment for call log to be written...');
-      await Future.delayed(const Duration(seconds: 2));
-
-      log('[PhoneState] Not default dialer, refreshing call logs locally...');
-      await callLogController.refreshCallLogs();
-
-      final service = FlutterBackgroundService();
-      if (await service.isRunning()) {
-        log(
-          '[PhoneState] Invoking uploadCallLogsNow for background service...',
-        );
-        service.invoke('uploadCallLogsNow');
-      } else {
-        log(
-          '[PhoneState] Background service not running, cannot request call log upload.',
-        );
-      }
-    } else {
-      log('[PhoneState] Is default dialer, skipping log refresh here.');
-    }
-
     if (number != null && number.isNotEmpty) {
       final callerName = await getContactName(number);
       notifyServiceCallState('onCallEnded', number, callerName);

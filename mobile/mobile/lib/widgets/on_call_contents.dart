@@ -51,7 +51,7 @@ class OnCallContents extends StatelessWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
+          padding: const EdgeInsets.only(bottom: 4.0),
           child: Text(
             displayName,
             style: const TextStyle(
@@ -60,6 +60,13 @@ class OnCallContents extends StatelessWidget {
               fontWeight: FontWeight.bold,
             ),
             textAlign: TextAlign.center,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16.0),
+          child: Text(
+            number,
+            style: const TextStyle(color: Colors.black54, fontSize: 16),
           ),
         ),
 

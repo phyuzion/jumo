@@ -5,12 +5,14 @@ import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/local_notification_service.dart';
+import 'package:mobile/controllers/call_log_controller.dart';
 
 // 통화 상태 enum 정의 (HomeScreen에서 가져옴 - 여기서 관리하는 것이 더 적절)
 enum CallState { idle, incoming, active, ended }
 
 class CallStateProvider with ChangeNotifier {
   final PhoneStateController phoneStateController;
+  final CallLogController callLogController;
 
   CallState _callState = CallState.idle;
   String _number = '';
@@ -46,7 +48,7 @@ class CallStateProvider with ChangeNotifier {
   int get endedCountdownSeconds => _endedCountdownSeconds; // <<< Getter 추가
 
   // 생성자 수정
-  CallStateProvider(this.phoneStateController);
+  CallStateProvider(this.phoneStateController, this.callLogController);
 
   // 상태 업데이트 메소드 수정 (async 추가)
   Future<void> updateCallState({
@@ -100,22 +102,24 @@ class CallStateProvider with ChangeNotifier {
           _isPopupVisible = false;
         }
       } else if (_callState == CallState.ended) {
-        if (isDefault) {
-          _isPopupVisible = true;
-          _startEndedStateTimer();
-          // <<< 부재중 알림 호출 추가 >>>
-          if (_callEndReason == 'missed') {
-            log('[Provider] Showing missed call notification for $_number');
-            // ID는 적절히 설정 (예: 번호 해시코드 사용 또는 고유 ID 생성)
-            final notificationId = _number.hashCode;
-            LocalNotificationService.showMissedCallNotification(
-              id: notificationId,
-              callerName: _callerName,
-              phoneNumber: _number,
-            );
-          }
-        } else {
-          _isPopupVisible = false;
+        log('[Provider] Ended state detected. Starting timer and processing.');
+        _isPopupVisible = false;
+        _startEndedStateTimer();
+        if (_callEndReason == 'missed') {
+          log('[Provider] Showing missed call notification for $_number');
+          final notificationId = _number.hashCode;
+          LocalNotificationService.showMissedCallNotification(
+            id: notificationId,
+            callerName: _callerName,
+            phoneNumber: _number,
+          );
+        }
+        await Future.delayed(const Duration(seconds: 2));
+        log('[Provider] Refreshing call logs after call ended.');
+        try {
+          await callLogController.refreshCallLogs();
+        } catch (e) {
+          log('[Provider] Error refreshing call logs: $e');
         }
       } else {
         _isPopupVisible = false;
@@ -160,12 +164,14 @@ class CallStateProvider with ChangeNotifier {
   // Ended 상태 후 Idle 전환 타이머 시작 (수정)
   void _startEndedStateTimer() {
     _cancelEndedStateTimer();
-    _endedCountdownSeconds = 10; // <<< 카운트다운 초기화
+    _endedCountdownSeconds = 10;
     log('[Provider] Starting ended state countdown timer...');
     _endedStateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      // <<< periodic으로 변경
+      log(
+        '[Provider] Ended Timer Tick! Countdown: $_endedCountdownSeconds, State: $_callState',
+      );
       if (_callState != CallState.ended) {
-        // 중간에 상태 변경 시 타이머 중지
+        log('[Provider] State changed during countdown. Cancelling timer.');
         timer.cancel();
         _endedStateTimer = null;
         return;
@@ -173,11 +179,10 @@ class CallStateProvider with ChangeNotifier {
 
       if (_endedCountdownSeconds > 0) {
         _endedCountdownSeconds--;
-        log('[Provider] Countdown: $_endedCountdownSeconds');
-        notifyListeners(); // 매초 UI 업데이트 알림
+        notifyListeners(); // <<< UI 업데이트 알림
       } else {
         log('[Provider] Countdown finished. Reverting to idle.');
-        timer.cancel(); // 타이머 중지
+        timer.cancel();
         _endedStateTimer = null;
         updateCallState(state: CallState.idle); // idle 상태로 변경
       }
