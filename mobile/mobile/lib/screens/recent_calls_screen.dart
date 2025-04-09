@@ -222,13 +222,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                   // ***** itemCount 로그 추가 *****
                   itemCount: data.length, // itemCount 확인
                   itemBuilder: (context, index) {
-                    // ***** itemBuilder 호출 로그 (일부만) *****
-                    if (index < 3) {
-                      // 너무 많은 로그 방지
-                      log(
-                        '[RecentCallsScreen] itemBuilder called for index: $index',
-                      );
-                    }
                     final call = data[index];
                     final number = call['number'] as String? ?? '';
                     final callType = call['callType'] as String? ?? '';

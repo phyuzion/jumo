@@ -34,6 +34,7 @@ class _CustomExpansionTileState extends State<CustomExpansionTile>
     _controller = AnimationController(
       duration: const Duration(milliseconds: 200),
       vsync: this,
+      value: widget.isExpanded ? 1.0 : 0.0,
     );
   }
 
