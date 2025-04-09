@@ -238,6 +238,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
       final callerName = event?['callerName'] as String? ?? '';
       final isConnected = event?['connected'] as bool? ?? false;
       final reason = event?['reason'] as String? ?? '';
+      final duration = event?['duration'] as int? ?? 0;
 
       CallState? newState;
       try {
@@ -259,6 +260,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
           callerName: callerName,
           isConnected: isConnected,
           reason: reason,
+          duration: duration,
         );
       } else {
         log(

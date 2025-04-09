@@ -2,14 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:developer';
 import 'package:mobile/services/native_methods.dart';
+import 'package:provider/provider.dart';
+import 'package:mobile/providers/call_state_provider.dart';
 // TODO: Import constants if needed (normalizePhone etc.)
 
 // OnCallScreen의 핵심 UI를 담당하는 위젯
-class OnCallContents extends StatefulWidget {
+class OnCallContents extends StatelessWidget {
   final String callerName;
   final String number;
   final bool connected; // 통화 연결 상태
   final VoidCallback onHangUp; // 통화 종료 콜백
+  final int duration; // <<< 파라미터 추가
 
   const OnCallContents({
     super.key,
@@ -17,70 +20,8 @@ class OnCallContents extends StatefulWidget {
     required this.number,
     required this.connected,
     required this.onHangUp,
+    required this.duration, // <<< 파라미터 추가
   });
-
-  @override
-  State<OnCallContents> createState() => _OnCallContentsState();
-}
-
-class _OnCallContentsState extends State<OnCallContents> {
-  Timer? _callTimer;
-  int _callDuration = 0;
-
-  // 버튼 상태 (임시 - 실제 상태 관리 필요)
-  bool isMuted = false;
-  bool isHold = false;
-  bool isSpeakerOn = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateTimerBasedOnState(widget.connected);
-  }
-
-  @override
-  void didUpdateWidget(OnCallContents oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.connected != widget.connected) {
-      _updateTimerBasedOnState(widget.connected);
-    }
-  }
-
-  void _updateTimerBasedOnState(bool isConnected) {
-    if (isConnected) {
-      _startCallTimer();
-    } else {
-      _stopCallTimer();
-    }
-  }
-
-  void _startCallTimer() {
-    _stopCallTimer();
-    _callDuration = 0;
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted && widget.connected) {
-        setState(() {
-          _callDuration++;
-        });
-      } else {
-        timer.cancel();
-      }
-    });
-    log('[OnCallContents] Call timer started.');
-  }
-
-  void _stopCallTimer() {
-    _callTimer?.cancel();
-    _callTimer = null;
-    _callDuration = 0;
-    log('[OnCallContents] Call timer stopped.');
-  }
-
-  @override
-  void dispose() {
-    _stopCallTimer();
-    super.dispose();
-  }
 
   String _formatDuration(int seconds) {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -88,46 +29,16 @@ class _OnCallContentsState extends State<OnCallContents> {
     return "$minutes:$secs";
   }
 
-  // --- 버튼 액션 핸들러 (NativeMethods 호출 및 콜백 연결) ---
-  Future<void> _toggleMute() async {
-    final newVal = !isMuted;
-    await NativeMethods.toggleMute(newVal);
-    if (mounted) setState(() => isMuted = newVal);
-    log('[OnCallContents] Mute toggled: $isMuted');
-  }
-
-  Future<void> _toggleHold() async {
-    final newVal = !isHold;
-    await NativeMethods.toggleHold(newVal);
-    if (mounted) setState(() => isHold = newVal);
-    log('[OnCallContents] Hold toggled: $isHold');
-  }
-
-  Future<void> _toggleSpeaker() async {
-    final newVal = !isSpeakerOn;
-    await NativeMethods.toggleSpeaker(newVal);
-    if (mounted) setState(() => isSpeakerOn = newVal);
-    log('[OnCallContents] Speaker toggled: $isSpeakerOn');
-  }
-
-  Future<void> _hangUp() async {
-    log('[OnCallContents] Hang up tapped');
-    try {
-      await NativeMethods.hangUpCall();
-    } catch (e) {
-      log('[OnCallContents] Error hanging up: $e');
-    }
-    _stopCallTimer();
-    widget.onHangUp();
-  }
-  // --- 버튼 액션 핸들러 끝 ---
-
   @override
   Widget build(BuildContext context) {
-    final displayName =
-        widget.callerName.isNotEmpty ? widget.callerName : widget.number;
-    final callStateText =
-        widget.connected ? _formatDuration(_callDuration) : '통화 연결중...';
+    // <<< Provider에서 상태 읽기 >>>
+    final callStateProvider = context.watch<CallStateProvider>();
+    final isMuted = callStateProvider.isMuted;
+    final isHold = callStateProvider.isHold;
+    final isSpeakerOn = callStateProvider.isSpeakerOn;
+
+    final displayName = callerName.isNotEmpty ? callerName : number;
+    final callStateText = connected ? _formatDuration(duration) : '통화 연결중...';
 
     return Column(
       children: [
@@ -162,23 +73,31 @@ class _OnCallContentsState extends State<OnCallContents> {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _buildIconButton(
+                context: context,
                 icon: isMuted ? Icons.mic_off : Icons.mic,
-                label: '음소거', // 라벨 유지 (작게)
+                label: '음소거',
                 active: isMuted,
-                onTap: _toggleMute,
+                onTap: () {
+                  context.read<CallStateProvider>().toggleMute();
+                },
               ),
               _buildIconButton(
+                context: context,
                 icon: Icons.pause,
-                label: '통화대기', // 라벨 유지 (작게)
+                label: '통화대기',
                 active: isHold,
-                onTap: _toggleHold,
+                onTap: () {
+                  context.read<CallStateProvider>().toggleHold();
+                },
               ),
               _buildIconButton(
-                icon:
-                    isSpeakerOn ? Icons.volume_up : Icons.volume_down, // 아이콘 변경
-                label: '스피커', // 라벨 유지 (작게)
+                context: context,
+                icon: isSpeakerOn ? Icons.volume_up : Icons.volume_down,
+                label: '스피커',
                 active: isSpeakerOn,
-                onTap: _toggleSpeaker,
+                onTap: () {
+                  context.read<CallStateProvider>().toggleSpeaker();
+                },
               ),
             ],
           ),
@@ -194,7 +113,7 @@ class _OnCallContentsState extends State<OnCallContents> {
               shape: const CircleBorder(),
               padding: const EdgeInsets.all(18), // 크기 약간 줄임
             ),
-            onPressed: _hangUp,
+            onPressed: onHangUp, // <<< 외부 콜백 직접 사용
             child: const Icon(
               Icons.call_end,
               color: Colors.white,
@@ -208,6 +127,7 @@ class _OnCallContentsState extends State<OnCallContents> {
 
   // 아이콘 버튼 빌더 (OnCallScreen 스타일 참고, 라벨 포함)
   Widget _buildIconButton({
+    required BuildContext context,
     required IconData icon,
     required String label,
     required bool active,

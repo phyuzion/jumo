@@ -20,6 +20,7 @@ class FloatingCallWidget extends StatefulWidget {
   final String number; // 초기 번호 (이름 조회 전)
   final String callerName; // 외부에서 받은 이름 (업데이트될 수 있음)
   final bool connected; // <<< 추가
+  final int duration; // <<< 파라미터 추가
   final VoidCallback onClosePopup; // 팝업 닫기 콜백
   final VoidCallback onHangUp; // <<< 추가
 
@@ -30,6 +31,7 @@ class FloatingCallWidget extends StatefulWidget {
     required this.number,
     required this.callerName,
     required this.connected, // <<< 추가
+    required this.duration, // <<< 파라미터 추가
     required this.onClosePopup,
     required this.onHangUp, // <<< 추가
   });
@@ -178,6 +180,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
           number: widget.number,
           connected: widget.connected,
           onHangUp: widget.onHangUp, // <<< 콜백 전달
+          duration: widget.duration, // <<< duration 전달
         );
         break;
       case CallState.ended:

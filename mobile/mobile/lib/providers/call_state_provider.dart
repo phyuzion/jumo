@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
+import 'package:mobile/services/native_methods.dart';
 
 // 통화 상태 enum 정의 (HomeScreen에서 가져옴 - 여기서 관리하는 것이 더 적절)
 enum CallState { idle, incoming, active, ended }
@@ -12,12 +13,16 @@ class CallStateProvider with ChangeNotifier {
   CallState _callState = CallState.idle;
   String _number = '';
   String _callerName = '';
-  int _duration = 0;
+  int _duration = 0; // <<< 유지 (백그라운드에서 값 받음)
   bool _isConnected = false; // active 상태 내 연결 여부
   bool _isPopupVisible = false;
   String _callEndReason = ''; // 통화 종료 이유 (missed 등)
 
-  Timer? _callTimer;
+  // <<< 버튼 상태 변수 추가 >>>
+  bool _isMuted = false;
+  bool _isHold = false;
+  bool _isSpeakerOn = false;
+
   Timer? _endedStateTimer; // ended 상태 후 idle 전환 타이머
 
   // Getters
@@ -28,6 +33,9 @@ class CallStateProvider with ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isPopupVisible => _isPopupVisible;
   String get callEndReason => _callEndReason;
+  bool get isMuted => _isMuted;
+  bool get isHold => _isHold;
+  bool get isSpeakerOn => _isSpeakerOn;
 
   // 생성자 수정
   CallStateProvider(this.phoneStateController);
@@ -39,6 +47,7 @@ class CallStateProvider with ChangeNotifier {
     String callerName = '',
     bool isConnected = false,
     String reason = '',
+    int duration = 0, // <<< duration 파라미터 추가
   }) {
     log(
       '[Provider] Received update: $state, Num: $number, Name: $callerName, Connected: $isConnected, Reason: $reason',
@@ -56,7 +65,8 @@ class CallStateProvider with ChangeNotifier {
         _callState != state ||
         _number != number ||
         _isConnected != isConnected ||
-        _callEndReason != reason;
+        _callEndReason != reason ||
+        _duration != duration;
 
     // 이름 조회 필요 시 또는 상태 변경 시 업데이트
     if (shouldFetchName || stateChanged) {
@@ -65,31 +75,20 @@ class CallStateProvider with ChangeNotifier {
       _isConnected = isConnected;
       _callEndReason = reason;
       _callerName = finalCallerName; // 일단 받은 이름으로 설정 (비어있을 수 있음)
+      _duration = duration; // <<< 전달받은 duration으로 업데이트
 
       // 상태에 따른 팝업 및 타이머 관리
       if (_callState == CallState.incoming ||
           (_callState == CallState.active)) {
         _isPopupVisible = true; // 전화 오거나 통화 중이면 팝업 자동 표시
-        if (_callState == CallState.active && _isConnected) {
-          _startCallTimer();
-        } else {
-          _stopCallTimer(); // incoming 또는 active(ringing) 상태면 타이머 중지/리셋
-          _duration = 0; // active(ringing) 상태일 때 시간 0으로 표시
-        }
         _cancelEndedStateTimer(); // ended 타이머 취소
       } else if (_callState == CallState.ended) {
-        _stopCallTimer();
-        // _isPopupVisible = true; // 종료 시 팝업 유지? (선택 사항)
         _isPopupVisible = false; // 종료 시 팝업 즉시 닫기 (현재 HomeScreen 테스트 로직 기준)
         _startEndedStateTimer(); // idle 전환 타이머 시작
       } else {
         // idle
-        _stopCallTimer();
         _isPopupVisible = false; // idle이면 팝업 닫기
         _cancelEndedStateTimer();
-        // idle 상태일 때 number, callerName 초기화 (선택적)
-        // _number = '';
-        // _callerName = '';
       }
 
       notifyListeners(); // 1차 알림 (이름 조회 전)
@@ -98,10 +97,6 @@ class CallStateProvider with ChangeNotifier {
       if (shouldFetchName) {
         _fetchAndUpdateCallerName(number);
       }
-    } else if (state == CallState.active && _callState == CallState.active) {
-      // active 상태 지속 시 타이머 업데이트를 위한 notify
-      // (만약 _startCallTimer 내부에서 notify를 이미 한다면 이 부분 불필요)
-      // notifyListeners();
     }
   }
 
@@ -131,31 +126,6 @@ class CallStateProvider with ChangeNotifier {
     // }
   }
 
-  // 통화 시간 타이머 시작
-  void _startCallTimer() {
-    _stopCallTimer(); // 이전 타이머 정리
-    _duration = 0;
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_callState == CallState.active && _isConnected) {
-        _duration++;
-        notifyListeners(); // 매초 시간 업데이트 알림
-      } else {
-        timer.cancel(); // 상태 변경 시 자동 중지
-      }
-    });
-    log('[Provider] Call timer started.');
-  }
-
-  // 통화 시간 타이머 중지
-  void _stopCallTimer() {
-    if (_callTimer?.isActive ?? false) {
-      _callTimer!.cancel();
-      log('[Provider] Call timer stopped.');
-    }
-    _callTimer = null;
-    // _duration = 0; // Stop 시 시간 초기화는 updateCallState에서 관리
-  }
-
   // Ended 상태 후 Idle 전환 타이머 시작
   void _startEndedStateTimer() {
     _cancelEndedStateTimer(); // 이전 타이머 취소
@@ -178,10 +148,47 @@ class CallStateProvider with ChangeNotifier {
     _endedStateTimer = null;
   }
 
+  // <<< 버튼 상태 토글 메소드 (NativeMethods 호출 추가) >>>
+  Future<void> toggleMute() async {
+    final newState = !_isMuted;
+    try {
+      await NativeMethods.toggleMute(newState);
+      _isMuted = newState;
+      log('[Provider] Mute toggled: $_isMuted');
+      notifyListeners();
+    } catch (e) {
+      log('[Provider] Error toggling mute: $e');
+      // 에러 발생 시 상태 롤백 등 처리?
+    }
+  }
+
+  Future<void> toggleHold() async {
+    final newState = !_isHold;
+    try {
+      await NativeMethods.toggleHold(newState);
+      _isHold = newState;
+      log('[Provider] Hold toggled: $_isHold');
+      notifyListeners();
+    } catch (e) {
+      log('[Provider] Error toggling hold: $e');
+    }
+  }
+
+  Future<void> toggleSpeaker() async {
+    final newState = !_isSpeakerOn;
+    try {
+      await NativeMethods.toggleSpeaker(newState);
+      _isSpeakerOn = newState;
+      log('[Provider] Speaker toggled: $_isSpeakerOn');
+      notifyListeners();
+    } catch (e) {
+      log('[Provider] Error toggling speaker: $e');
+    }
+  }
+
   // 앱 종료 등 리소스 해제 시 타이머 정리
   @override
   void dispose() {
-    _stopCallTimer();
     _cancelEndedStateTimer();
     super.dispose();
   }

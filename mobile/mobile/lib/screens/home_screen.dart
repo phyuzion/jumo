@@ -16,6 +16,7 @@ import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/dynamic_call_island.dart';
 import 'package:mobile/widgets/floating_call_widget.dart';
 import 'package:mobile/providers/call_state_provider.dart';
+import 'package:mobile/services/native_methods.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -122,9 +123,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     log('[HomeScreen] Popup toggle requested.');
   }
 
-  void _handleHangUp() {
+  void _handleHangUp() async {
     log('[HomeScreen] Handling hang up...');
-    context.read<CallStateProvider>().updateCallState(state: CallState.ended);
+    try {
+      await NativeMethods.hangUpCall();
+    } catch (e) {
+      log('[HomeScreen] Error calling native hangUpCall: $e');
+    }
+    if (mounted) {
+      context.read<CallStateProvider>().updateCallState(state: CallState.ended);
+    }
   }
 
   @override
@@ -136,6 +144,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final callerName = callStateProvider.callerName;
     final isConnected = callStateProvider.isConnected;
     final isPopupVisible = callStateProvider.isPopupVisible;
+    final duration = callStateProvider.duration;
 
     final appBar = AppBar(
       backgroundColor: Colors.white,
@@ -310,12 +319,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           left: 16.0,
           right: 16.0,
           child: FloatingCallWidget(
-            callerName: _currentCallerName,
             isVisible: isPopupVisible,
             callState: callState,
             number: number,
             callerName: callerName,
             connected: isConnected,
+            duration: duration,
             onClosePopup: _toggleCallPopup,
             onHangUp: _handleHangUp,
           ),
