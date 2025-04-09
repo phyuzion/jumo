@@ -226,6 +226,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
         onPressed: _onTapAddContact,
         child: const Icon(Icons.add),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 

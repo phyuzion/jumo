@@ -103,7 +103,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 100),
+                const SizedBox(height: 10),
                 Text(
                   displayName,
                   style: const TextStyle(
@@ -137,7 +137,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 10),
               ],
             ),
           ),
@@ -178,8 +178,6 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
             child: Icon(icon, color: Colors.white, size: 32),
           ),
         ),
-        const SizedBox(height: 8),
-        Text(label, style: const TextStyle(color: Colors.black)),
       ],
     );
   }

@@ -109,6 +109,8 @@ class _BoardScreenState extends State<BoardScreen> {
         onPressed: _onTapCreate,
         child: const Icon(Icons.add),
       ),
+
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

@@ -347,6 +347,8 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                   },
                 ),
       ),
+      // <<< FAB 정의 제거 시작 >>>
+      /* 
       floatingActionButton:
           _isDefaultDialer
               ? FloatingActionButton(
@@ -360,7 +362,9 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                 },
                 child: const Icon(Icons.dialpad),
               )
-              : null,
+              : null, 
+      */
+      // <<< FAB 정의 제거 끝 >>>
     );
   }
 

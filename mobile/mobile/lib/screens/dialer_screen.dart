@@ -46,7 +46,6 @@ class _DialerScreenState extends State<DialerScreen> {
     ];
 
     return Scaffold(
-      appBar: AppBar(title: Text('다이얼러')),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -58,9 +57,15 @@ class _DialerScreenState extends State<DialerScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 // 1) 번호 표시
-                Text(_number, style: const TextStyle(fontSize: 35)),
+                Text(
+                  _number,
+                  style: const TextStyle(
+                    fontSize: 35,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
 
-                const SizedBox(height: 30),
+                const SizedBox(height: 20),
 
                 // 2) 키패드
                 _buildDialPad(digits, screenW),
