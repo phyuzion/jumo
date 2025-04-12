@@ -17,6 +17,7 @@ import 'package:mobile/widgets/dynamic_call_island.dart';
 import 'package:mobile/widgets/floating_call_widget.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -58,6 +59,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     ) {
       if (mounted) {
         _loadNotificationCount();
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final authBox = context.read<Box<dynamic>>();
+        final bool isLoggedIn =
+            authBox.get('loginStatus', defaultValue: false) ?? false;
+
+        if (isLoggedIn) {
+          log('[HomeScreen] Logged in, initializing post-login data...');
+          context.read<AppController>().initializePostLoginData();
+        } else {
+          log('[HomeScreen] Not logged in, skipping post-login init.');
+        }
+        log('[HomeScreen] Initializing contacts...');
+        context.read<ContactsController>().getLocalContacts();
       }
     });
   }

@@ -40,59 +40,41 @@ class _DeciderScreenState extends State<DeciderScreen> {
       final isLoggedIn =
           _authBox.get('loginStatus', defaultValue: false) as bool;
       if (isLoggedIn) {
-        // ***** 이미 로그인된 경우, 홈 이동 전에 초기화 *****
-        try {
-          log(
-            '[DeciderScreen] Already logged in, initializing post-login data...',
-          );
-          // AppController 인스턴스 다시 가져오기 (Provider 통해)
-          final appCtrl = context.read<AppController>();
-          await appCtrl.initializePostLoginData();
-          log('[DeciderScreen] Post-login initialization complete.');
-          if (!mounted) return; // 초기화 중 위젯 unmount 될 수 있음
-          Navigator.pushReplacementNamed(context, '/home');
-        } catch (e) {
-          log('[DeciderScreen] Error initializing post-login data: $e');
-          // 초기화 실패 시 로그인 화면으로 보낼 수도 있음
-          setState(() => _checking = false); // 로딩 중단
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('초기화 실패: $e')));
-          // Navigator.pushReplacementNamed(context, '/login');
-        }
+        // <<< 초기화 호출 없이 바로 홈으로 이동 >>>
+        log('[DeciderScreen] Already logged in, navigating to home.');
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, '/home');
       } else {
+        // ... (비로그인 로직)
         String myNumber = '';
         try {
           myNumber = await NativeMethods.getMyPhoneNumber();
         } catch (e) {
-          log('[DeciderScreen] Failed to get phone number: $e');
-          // 번호 못 가져올 시 예외 처리 (예: 에러 메시지 표시 후 앱 종료)
+          log('Error getting phone number: $e'); /* Handle error */
         }
-
         log('myNumber=$myNumber');
         if (myNumber.isEmpty) {
-          // TODO: 번호 없을 시 처리 (예: 사용자 안내 후 종료)
-          log('[DeciderScreen] Phone number is empty.');
-          // SystemNavigator.pop(); // 앱 종료 예시
-          // 임시로 로그인 화면으로 이동 (개선 필요)
           Navigator.pushReplacementNamed(context, '/login');
           return;
         }
-
         final myRealnumber = normalizePhone(myNumber);
-        // Hive에 myNumber 저장
         await _authBox.put('myNumber', myRealnumber);
-
         Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
-      // 권한 거부
+      // 권한 거부 처리 (기존 유지)
       if (!mounted) return;
       setState(() {
         _checking = false;
         _allPermsGranted = false;
       });
     }
+    // <<< 함수 끝에서도 checking 상태 업데이트 (권한 거부 외 경로) >>>
+    // 이 부분이 필요할 수 있음 (네비게이션 후에도 위젯이 남아있을 경우 대비)
+    // 하지만 pushReplacementNamed 후에는 보통 필요 없음
+    // if (mounted && _checking) {
+    //    setState(() => _checking = false);
+    // }
   }
 
   @override

@@ -33,6 +33,7 @@ import 'package:mobile/models/blocked_history.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/providers/call_state_provider.dart';
+import 'package:hive_ce/hive.dart';
 
 /// 오버레이 전용 엔트리
 @pragma('vm:entry-point')
@@ -138,6 +139,7 @@ void main() async {
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
         ),
+        Provider<Box<dynamic>>.value(value: Hive.box('auth')),
         ChangeNotifierProvider(
           create:
               (context) => CallStateProvider(
