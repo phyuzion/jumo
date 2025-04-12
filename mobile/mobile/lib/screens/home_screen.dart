@@ -12,15 +12,11 @@ import 'contacts_screen.dart';
 import 'board_screen.dart';
 import 'settings_screen.dart';
 import 'dart:developer';
-import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/dynamic_call_island.dart';
 import 'package:mobile/widgets/floating_call_widget.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
-import 'package:mobile/controllers/blocked_numbers_controller.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:mobile/controllers/call_log_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -221,7 +217,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
     }
 
-    final appController = context.watch<AppController>();
     final callStateProvider = context.watch<CallStateProvider>();
     final callState = callStateProvider.callState;
     final number = callStateProvider.number;
@@ -324,16 +319,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
     );
 
-    final double appBarHeight =
-        appBar.preferredSize.height +
-        (appBar.bottom?.preferredSize.height ?? 0);
-    final double panelTopMargin = 16.0;
     final double fabSize = 60.0;
     final double fixedButtonBottomMargin = 16.0;
     final double panelMarginAboveButton = 0.0;
     final double panelBottomPosition =
         fixedButtonBottomMargin + fabSize + panelMarginAboveButton;
-    final double statusBarHeight = MediaQuery.of(context).padding.top;
 
     return Stack(
       children: [
@@ -390,6 +380,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               connected: isConnected,
               endedCountdownSeconds: callStateProvider.endedCountdownSeconds,
               onTogglePopup: _toggleCallPopup,
+              duration: duration,
             ),
           ),
       ],

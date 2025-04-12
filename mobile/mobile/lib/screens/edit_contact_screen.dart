@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:mobile/controllers/call_log_controller.dart';
-import 'package:mobile/controllers/contacts_controller.dart';
-import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';

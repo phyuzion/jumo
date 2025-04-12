@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/providers/call_state_provider.dart';
-import 'dart:async'; // Timer 사용 위해 (통화 시간)
 import 'dart:developer'; // 로그
 
 class DynamicCallIsland extends StatefulWidget {
@@ -11,6 +10,7 @@ class DynamicCallIsland extends StatefulWidget {
   final VoidCallback onTogglePopup; // 팝업 토글 콜백
   final bool connected; // <<< 추가
   final int endedCountdownSeconds; // <<< 추가
+  final int duration; // <<< duration 파라미터 추가
 
   const DynamicCallIsland({
     super.key,
@@ -21,6 +21,7 @@ class DynamicCallIsland extends StatefulWidget {
     required this.onTogglePopup,
     required this.connected, // <<< 추가
     required this.endedCountdownSeconds, // <<< 추가
+    required this.duration, // <<< 생성자에 추가
   });
 
   @override
@@ -28,64 +29,8 @@ class DynamicCallIsland extends StatefulWidget {
 }
 
 class _DynamicCallIslandState extends State<DynamicCallIsland> {
-  Timer? _callTimer;
-  int _callDuration = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateTimerBasedOnState(
-      widget.callState == CallState.active && widget.connected,
-    );
-  }
-
-  @override
-  void didUpdateWidget(DynamicCallIsland oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.callState != widget.callState ||
-        oldWidget.connected != widget.connected) {
-      log(
-        '[Island] State/Connected changed: ${widget.callState} / ${widget.connected}',
-      );
-      _updateTimerBasedOnState(
-        widget.callState == CallState.active && widget.connected,
-      );
-    }
-  }
-
-  void _updateTimerBasedOnState(bool shouldRunTimer) {
-    if (shouldRunTimer) {
-      _startCallTimer();
-    } else {
-      _stopCallTimer();
-    }
-  }
-
-  void _startCallTimer() {
-    _stopCallTimer();
-    _callDuration = 0;
-    _callTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted && widget.callState == CallState.active && widget.connected) {
-        setState(() {
-          _callDuration++;
-        });
-      } else {
-        timer.cancel();
-      }
-    });
-    log('[Island] Call timer started.');
-  }
-
-  void _stopCallTimer() {
-    _callTimer?.cancel();
-    _callTimer = null;
-    _callDuration = 0;
-    log('[Island] Call timer stopped.');
-  }
-
   @override
   void dispose() {
-    _stopCallTimer();
     super.dispose();
   }
 
@@ -178,7 +123,7 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
           barContent = _buildBarContent(
             leadingIcon,
             widget.connected
-                ? "통화 중 (${_formatDuration(_callDuration)})"
+                ? "통화 중 (${_formatDuration(widget.duration)})"
                 : "연결 중...",
             widget.callerName,
             widget.number,

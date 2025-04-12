@@ -16,10 +16,10 @@ import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/search_screen.dart';
-import 'package:mobile/screens/dialer_screen.dart';
-import 'package:mobile/screens/incoming_call_screen.dart';
-import 'package:mobile/screens/on_call_screen.dart';
-import 'package:mobile/screens/call_ended_screen.dart';
+import 'package:mobile/deprecated/dialer_screen.dart';
+import 'package:mobile/deprecated/incoming_call_screen.dart';
+import 'package:mobile/deprecated/on_call_screen.dart';
+import 'package:mobile/deprecated/call_ended_screen.dart';
 import 'package:mobile/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -31,7 +31,6 @@ import 'package:flutter_quill/flutter_quill.dart'
     show FlutterQuillLocalizations;
 import 'package:mobile/models/blocked_history.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:hive_ce/hive.dart';
 

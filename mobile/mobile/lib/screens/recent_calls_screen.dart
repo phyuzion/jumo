@@ -10,7 +10,6 @@ import 'package:provider/provider.dart'; // context.read()
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
-import 'package:mobile/screens/dialer_screen.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'dart:developer';
 

@@ -4,8 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:hive_ce/hive.dart'; // Hive 추가
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
-import 'package:mobile/controllers/app_controller.dart';
-import 'package:provider/provider.dart'; // Provider 임포트 추가
 import 'package:mobile/services/native_methods.dart'; // <<< 임포트 추가
 import 'package:mobile/utils/constants.dart'; // <<< 임포트 추가
 

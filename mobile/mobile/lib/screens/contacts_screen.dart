@@ -9,9 +9,6 @@ import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'package:provider/provider.dart';
 import 'dart:developer';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
-import 'package:hive_ce/hive.dart';
-import 'package:mobile/utils/constants.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});

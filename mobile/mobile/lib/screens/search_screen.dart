@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
-import 'package:mobile/models/phone_number_model.dart';
 import 'package:mobile/models/search_result_model.dart';
-import 'package:mobile/models/today_record.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 import 'package:provider/provider.dart';

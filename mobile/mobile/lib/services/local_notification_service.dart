@@ -2,8 +2,6 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:developer';
-import 'package:flutter/material.dart'; // NavigatorState 사용 위해 추가
-import 'package:mobile/controllers/navigation_controller.dart'; // NavigationController 사용 위해 추가
 
 // NavigatorKey 등 활용하려면 import
 // import 'package:mobile/controllers/navigation_controller.dart';
