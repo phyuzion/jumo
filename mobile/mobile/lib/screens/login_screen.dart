@@ -6,6 +6,8 @@ import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:provider/provider.dart'; // Provider 임포트 추가
+import 'package:mobile/services/native_methods.dart'; // <<< 임포트 추가
+import 'package:mobile/utils/constants.dart'; // <<< 임포트 추가
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,7 +20,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _loginIdCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
 
-  String _myNumber = ''; // 초기값 설정
+  String _myNumber = '번호 확인중...'; // <<< 초기값 변경
+  bool _isNumberLoading = true; // <<< 번호 로딩 상태 추가
   bool _loading = false;
 
   // "아이디/비번 기억하기" 체크 여부
@@ -36,20 +39,56 @@ class _LoginScreenState extends State<LoginScreen> {
     _loadInitialData();
   }
 
-  // 초기 데이터 로드 (myNumber, savedId/pw)
-  void _loadInitialData() {
-    _myNumber = _authBox.get('myNumber', defaultValue: '') as String;
+  // 초기 데이터 로드 (수정됨)
+  Future<void> _loadInitialData() async {
+    // <<< async 추가
+    if (!mounted) return;
+    setState(() {
+      // 로딩 상태 시작
+      _myNumber = '번호 확인중...';
+      _isNumberLoading = true;
+    });
+
+    try {
+      // 네이티브에서 번호 가져오기
+      final rawNumber = await NativeMethods.getMyPhoneNumber();
+      if (!mounted) return;
+
+      if (rawNumber.isNotEmpty) {
+        final normalizedNumber = normalizePhone(rawNumber);
+        log('[LoginScreen] My number loaded: $normalizedNumber');
+        // Hive에 저장
+        await _authBox.put('myNumber', normalizedNumber);
+        // 상태 업데이트
+        setState(() {
+          _myNumber = normalizedNumber;
+          _isNumberLoading = false;
+        });
+      } else {
+        log('[LoginScreen] Failed to get phone number (empty).');
+        setState(() {
+          _myNumber = '번호 확인 실패';
+          _isNumberLoading = false;
+        });
+        // TODO: 사용자에게 오류 알림 또는 재시도 옵션 제공
+      }
+    } catch (e) {
+      log('[LoginScreen] Error getting phone number: $e');
+      if (mounted) {
+        setState(() {
+          _myNumber = '번호 확인 오류';
+          _isNumberLoading = false;
+        });
+        // TODO: 사용자에게 오류 알림
+      }
+    }
+
+    // 저장된 ID/PW 로드는 그대로 유지
     final savedId = _authBox.get('savedLoginId') as String?;
     final savedPw = _authBox.get('savedPassword') as String?;
-
-    // 저장된 ID/PW 있으면 입력 필드에 설정
     if (savedId != null) _loginIdCtrl.text = savedId;
     if (savedPw != null) _passwordCtrl.text = savedPw;
-
-    // 저장된 정보가 있다면 _rememberMe 기본값 true 유지, 없으면 false
     _rememberMe = (savedId != null && savedPw != null);
-
-    // 자동 로그인 로직 제거 (user_api 또는 client 에서 처리)
   }
 
   /// 로그인 버튼 or Enter key
@@ -63,8 +102,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (loginId.isEmpty || password.isEmpty) {
         throw Exception('아이디와 비번을 모두 입력해주세요.');
       }
-      if (_myNumber.isEmpty) {
-        throw Exception('전화번호를 인식할수 없습니다. 앱을 재시작해주세요.');
+      if (_myNumber.isEmpty ||
+          _myNumber.contains('확인') ||
+          _myNumber.contains('오류')) {
+        throw Exception('전화번호를 인식할 수 없습니다. 앱 권한을 확인하거나 재시작해주세요.');
       }
 
       // 로그인 호출
@@ -173,8 +214,13 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 20),
                     Text(
-                      '내 번호: $_myNumber',
-                      style: const TextStyle(color: Colors.grey),
+                      _isNumberLoading ? '번호 확인중...' : '내 번호: $_myNumber',
+                      style: TextStyle(
+                        color:
+                            _myNumber.contains('실패') || _myNumber.contains('오류')
+                                ? Colors.red
+                                : Colors.grey,
+                      ),
                     ),
                   ],
                 ),

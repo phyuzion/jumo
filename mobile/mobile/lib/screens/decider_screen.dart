@@ -40,25 +40,12 @@ class _DeciderScreenState extends State<DeciderScreen> {
       final isLoggedIn =
           _authBox.get('loginStatus', defaultValue: false) as bool;
       if (isLoggedIn) {
-        // <<< 초기화 호출 없이 바로 홈으로 이동 >>>
-        log('[DeciderScreen] Already logged in, navigating to home.');
-        if (!mounted) return;
+        // ... (홈으로 바로 이동)
         Navigator.pushReplacementNamed(context, '/home');
       } else {
-        // ... (비로그인 로직)
-        String myNumber = '';
-        try {
-          myNumber = await NativeMethods.getMyPhoneNumber();
-        } catch (e) {
-          log('Error getting phone number: $e'); /* Handle error */
-        }
-        log('myNumber=$myNumber');
-        if (myNumber.isEmpty) {
-          Navigator.pushReplacementNamed(context, '/login');
-          return;
-        }
-        final myRealnumber = normalizePhone(myNumber);
-        await _authBox.put('myNumber', myRealnumber);
+        // <<< 바로 로그인 화면으로 이동 >>>
+        log('[DeciderScreen] Not logged in, navigating to login.');
+        if (!mounted) return; // 추가: 네비게이션 전 마운트 확인
         Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
