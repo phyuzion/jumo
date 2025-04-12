@@ -382,6 +382,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.1.2"
+  flutter_broadcasts_4m:
+    dependency: "direct main"
+    description:
+      name: flutter_broadcasts_4m
+      sha256: "7077a093d500079abfbe6a4896fe38bdb5946f82946a480c33a24255f842b2ab"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.2"
   flutter_colorpicker:
     dependency: transitive
     description:

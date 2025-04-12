@@ -140,13 +140,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     log('[HomeScreen] UI is ready (Contacts loading in background).');
 
-    log('[HomeScreen] Requesting background tasks...');
+    log('[HomeScreen] Requesting background service start...');
     try {
-      // 백그라운드 동기화, 푸시 알림 설정 등 요청
-      await _appController.startBackgroundService(); // 예시
-      log('[HomeScreen] Invoked background tasks.');
+      await _appController.startBackgroundService(); // 백그라운드 서비스 시작
+      log('[HomeScreen] Background service start requested.'); // 시작 요청 로그로 변경
+
+      final service = FlutterBackgroundService(); // 서비스 인스턴스 얻기
+      // 잠시 대기하여 서비스가 시작될 시간을 확보 (선택적, 타이밍 이슈 방지용)
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (await service.isRunning()) {
+        log(
+          '[HomeScreen] Background service is running. Invoking background tasks: uploadCallLogsNow, startContactSyncNow...',
+        );
+        try {
+          service.invoke('uploadCallLogsNow');
+          service.invoke('startContactSyncNow');
+          log('[HomeScreen] Successfully invoked background tasks.');
+        } catch (e) {
+          log('[HomeScreen] Error invoking background tasks: $e');
+        }
+      } else {
+        log(
+          '[HomeScreen] Background service failed to start or is not running after request.',
+        );
+      }
     } catch (e) {
-      log('[HomeScreen] Error invoking background tasks: $e');
+      log(
+        '[HomeScreen] Error during background service start or task invocation: $e',
+      );
     }
 
     _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((

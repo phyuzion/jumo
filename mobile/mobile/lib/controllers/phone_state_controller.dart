@@ -82,79 +82,15 @@ class PhoneStateController with WidgetsBindingObserver {
       '[PhoneStateController] Incoming call: $number, Is default dialer: $isDef',
     );
 
-    if (isDef) {
-      final callerName = await contactsController.getContactName(number);
-      log(
-        '[PhoneStateController] Default Dialer: Notifying service for $number, name: $callerName',
-      );
-      notifyServiceCallState('onIncomingNumber', number, callerName);
-      return;
-    }
-
-    if (await FlutterOverlayWindow.isPermissionGranted()) {
-      log(
-        '[PhoneStateController] Overlay permission granted for incoming call: $number',
-      );
-
-      final ringingData = {'type': 'ringing', 'phoneNumber': number};
-      try {
-        await FlutterOverlayWindow.shareData(ringingData);
-        log(
-          '[PhoneStateController] Sent ringing state to overlay: $ringingData',
-        );
-      } catch (e) {
-        log('[PhoneStateController] Error sending ringing state: $e');
-      }
-
-      SearchResultModel? searchResultModel;
-      try {
-        final phoneData = await SearchRecordsController.searchPhone(number);
-        final todayRecords = await SearchRecordsController.searchTodayRecord(
-          number,
-        );
-
-        if (phoneData != null ||
-            (todayRecords != null && todayRecords.isNotEmpty)) {
-          searchResultModel = SearchResultModel(
-            phoneNumberModel: phoneData,
-            todayRecords: todayRecords,
-          );
-        }
-        log(
-          '[PhoneStateController] Search completed for $number. Result found: ${searchResultModel != null}',
-        );
-      } catch (e) {
-        log('[PhoneStateController] Error during search for $number: $e');
-        searchResultModel = null;
-      }
-
-      final resultData = {
-        'type': 'result',
-        'phoneNumber': number,
-        'searchResult': searchResultModel?.toJson(),
-      };
-      try {
-        await FlutterOverlayWindow.shareData(resultData);
-        log(
-          '[PhoneStateController] Sent result state to overlay: type=result, number=$number, hasResult=${searchResultModel != null}',
-        );
-      } catch (e) {
-        log('[PhoneStateController] Error sending result state: $e');
-      }
-    } else {
-      log(
-        '[PhoneStateController] Overlay permission not granted for incoming call: $number',
-      );
-      final callerName = await contactsController.getContactName(number);
-      log(
-        '[PhoneStateController] No Overlay Permission: Notifying service for $number, name: $callerName',
-      );
-      notifyServiceCallState('onIncomingNumber', number, callerName);
-    }
+    final callerName = await contactsController.getContactName(number);
+    log(
+      '[PhoneStateController] Notifying service for incoming call: $number, name: $callerName',
+    );
+    notifyServiceCallState('onIncomingNumber', number, callerName);
   }
 
   Future<void> _onCallStarted(String? number) async {
-    log('[PhoneState] callStarted for number: $number');
+    log('[PhoneStateController] callStarted for number: $number');
     if (number != null && number.isNotEmpty) {
       final callerName = await contactsController.getContactName(number);
       notifyServiceCallState('onCall', number, callerName, connected: true);
@@ -162,10 +98,9 @@ class PhoneStateController with WidgetsBindingObserver {
   }
 
   Future<void> _onCallEnded(String? number) async {
-    log('[PhoneState] callEnded for number: $number');
-
+    log('[PhoneStateController] callEnded for number: $number');
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
-    log('[PhoneState] Is default dialer: $isDef');
+    log('[PhoneStateController] Is default dialer on call end: $isDef');
 
     if (number != null && number.isNotEmpty) {
       final callerName = await contactsController.getContactName(number);

@@ -24,6 +24,12 @@ import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/app_controller.dart'; // <<< FOREGROUND_SERVICE_NOTIFICATION_ID 사용 위해
 import 'package:flutter/material.dart'; // <<< Timer 등 기본 요소 위해
+import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
+import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart'
+    as overlay_window; // <<< 이름 충돌 해결
+import 'package:mobile/controllers/search_records_controller.dart';
+import 'package:mobile/models/search_result_model.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 
 const int CALL_STATUS_NOTIFICATION_ID = 1111; // 통화 상태 알림 전용 ID
 const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
@@ -43,6 +49,29 @@ Future<void> onStart(ServiceInstance service) async {
   // <<< 현재 상태 정보 저장용 변수 (타이머 내부에서 사용) >>>
   String _currentNumberForTimer = "";
   String _currentCallerNameForTimer = "";
+
+  // <<< 기본 전화 앱 여부 확인 (서비스 시작 시 한 번만) >>>
+  bool isDefaultDialer = true; // 기본값은 true로 설정 (오류 방지)
+  try {
+    // AndroidServiceInstance 확인 후 호출 (Android 전용 기능이므로)
+    if (service is AndroidServiceInstance) {
+      isDefaultDialer = await NativeDefaultDialerMethods.isDefaultDialer();
+      log(
+        '[BackgroundService][onStart] Checked default dialer status: $isDefaultDialer',
+      );
+    } else {
+      log(
+        '[BackgroundService][onStart] Not an Android instance, cannot check default dialer. Assuming false.',
+      );
+      isDefaultDialer = false; // 다른 플랫폼이거나 확인 불가 시 false 간주
+    }
+  } catch (e) {
+    log(
+      '[BackgroundService][onStart] Error checking default dialer status: $e',
+    );
+    // 에러 발생 시 false로 간주하여 오버레이 시도
+    isDefaultDialer = false;
+  }
 
   // <<< 시간 포맷 함수 정의 먼저 >>>
   String _formatDurationBackground(int seconds) {
@@ -243,7 +272,7 @@ Future<void> onStart(ServiceInstance service) async {
     // <<< 상태 변수 업데이트 로그 추가 >>>
     _currentNumberForTimer = event['number'] ?? _currentNumberForTimer;
     _currentCallerNameForTimer =
-        event['callerName'] ?? _currentCallerNameForTimer;
+        event['callerName'] as String? ?? _currentCallerNameForTimer;
     log(
       '[BackgroundService][on:callStateChanged] Updated timer info: Number=$_currentNumberForTimer, Name=$_currentCallerNameForTimer',
     );
@@ -373,6 +402,165 @@ Future<void> onStart(ServiceInstance service) async {
     smsSyncTimer?.cancel();
     service.stopSelf();
   });
+
+  log('[BackgroundService] Setting up BroadcastReceiver for PHONE_STATE...');
+
+  // ***** 전화 상태 BroadcastReceiver 설정 *****
+  try {
+    const String phoneStateAction = "android.intent.action.PHONE_STATE";
+    final BroadcastReceiver receiver = BroadcastReceiver(
+      names: <String>[phoneStateAction],
+    );
+
+    receiver.messages.listen((message) async {
+      log(
+        '[BackgroundService][BroadcastReceiver] Received broadcast message for $phoneStateAction:',
+      );
+      final Map<String, dynamic>? intentExtras = message?.data;
+      log(
+        '[BackgroundService][BroadcastReceiver] Message content (Intent Extras): $intentExtras',
+      );
+
+      if (intentExtras != null) {
+        final String? state =
+            intentExtras['state']; // TelephonyManager.EXTRA_STATE
+        final String? incomingNumber =
+            intentExtras['incoming_number']; // TelephonyManager.EXTRA_INCOMING_NUMBER
+        log(
+          '[BackgroundService][BroadcastReceiver] Parsed state: $state, incomingNumber: $incomingNumber',
+        );
+
+        if (!isDefaultDialer) {
+          if (state == 'RINGING' &&
+              incomingNumber != null &&
+              incomingNumber.isNotEmpty) {
+            log(
+              '[BackgroundService][BroadcastReceiver] RINGING detected for $incomingNumber. Handling overlay...',
+            );
+
+            final ringingData = {
+              'type': 'ringing',
+              'phoneNumber': incomingNumber,
+            };
+            try {
+              await overlay_window.FlutterOverlayWindow.shareData(ringingData);
+              log(
+                '[BackgroundService][BroadcastReceiver] Sent ringing state via shareData.',
+              );
+
+              if (!await overlay_window.FlutterOverlayWindow.isActive()) {
+                await overlay_window.FlutterOverlayWindow.showOverlay(
+                  enableDrag: true,
+                  alignment: overlay_window.OverlayAlignment.bottomCenter,
+                  height: overlay_window.WindowSize.matchParent,
+                  width: overlay_window.WindowSize.matchParent,
+                  overlayTitle: incomingNumber,
+                  overlayContent: "전화 수신 중...",
+                  flag: overlay_window.OverlayFlag.defaultFlag,
+                  visibility:
+                      overlay_window.NotificationVisibility.visibilityPublic,
+                  positionGravity: overlay_window.PositionGravity.auto,
+                );
+                log(
+                  '[BackgroundService][BroadcastReceiver] Requested to show overlay.',
+                );
+              } else {
+                log(
+                  '[BackgroundService][BroadcastReceiver] Overlay already active. Only sent shareData.',
+                );
+              }
+            } catch (e) {
+              log(
+                '[BackgroundService][BroadcastReceiver] Error showing overlay or sending ringing data: $e',
+              );
+            }
+
+            SearchResultModel? searchResultModel;
+            try {
+              log(
+                '[BackgroundService][BroadcastReceiver] Attempting search using SearchRecordsController for $incomingNumber...',
+              );
+              final phoneData = await SearchRecordsController.searchPhone(
+                incomingNumber,
+              );
+              final todayRecords =
+                  await SearchRecordsController.searchTodayRecord(
+                    incomingNumber,
+                  );
+              log(
+                '[BackgroundService][BroadcastReceiver] searchTodayRecord result: ${todayRecords?.length ?? 0} records found.',
+              );
+              log(
+                '[BackgroundService][BroadcastReceiver] Today Records data: $todayRecords',
+              );
+
+              if (phoneData != null ||
+                  (todayRecords != null && todayRecords.isNotEmpty)) {
+                searchResultModel = SearchResultModel(
+                  phoneNumberModel: phoneData,
+                  todayRecords: todayRecords,
+                );
+              }
+              log(
+                '[BackgroundService][BroadcastReceiver] Search completed via Controller for $incomingNumber. Result found: ${searchResultModel != null}',
+              );
+            } catch (e, stackTrace) {
+              log(
+                '[BackgroundService][BroadcastReceiver] Error during search via Controller: $e',
+              );
+              log(
+                '[BackgroundService][BroadcastReceiver] StackTrace: $stackTrace',
+              );
+              searchResultModel = null;
+            }
+
+            final resultData = {
+              'type': 'result',
+              'phoneNumber': incomingNumber,
+              'searchResult': searchResultModel?.toJson(),
+            };
+            try {
+              await overlay_window.FlutterOverlayWindow.shareData(resultData);
+              log(
+                '[BackgroundService][BroadcastReceiver] Sent result state via shareData.',
+              );
+            } catch (e) {
+              log(
+                '[BackgroundService][BroadcastReceiver] Error sending result data: $e',
+              );
+            }
+          } else if (state == 'IDLE') {
+            log(
+              '[BackgroundService][BroadcastReceiver] IDLE state detected. Closing overlay (if active).',
+            );
+            try {
+              if (await overlay_window.FlutterOverlayWindow.isActive()) {
+                await overlay_window.FlutterOverlayWindow.closeOverlay();
+                log('[BackgroundService][BroadcastReceiver] Closed overlay.');
+              }
+            } catch (e) {
+              log(
+                '[BackgroundService][BroadcastReceiver] Error closing overlay: $e',
+              );
+            }
+          }
+        } else {
+          log(
+            '[BackgroundService][BroadcastReceiver] Default dialer is active. Skipping overlay logic.',
+          );
+        }
+      }
+    });
+
+    await receiver.start();
+    log(
+      '[BackgroundService][onStart] BroadcastReceiver started successfully for $phoneStateAction.',
+    );
+  } catch (e) {
+    log(
+      '[BackgroundService][onStart] Error setting up or starting BroadcastReceiver: $e',
+    );
+  }
 
   log('[BackgroundService] Setup complete.');
 
