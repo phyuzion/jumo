@@ -257,7 +257,7 @@ Future<void> performContactBackgroundSync() async {
   }
 }
 
-class ContactsController {
+class ContactsController with ChangeNotifier {
   // GetStorage 관련 멤버 변수 완전 제거
   // final _box = GetStorage();
   // static const storageKey = 'phonebook';
@@ -267,9 +267,11 @@ class ContactsController {
   // static const _cacheValidityDuration = Duration(minutes: 5);
 
   // 메모리 캐시 (유지)
-  List<PhoneBookModel> _memoryCache = [];
-  DateTime? _lastMemoryCacheTime;
-  static const _memoryCacheDuration = Duration(minutes: 1);
+  List<PhoneBookModel> _contacts = [];
+  Map<String, PhoneBookModel> _contactCache =
+      {}; // <<< 기존 캐시 유지 또는 _contacts 사용
+  bool _isLoading = false;
+  DateTime? _lastLoadTime; // <<< 마지막 로드 시간 추가 (선택적 최적화)
 
   // 이전 동기화 상태 저장 키 정의 (유지)
   static const String _lastSyncStateKey = 'contacts_state';
@@ -280,51 +282,83 @@ class ContactsController {
     triggerBackgroundSync();
   }
 
-  /// 현재 로컬 연락처 목록 가져오기 (캐시 활용)
-  Future<List<PhoneBookModel>> getLocalContacts() async {
-    // 메모리 캐시 확인
-    if (_lastMemoryCacheTime != null &&
-        DateTime.now().difference(_lastMemoryCacheTime!) <
-            _memoryCacheDuration &&
-        _memoryCache.isNotEmpty) {
-      log('[ContactsController] Using memory cache for local contacts');
-      return _memoryCache;
+  /// 현재 로컬 연락처 목록 가져오기 (수정됨)
+  Future<List<PhoneBookModel>> getLocalContacts({
+    bool forceRefresh = false, // <<< 강제 새로고침 옵션 추가
+  }) async {
+    // <<< 캐시 및 로딩 상태 확인 >>>
+    final now = DateTime.now();
+    if (!forceRefresh &&
+        _lastLoadTime != null &&
+        now.difference(_lastLoadTime!) <
+            const Duration(minutes: 1) && // 예: 1분 캐시
+        _contacts.isNotEmpty) {
+      log('[ContactsController] Using cached contacts.');
+      return _contacts;
+    }
+    if (_isLoading) {
+      log('[ContactsController] Already loading contacts...');
+      // 로딩 중일 때 현재 캐시 반환 또는 Future 기다리기? (우선 현재 캐시 반환)
+      return _contacts;
     }
 
-    log('[ContactsController] Fetching contacts from device...');
+    log(
+      '[ContactsController] Fetching contacts from device... ForceRefresh: $forceRefresh',
+    );
+    // <<< 상태 변경을 마이크로태스크로 지연 >>>
+    Future.microtask(() {
+      // if (mounted) { // <<< 제거
+      // Check if still relevant before updating state
+      if (!_isLoading) {
+        // 혹시 모를 중복 방지
+        _isLoading = true;
+        notifyListeners(); // 로딩 시작 알림
+      }
+      // }
+    });
+
     try {
-      // 연락처 접근 권한 확인 (선택적)
       final hasPermission = await FlutterContacts.requestPermission(
         readonly: true,
       );
       if (!hasPermission) {
         log('[ContactsController] Contact permission denied.');
-        // TODO: 사용자에게 권한 필요 안내 또는 설정 이동 버튼 제공
-        return []; // 권한 없으면 빈 리스트 반환
+        throw Exception('연락처 접근 권한이 거부되었습니다.');
       }
 
-      final contacts = await FlutterContacts.getContacts(
-        withProperties: true, // 이름 필요
+      final contactsRaw = await FlutterContacts.getContacts(
+        withProperties: true,
         withPhoto: false,
         withThumbnail: false,
       );
 
-      // 백그라운드 스레드에서 파싱 (연락처 많을 때 UI 블록 방지)
-      final phoneBookModels = await compute(_parseContacts, contacts);
+      // 파싱은 compute 사용 유지
+      final phoneBookModels = await compute(_parseContacts, contactsRaw);
 
-      // 메모리 캐시 업데이트
-      _memoryCache = phoneBookModels;
-      _lastMemoryCacheTime = DateTime.now();
+      // <<< 로드 완료 후 상태 업데이트 및 알림 >>>
+      // 이 부분은 비동기 작업 완료 후이므로 microtask 필요 없음
+      _contacts = phoneBookModels;
+      _contactCache = {for (var c in _contacts) c.phoneNumber: c};
+      _lastLoadTime = now;
+      _isLoading = false;
+      notifyListeners();
 
-      return phoneBookModels;
+      return _contacts;
     } catch (e) {
       log('[ContactsController] Error fetching device contacts: $e');
-      // 권한 오류 외 다른 오류 처리
-      return []; // 오류 시 빈 리스트 반환
+      // <<< 오류 시에도 microtask 또는 다음 프레임 콜백 사용 고려 >>>
+      Future.microtask(() {
+        // <<< microtask 추가
+        // if (mounted) { // <<< 제거
+        _isLoading = false;
+        notifyListeners();
+        // }
+      });
+      throw e;
     }
   }
 
-  /// 백그라운드 동기화 트리거 (이제 백그라운드 서비스에 요청)
+  /// 백그라운드 동기화 트리거 (변경 없음)
   void triggerBackgroundSync() {
     log('[ContactsController] Requesting background contact sync...');
     // TODO: 백그라운드 서비스에 동기화 시작 이벤트 보내기
@@ -332,10 +366,40 @@ class ContactsController {
     // 또는 주기적 실행에 맡김
   }
 
-  // 메모리 캐시 초기화 메소드 추가
+  // 캐시 초기화 메소드 (변경 없음 - 내부 변수 초기화)
   void invalidateCache() {
-    _memoryCache = [];
-    _lastMemoryCacheTime = null;
-    log('[ContactsController] Memory cache invalidated.');
+    _contacts = [];
+    _contactCache = {};
+    _lastLoadTime = null;
+    log('[ContactsController] Contacts cache invalidated.');
+    notifyListeners(); // 캐시 무효화 알림
+  }
+
+  // <<< Getters 추가 >>>
+  List<PhoneBookModel> get contacts => _contacts;
+  Map<String, PhoneBookModel> get contactCache => _contactCache;
+  bool get isLoading => _isLoading;
+
+  // <<< 이름 조회 함수 추가 (Provider 대신 Controller에 위치) >>>
+  Future<String> getContactName(String phoneNumber) async {
+    final normalizedNumber = normalizePhone(phoneNumber);
+    // 캐시 먼저 확인
+    if (_contactCache.containsKey(normalizedNumber)) {
+      return _contactCache[normalizedNumber]!.name;
+    }
+    // 캐시 없으면 전체 로드 (하지만 보통 미리 로드되어 있을 것)
+    final contacts = await getLocalContacts();
+    try {
+      final contact = contacts.firstWhere(
+        (c) => c.phoneNumber == normalizedNumber,
+        orElse: () => PhoneBookModel(contactId: '', name: '', phoneNumber: ''),
+      );
+      return contact.name.isNotEmpty ? contact.name : '';
+    } catch (e) {
+      log(
+        '[ContactsController] Error finding contact name for $normalizedNumber: $e',
+      );
+      return '';
+    }
   }
 }

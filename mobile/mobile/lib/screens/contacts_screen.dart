@@ -8,6 +8,10 @@ import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'package:provider/provider.dart';
 import 'dart:developer';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:hive_ce/hive.dart';
+import 'package:mobile/utils/constants.dart';
 
 class ContactsScreen extends StatefulWidget {
   const ContactsScreen({super.key});
@@ -17,8 +21,6 @@ class ContactsScreen extends StatefulWidget {
 }
 
 class _ContactsScreenState extends State<ContactsScreen> {
-  List<PhoneBookModel> _contacts = [];
-  bool _isLoading = true;
   int? _expandedIndex;
   bool _isDefaultDialer = false;
   bool _isSearching = false;
@@ -27,7 +29,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadContacts();
     _checkDefaultDialer();
   }
 
@@ -42,54 +43,33 @@ class _ContactsScreenState extends State<ContactsScreen> {
     setState(() => _isDefaultDialer = isDefault);
   }
 
-  Future<void> _loadContacts() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      final contactsCtrl = context.read<ContactsController>();
-      final list = await contactsCtrl.getLocalContacts();
-      if (!mounted) return;
-      setState(() {
-        _contacts = list;
-        _isLoading = false;
-      });
-    } catch (e) {
-      log('[ContactsScreen] Error loading contacts: $e');
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('연락처를 불러오는데 실패했습니다.')));
-      }
-    }
-  }
-
   Future<void> _refreshContacts() async {
-    context.read<ContactsController>().invalidateCache();
-    await _loadContacts();
-  }
-
-  List<PhoneBookModel> get _filteredContacts {
-    final List<PhoneBookModel> allContacts = _contacts;
-
-    if (_searchQuery.isEmpty) {
-      return allContacts;
-    }
-    final lowerQuery = _searchQuery.toLowerCase();
-    return allContacts.where((c) {
-      final name = c.name.toLowerCase();
-      final phone = c.phoneNumber.toLowerCase();
-      return name.contains(lowerQuery) || phone.contains(lowerQuery);
-    }).toList();
+    await context.read<ContactsController>().getLocalContacts(
+      forceRefresh: true,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final data = _filteredContacts;
+    final contactsProvider = context.watch<ContactsController>();
+    final allContacts = contactsProvider.contacts;
+    final isLoading = contactsProvider.isLoading;
+
+    final List<PhoneBookModel> data;
+    if (_searchQuery.isEmpty) {
+      data = allContacts;
+    } else {
+      final lowerQuery = _searchQuery.toLowerCase();
+      data =
+          allContacts.where((c) {
+            final name = c.name.toLowerCase();
+            final phone = c.phoneNumber.toLowerCase();
+            return name.contains(lowerQuery) || phone.contains(lowerQuery);
+          }).toList();
+    }
+    log(
+      '[ContactsScreen] build: isLoading=$isLoading, contact count: ${data.length}',
+    );
 
     return Scaffold(
       appBar: PreferredSize(
@@ -132,8 +112,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
         child:
-            _isLoading
+            isLoading
                 ? const Center(child: CircularProgressIndicator())
+                : data.isEmpty
+                ? Center(
+                  child: Text(
+                    _searchQuery.isEmpty ? '연락처가 없습니다.' : '검색 결과가 없습니다.',
+                  ),
+                )
                 : ListView.builder(
                   itemCount: data.length,
                   itemBuilder: (ctx, i) {

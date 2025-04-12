@@ -115,10 +115,11 @@ void main() async {
     callLogContoller,
     contactsController,
   );
-  // NavigationController 초기화는 컨트롤러 생성 후
+  // NavigationController 초기화 수정
   await NavigationController.init(
     phoneStateController,
     blockedNumbersController,
+    contactsController,
   );
   final appController = AppController(
     phoneStateController,
@@ -133,18 +134,19 @@ void main() async {
       providers: [
         Provider<PhoneStateController>.value(value: phoneStateController),
         Provider<AppController>.value(value: appController),
-        Provider<ContactsController>.value(value: contactsController),
-        Provider<CallLogController>.value(value: callLogContoller),
         Provider<SmsController>.value(value: smsController),
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
         ),
         Provider<Box<dynamic>>.value(value: Hive.box('auth')),
+        ChangeNotifierProvider.value(value: callLogContoller),
+        ChangeNotifierProvider.value(value: contactsController),
         ChangeNotifierProvider(
           create:
               (context) => CallStateProvider(
                 context.read<PhoneStateController>(),
                 context.read<CallLogController>(),
+                context.read<ContactsController>(),
               ),
         ),
       ],

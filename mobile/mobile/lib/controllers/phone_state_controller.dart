@@ -35,40 +35,30 @@ class PhoneStateController with WidgetsBindingObserver {
       if (isDef) return;
 
       String? number = event.number;
-      String callerName = '';
-
-      if (number != null && number.isNotEmpty) {
-        callerName = await getContactName(number);
-      }
 
       switch (event.status) {
         case PhoneStateStatus.NOTHING:
           _onNothing();
           if (number != null && number.isNotEmpty) {
-            notifyServiceCallState('onCallEnded', number, callerName);
+            notifyServiceCallState('onCallEnded', number, '');
           }
           break;
         case PhoneStateStatus.CALL_INCOMING:
           if (number != null && number.isNotEmpty) {
             await _onIncoming(number);
-            notifyServiceCallState('onIncomingNumber', number, callerName);
+            notifyServiceCallState('onIncomingNumber', number, '');
           }
           break;
         case PhoneStateStatus.CALL_STARTED:
           if (number != null && number.isNotEmpty) {
             await _onCallStarted(number);
-            notifyServiceCallState(
-              'onCall',
-              number,
-              callerName,
-              connected: true,
-            );
+            notifyServiceCallState('onCall', number, '', connected: true);
           }
           break;
         case PhoneStateStatus.CALL_ENDED:
           if (number != null && number.isNotEmpty) {
             await _onCallEnded(number);
-            notifyServiceCallState('onCallEnded', number, callerName);
+            notifyServiceCallState('onCallEnded', number, '');
           }
           break;
       }
@@ -108,7 +98,7 @@ class PhoneStateController with WidgetsBindingObserver {
     log('[PhoneState] not default => overlay shown for $number');
 
     if (number != null && number.isNotEmpty) {
-      final callerName = await getContactName(number);
+      final callerName = await contactsController.getContactName(number);
       notifyServiceCallState('onIncomingNumber', number, callerName);
     }
   }
@@ -116,7 +106,7 @@ class PhoneStateController with WidgetsBindingObserver {
   Future<void> _onCallStarted(String? number) async {
     log('[PhoneState] callStarted for number: $number');
     if (number != null && number.isNotEmpty) {
-      final callerName = await getContactName(number);
+      final callerName = await contactsController.getContactName(number);
       notifyServiceCallState('onCall', number, callerName, connected: true);
     }
   }
@@ -128,7 +118,7 @@ class PhoneStateController with WidgetsBindingObserver {
     log('[PhoneState] Is default dialer: $isDef');
 
     if (number != null && number.isNotEmpty) {
-      final callerName = await getContactName(number);
+      final callerName = await contactsController.getContactName(number);
       notifyServiceCallState('onCallEnded', number, callerName);
     }
   }
@@ -188,27 +178,6 @@ class PhoneStateController with WidgetsBindingObserver {
 
   void _processCallEnd(String number) async {
     // Implementation of _processCallEnd method
-  }
-
-  Future<String> getContactName(String phoneNumber) async {
-    final normalizedNumber = normalizePhone(phoneNumber);
-    try {
-      final List<PhoneBookModel> contacts =
-          await contactsController.getLocalContacts();
-      final contact = contacts.firstWhere(
-        (c) => c.phoneNumber == normalizedNumber,
-        orElse: () => PhoneBookModel(contactId: '', name: '', phoneNumber: ''),
-      );
-
-      if (contact.name.isNotEmpty && contact.name != '(No Name)') {
-        return contact.name;
-      }
-    } catch (e) {
-      log(
-        '[PhoneStateController] Error getting contact name for $normalizedNumber: $e',
-      );
-    }
-    return '';
   }
 
   @override

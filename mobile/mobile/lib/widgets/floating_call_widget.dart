@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/providers/call_state_provider.dart';
-import 'package:mobile/screens/home_screen.dart'; // CallState enum 사용 위해 임시 임포트 (나중에 분리)
+// import 'package:mobile/screens/home_screen.dart'; // <<< 임시 임포트 제거
 import 'package:mobile/widgets/dialer_content.dart'; // <<< 새 위젯 임포트
 import 'dart:developer';
 import 'package:mobile/widgets/incoming_call_content.dart'; // <<< 새 위젯 임포트
@@ -112,8 +112,8 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
     try {
       final normalizedNumber = normalizePhone(widget.number);
       // <<< PhoneStateController 통해 이름 조회 >>>
-      final phoneStateCtrl = context.read<PhoneStateController>();
-      _loadedCallerName = await phoneStateCtrl.getContactName(widget.number);
+      final contactsCtrl = context.read<ContactsController>();
+      _loadedCallerName = await contactsCtrl.getContactName(widget.number);
       if (!mounted) return;
       setState(() {});
 
@@ -179,8 +179,8 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
                   : widget.callerName,
           number: widget.number,
           connected: widget.connected,
-          onHangUp: widget.onHangUp, // <<< 콜백 전달
-          duration: widget.duration, // <<< duration 전달
+          onHangUp: widget.onHangUp,
+          duration: widget.duration,
         );
         break;
       case CallState.ended:

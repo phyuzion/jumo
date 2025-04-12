@@ -7,6 +7,7 @@ import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 
 class NavigationController {
   static final navKey = GlobalKey<NavigatorState>();
@@ -14,6 +15,7 @@ class NavigationController {
   static Future<void> init(
     PhoneStateController phoneStateController,
     BlockedNumbersController blockedNumbersController,
+    ContactsController contactsController,
   ) async {
     // 네이티브 -> Flutter 이벤트 핸들러
     NativeMethods.setMethodCallHandler((call) async {
@@ -35,7 +37,7 @@ class NavigationController {
         }
       }
       if (number.isNotEmpty) {
-        callerName = await phoneStateController.getContactName(number);
+        callerName = await contactsController.getContactName(number);
       }
 
       // <<< 기본 앱일 때만 상태 알림 >>>

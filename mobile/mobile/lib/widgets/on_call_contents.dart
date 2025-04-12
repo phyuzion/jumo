@@ -84,27 +84,21 @@ class OnCallContents extends StatelessWidget {
                 icon: isMuted ? Icons.mic_off : Icons.mic,
                 label: '음소거',
                 active: isMuted,
-                onTap: () {
-                  context.read<CallStateProvider>().toggleMute();
-                },
+                onTap: context.read<CallStateProvider>().toggleMute,
               ),
               _buildIconButton(
                 context: context,
                 icon: Icons.pause,
                 label: '통화대기',
                 active: isHold,
-                onTap: () {
-                  context.read<CallStateProvider>().toggleHold();
-                },
+                onTap: context.read<CallStateProvider>().toggleHold,
               ),
               _buildIconButton(
                 context: context,
                 icon: isSpeakerOn ? Icons.volume_up : Icons.volume_down,
                 label: '스피커',
                 active: isSpeakerOn,
-                onTap: () {
-                  context.read<CallStateProvider>().toggleSpeaker();
-                },
+                onTap: context.read<CallStateProvider>().toggleSpeaker,
               ),
             ],
           ),

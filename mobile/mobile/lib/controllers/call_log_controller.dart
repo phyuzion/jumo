@@ -4,18 +4,52 @@ import 'dart:convert';
 import 'dart:developer';
 import 'package:call_e_log/call_log.dart';
 import 'package:hive_ce/hive.dart';
-import 'package:mobile/utils/app_event_bus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mobile/utils/constants.dart';
 
-class CallLogController {
+class CallLogController with ChangeNotifier {
   static const storageKey = 'call_logs';
   Box get _callLogBox => Hive.box(storageKey);
 
-  /// 통화 목록 새로 읽어서 -> 로컬 DB(Hive)에 저장하고 이벤트 발생
-  /// 서버 업로드는 별도로 요청해야 함.
+  List<Map<String, dynamic>> _callLogs = [];
+  bool _isLoading = false;
+
+  List<Map<String, dynamic>> get callLogs => _callLogs;
+  bool get isLoading => _isLoading;
+
+  CallLogController() {
+    loadSavedCallLogs();
+  }
+
+  void loadSavedCallLogs() {
+    log('[CallLogController] Loading saved call logs from Hive...');
+    final logString = _callLogBox.get('logs', defaultValue: '[]') as String;
+    try {
+      final decodedList = jsonDecode(logString) as List;
+      _callLogs = decodedList.cast<Map<String, dynamic>>().toList();
+      log('[CallLogController] Loaded ${_callLogs.length} logs from Hive.');
+    } catch (e) {
+      log('[CallLogController] Error decoding call logs from Hive: $e');
+      _callLogs = [];
+    }
+  }
+
+  /// 통화 목록 새로 읽어서 -> 로컬 DB(Hive)에 저장하고 상태 업데이트
   Future<void> refreshCallLogs() async {
     final stopwatch = Stopwatch()..start();
     log('[CallLogController] Refreshing call logs and saving locally...');
+
+    // <<< 로딩 상태 시작 알림 (마이크로태스크로 지연) >>>
+    Future.microtask(() {
+      if (!_isLoading) {
+        // 중복 방지
+        _isLoading = true;
+        notifyListeners();
+      }
+    });
+    // _isLoading = true; // <<< 직접 변경 제거
+    // notifyListeners(); // <<< 직접 호출 제거
+
     try {
       final callEntries = await CallLog.get();
       final takeCount = callEntries.length > 30 ? 30 : callEntries.length;
@@ -31,21 +65,23 @@ class CallLogController {
         }
       }
 
-      // Hive 저장
       await _callLogBox.put('logs', jsonEncode(newList));
       log(
         '[CallLogController] Saved ${newList.length} call logs locally to Hive.',
       );
 
-      // UI 갱신 이벤트 발생
-      appEventBus.fire(CallLogUpdatedEvent());
-      log('[CallLogController] Fired CallLogUpdatedEvent.');
+      _callLogs = newList;
     } catch (e, st) {
       log('refreshCallLogs error: $e\n$st');
     } finally {
+      // <<< 로딩 상태 종료 알림 (마이크로태스크 고려) >>>
+      // Future.microtask(() { // 필요 시 microtask 사용
+      _isLoading = false;
+      notifyListeners();
+      // });
       stopwatch.stop();
       log(
-        '[CallLogController] Total refreshCallLogs (local save) took: ${stopwatch.elapsedMilliseconds}ms',
+        '[CallLogController] Total refreshCallLogs took: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
   }
@@ -78,19 +114,4 @@ class CallLogController {
       };
     }).toList();
   }
-
-  /// 외부: 로컬(Hive)에 저장된 통화 목록 불러오기
-  List<Map<String, dynamic>> getSavedCallLogs() {
-    final logString = _callLogBox.get('logs', defaultValue: '[]') as String;
-    try {
-      final decodedList = jsonDecode(logString) as List;
-      return decodedList.cast<Map<String, dynamic>>().toList();
-    } catch (e) {
-      log('[CallLogController] Error decoding call logs from Hive: $e');
-      return [];
-    }
-  }
 }
-
-// CallLogUpdatedEvent 정의 제거 (app_event_bus.dart 사용)
-// class CallLogUpdatedEvent {}

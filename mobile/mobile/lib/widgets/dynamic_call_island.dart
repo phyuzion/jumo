@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/providers/call_state_provider.dart';
-import 'package:mobile/screens/home_screen.dart'; // CallState enum 사용 위해 임시 임포트 (나중에 분리)
 import 'dart:async'; // Timer 사용 위해 (통화 시간)
 import 'dart:developer'; // 로그
 

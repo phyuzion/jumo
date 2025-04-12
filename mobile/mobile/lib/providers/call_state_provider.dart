@@ -6,6 +6,7 @@ import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 
 // 통화 상태 enum 정의 (HomeScreen에서 가져옴 - 여기서 관리하는 것이 더 적절)
 enum CallState { idle, incoming, active, ended }
@@ -13,6 +14,7 @@ enum CallState { idle, incoming, active, ended }
 class CallStateProvider with ChangeNotifier {
   final PhoneStateController phoneStateController;
   final CallLogController callLogController;
+  final ContactsController contactsController;
 
   CallState _callState = CallState.idle;
   String _number = '';
@@ -48,7 +50,11 @@ class CallStateProvider with ChangeNotifier {
   int get endedCountdownSeconds => _endedCountdownSeconds; // <<< Getter 추가
 
   // 생성자 수정
-  CallStateProvider(this.phoneStateController, this.callLogController);
+  CallStateProvider(
+    this.phoneStateController,
+    this.callLogController,
+    this.contactsController,
+  );
 
   // 상태 업데이트 메소드 수정 (async 추가)
   Future<void> updateCallState({
@@ -146,15 +152,15 @@ class CallStateProvider with ChangeNotifier {
     }
   }
 
-  // 이름 비동기 조회 및 업데이트 함수
+  // 이름 비동기 조회 및 업데이트 함수 (수정)
   Future<void> _fetchAndUpdateCallerName(String number) async {
     log('[Provider] Fetching caller name for $number...');
     try {
-      String fetchedName = await phoneStateController.getContactName(number);
+      String fetchedName = await contactsController.getContactName(number);
       if (fetchedName.isNotEmpty && _callerName != fetchedName) {
         log('[Provider] Caller name updated: $fetchedName');
         _callerName = fetchedName;
-        notifyListeners(); // 이름 업데이트 후 다시 알림
+        notifyListeners();
       }
     } catch (e) {
       log('[Provider] Error fetching caller name: $e');
