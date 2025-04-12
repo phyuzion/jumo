@@ -109,28 +109,8 @@ class PhoneStateController with WidgetsBindingObserver {
       notifyServiceCallState('onCallEnded', number, callerName);
       log('[PhoneStateController] Notified service about call ended.');
 
-      // <<< 2. 통화 기록 업로드 요청 추가 >>>
-      try {
-        // 로컬 기록 갱신이 필요하다면 여기서 호출
-        // await callLogController.refreshCallLogs();
-        // log('[PhoneStateController] Refreshed call logs locally before requesting upload.');
-
-        final service = FlutterBackgroundService();
-        if (await service.isRunning()) {
-          log(
-            '[PhoneStateController] Requesting immediate call log upload via invoke...',
-          );
-          service.invoke('uploadCallLogsNow');
-          log('[PhoneStateController] Invoked uploadCallLogsNow successfully.');
-        } else {
-          log(
-            '[PhoneStateController] Background service not running, cannot request upload.',
-          );
-        }
-      } catch (e) {
-        log('[PhoneStateController] Error requesting call log upload: $e');
-      }
-      // <<< 추가 끝 >>>
+      // <<< 필요 시 여기서 refreshCallLogs 호출 고려 >>>
+      // context.read<CallLogController>().refreshCallLogs();
     }
   }
 

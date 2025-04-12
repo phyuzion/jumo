@@ -320,13 +320,12 @@ class AppController {
         '[AppController] Requesting initial background tasks... from performCoreInitialization',
       );
       final service = FlutterBackgroundService();
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 2)); // 서비스 시작 대기
       if (await service.isRunning()) {
         log(
-          '[AppController] Service is running. Invoking tasks: uploadCallLogsNow, startContactSyncNow, syncBlockedListsNow...',
+          '[AppController] Service is running. Invoking tasks: startContactSyncNow, syncBlockedListsNow...',
         );
         try {
-          service.invoke('uploadCallLogsNow');
           service.invoke('startContactSyncNow');
           service.invoke('syncBlockedListsNow');
           log('[AppController] Successfully invoked background tasks.');
