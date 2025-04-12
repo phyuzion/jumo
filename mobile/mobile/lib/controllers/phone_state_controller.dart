@@ -1,18 +1,11 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart';
-import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
-import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
-import 'package:mobile/models/search_result_model.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:flutter/services.dart';
-import 'package:mobile/models/phone_book_model.dart';
-import 'package:mobile/utils/constants.dart';
 
 class PhoneStateController with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> navigatorKey;
@@ -108,9 +101,6 @@ class PhoneStateController with WidgetsBindingObserver {
       // 1. 먼저 서비스에 'ended' 상태 알림 (UI 업데이트 등)
       notifyServiceCallState('onCallEnded', number, callerName);
       log('[PhoneStateController] Notified service about call ended.');
-
-      // <<< 필요 시 여기서 refreshCallLogs 호출 고려 >>>
-      // context.read<CallLogController>().refreshCallLogs();
     }
   }
 
@@ -172,18 +162,6 @@ class PhoneStateController with WidgetsBindingObserver {
         '[PhoneStateController][notifyServiceCallState] Error invoking service: $e',
       );
     }
-  }
-
-  void _processIncomingCall(String number, String callerName) async {
-    // Implementation of _processIncomingCall method
-  }
-
-  void _processCallStart(String number, String callerName) async {
-    // Implementation of _processCallStart method
-  }
-
-  void _processCallEnd(String number) async {
-    // Implementation of _processCallEnd method
   }
 
   @override
