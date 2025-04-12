@@ -18,183 +18,391 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
   SearchResultModel? _result;
   String? _phoneNumber;
   final ScrollController _scrollController = ScrollController();
+  bool _isLoading = true; // 초기 상태는 로딩 중
+  bool _isOverlayVisible = false; // 오버레이 표시 여부 상태
+
+  StreamSubscription? _overlayListenerSubscription; // 리스너 구독 관리
 
   @override
   void initState() {
     super.initState();
-
-    /// streams message shared between overlay and main app
-    FlutterOverlayWindow.overlayListener.listen((result) {
-      setState(() {
-        final data = result as Map<String, dynamic>;
-        _result = SearchResultModel.fromJson(data);
-        _phoneNumber =
-            _result?.phoneNumberModel?.phoneNumber ?? data['phoneNumber'];
-      });
-      _showOverlay();
-    });
+    _listenToOverlayEvents();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _overlayListenerSubscription?.cancel(); // 리스너 해제
     super.dispose();
   }
 
-  Future<void> _showOverlay() async {
-    log('show Overlay : $_result');
-    String title = _phoneNumber!;
-    if (await FlutterOverlayWindow.isActive()) {
-      await FlutterOverlayWindow.closeOverlay();
+  void _listenToOverlayEvents() {
+    // 기존 리스너가 있다면 취소
+    _overlayListenerSubscription?.cancel();
+
+    // 새 리스너 등록
+    _overlayListenerSubscription = FlutterOverlayWindow.overlayListener.listen((
+      data,
+    ) {
+      if (data is! Map<String, dynamic>) {
+        log(
+          '[CallResultOverlay] Received invalid data type: ${data.runtimeType}',
+        );
+        return;
+      }
+
+      final type = data['type'] as String?;
+      final phoneNumber = data['phoneNumber'] as String?;
+
+      log('[CallResultOverlay] Received data: type=$type, number=$phoneNumber');
+
+      if (type == 'ringing') {
+        setState(() {
+          _phoneNumber = phoneNumber;
+          _isLoading = true;
+          _result = null; // 이전 결과 초기화
+        });
+        _showOverlayIfNeeded(); // 오버레이 표시 시도
+      } else if (type == 'result') {
+        final searchResultData = data['searchResult'] as Map<String, dynamic>?;
+        setState(() {
+          _phoneNumber = phoneNumber; // 번호는 결과에도 포함되므로 업데이트
+          _isLoading = false;
+          if (searchResultData != null) {
+            try {
+              _result = SearchResultModel.fromJson(searchResultData);
+              log('[CallResultOverlay] Parsed search result for $phoneNumber');
+            } catch (e) {
+              log(
+                '[CallResultOverlay] Error parsing search result for $phoneNumber: $e',
+              );
+              _result = null; // 파싱 에러 시 결과 없음 처리
+            }
+          } else {
+            _result = null; // searchResult가 null이면 결과 없음
+            log(
+              '[CallResultOverlay] No search result found for $phoneNumber (신규 번호)',
+            );
+          }
+        });
+        // 'result' 타입 수신 시에는 이미 오버레이가 떠 있어야 하므로 _showOverlayIfNeeded 불필요
+        if (!_isOverlayVisible) {
+          // 혹시 ringing을 놓치고 result만 받은 예외 케이스 대비
+          log(
+            '[CallResultOverlay] Warning: Received result but overlay was not visible. Showing now.',
+          );
+          _showOverlayIfNeeded();
+        }
+      } else {
+        log('[CallResultOverlay] Received unknown data type: $type');
+      }
+    });
+    log('[CallResultOverlay] Overlay listener started.');
+  }
+
+  // 오버레이를 표시해야 할 때만 호출 (중복 호출 방지)
+  Future<void> _showOverlayIfNeeded() async {
+    if (_isOverlayVisible) {
+      log('[CallResultOverlay] Overlay already visible. Skipping showOverlay.');
+      return; // 이미 표시되어 있으면 아무것도 안 함
     }
-    await FlutterOverlayWindow.showOverlay(
-      enableDrag: true,
-      alignment: OverlayAlignment.bottomCenter,
-      height: WindowSize.matchParent,
-      width: WindowSize.matchParent,
-      overlayTitle: title,
-      overlayContent: "전화가 왔습니다", // 알림 표기용
-      flag: OverlayFlag.defaultFlag,
-      visibility: NotificationVisibility.visibilityPublic,
-      positionGravity: PositionGravity.auto,
-    );
+
+    if (_phoneNumber == null) {
+      log('[CallResultOverlay] Cannot show overlay without phone number.');
+      return;
+    }
+
+    log('[CallResultOverlay] Attempting to show overlay for $_phoneNumber');
+    try {
+      // 기존 오버레이가 혹시 남아있을 경우 대비하여 닫기 시도 (선택적)
+      // if (await FlutterOverlayWindow.isActive()) {
+      //   await FlutterOverlayWindow.closeOverlay();
+      //   log('[CallResultOverlay] Closed existing overlay before showing new one.');
+      // }
+
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true, // 필요에 따라 설정 조정
+        alignment: OverlayAlignment.bottomCenter, // 필요에 따라 설정 조정
+        height: WindowSize.matchParent, // 필요에 따라 설정 조정
+        width: WindowSize.matchParent, // 필요에 따라 설정 조정
+        overlayTitle: _phoneNumber!, // 알림용 제목
+        overlayContent: "전화 수신 중...", // 알림용 내용
+        flag: OverlayFlag.defaultFlag,
+        visibility: NotificationVisibility.visibilityPublic,
+        positionGravity: PositionGravity.auto,
+      );
+      setState(() {
+        // <<< setState 추가
+        _isOverlayVisible = true; // 오버레이 표시 성공 상태 업데이트
+      });
+      log('[CallResultOverlay] Overlay shown successfully.');
+    } catch (e) {
+      log('[CallResultOverlay] Error showing overlay: $e');
+      setState(() {
+        // <<< setState 추가
+        _isOverlayVisible = false; // 에러 발생 시 상태 초기화
+      });
+    }
+  }
+
+  // 닫기 버튼 등에서 오버레이를 닫을 때 상태 업데이트
+  Future<void> _closeOverlay() async {
+    // _isOverlayVisible 상태를 먼저 false로 바꿔서 UI가 즉시 닫힌 것처럼 보이게 함 (선택적)
+    // setState(() { _isOverlayVisible = false; });
+
+    try {
+      await FlutterOverlayWindow.closeOverlay();
+      setState(() {
+        // <<< setState 추가
+        _isOverlayVisible = false; // 오버레이 닫힘 상태 업데이트
+      });
+      log('[CallResultOverlay] Overlay closed by user.');
+    } catch (e) {
+      log('[CallResultOverlay] Error closing overlay: $e');
+      // 에러가 나도 상태는 false로 간주
+      setState(() {
+        // <<< setState 추가
+        _isOverlayVisible = false;
+      });
+    }
   }
 
   void _scrollUp() {
-    final newOffset = _scrollController.offset - 100;
-    _scrollController.animateTo(
-      newOffset.clamp(0, _scrollController.position.maxScrollExtent), // 오버슈팅 방지
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    // Clamp 추가 및 예외 처리 보강
+    if (_scrollController.hasClients) {
+      final newOffset = _scrollController.offset - 100;
+      _scrollController.animateTo(
+        newOffset.clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        ), // double로 변경
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _scrollDown() {
-    final newOffset = _scrollController.offset + 100;
-    _scrollController.animateTo(
-      newOffset.clamp(0, _scrollController.position.maxScrollExtent), // 오버슈팅 방지
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
+    // Clamp 추가 및 예외 처리 보강
+    if (_scrollController.hasClients) {
+      final newOffset = _scrollController.offset + 100;
+      _scrollController.animateTo(
+        newOffset.clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        ), // double로 변경
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // 가로/세로에 따라 높이 지정
+    // 오버레이가 보이지 않아야 하면 빈 컨테이너 반환 (닫기 애니메이션 등 개선 여지 있음)
+    if (!_isOverlayVisible) {
+      return const SizedBox.shrink();
+    }
+
+    // 가로/세로에 따라 높이 지정 (기존 코드와 동일)
     final size = MediaQuery.of(context).size;
 
-    // 데이터 길이에 따른 높이 계산
+    // 데이터 길이에 따른 높이 계산 (기존 코드와 동일, _result null 체크 추가)
     final todayRecordsCount = _result?.todayRecords?.length ?? 0;
     final phoneRecordsCount = _result?.phoneNumberModel?.records?.length ?? 0;
+    double baseHeight = 0.1; // 기본 높이 (예: 화면의 10%)
 
-    // 기본 높이 (헤더 + 여백)
-    double baseHeight = 0.1; // 기본 40% 높이
+    // 최소/최대 높이 설정 (예시: 최소 20%, 최대 60%)
+    double minHeightFactor = 0.2;
+    double maxHeightFactor = 0.6;
 
-    // todayRecords가 있는 경우
-    if (todayRecordsCount > 0) {
-      // todayRecords 섹션 헤더 + 아이템들
-      baseHeight += 0.1 + (todayRecordsCount * 0.08);
+    // 로딩 중일 때 고정 높이 또는 최소 높이 사용
+    if (_isLoading) {
+      baseHeight = minHeightFactor;
+    } else {
+      // 컨텐츠 기반 높이 계산 (SearchResultWidget 내부 구조에 따라 조정 필요)
+      double contentHeightFactor = 0.0;
+      // 예시: 헤더 + 여백 + 오늘 기록 + 전화번호 기록
+      contentHeightFactor += 0.1; // 헤더/번호 표시 영역
+      if (todayRecordsCount > 0) {
+        contentHeightFactor +=
+            0.05 + (todayRecordsCount * 0.05); // 섹션 헤더 + 아이템 높이 (예시)
+      }
+      if (phoneRecordsCount > 0) {
+        contentHeightFactor +=
+            0.05 + (phoneRecordsCount * 0.05); // 섹션 헤더 + 아이템 높이 (예시)
+      }
+      // 검색 결과 없을 때의 높이
+      if (!_isLoading && _result == null) {
+        contentHeightFactor = 0.15; // 예시: 번호 + "신규 번호" 텍스트 높이
+      }
+
+      baseHeight = contentHeightFactor.clamp(minHeightFactor, maxHeightFactor);
     }
-
-    // phoneRecords가 있는 경우
-    if (phoneRecordsCount > 0) {
-      // phoneRecords 섹션 헤더 + 아이템들
-      baseHeight += 0.1 + (phoneRecordsCount * 0.08);
-    }
-
-    // 최대 높이 제한 (화면의 80%로)
-    baseHeight = baseHeight.clamp(0.1, 0.6);
 
     return Material(
       color: Colors.transparent,
       child: Center(
         child: Container(
-          // 가로는 full, 세로는 위에서 계산
           width: size.width,
-          height: size.height * baseHeight,
-          margin: const EdgeInsets.symmetric(horizontal: 20),
+          // height: size.height * baseHeight, // 동적 높이 적용
+          constraints: BoxConstraints(
+            // 최대/최소 높이 제약 추가
+            minHeight: size.height * minHeightFactor,
+            maxHeight: size.height * maxHeightFactor,
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 20), // 여백 유지
           decoration: BoxDecoration(
             color: Colors.white,
-            border: Border.all(color: Colors.transparent),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(15), // 약간 둥글게
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 15,
+                spreadRadius: 2,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(15),
             child: Stack(
               children: [
-                if (_result == null)
-                  const Center(child: CircularProgressIndicator())
-                else
-                  Positioned.fill(
-                    child: Padding(
-                      // 하단 패딩 추가
-                      padding: const EdgeInsets.only(
-                        bottom: 50,
-                      ), // 스크롤 버튼 높이만큼 패딩
-                      child: SearchResultWidget(
-                        searchResult: _result!,
-                        scrollController: _scrollController,
-                        ignorePointer: true,
-                      ),
-                    ),
-                  ),
-                // (2) 닫기 버튼
-                Positioned(
-                  top: 0,
-                  right: 0,
-                  child: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => FlutterOverlayWindow.closeOverlay(),
+                // 컨텐츠 영역
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.only(
+                      bottom: 50,
+                      top: 40,
+                    ), // 상단 닫기, 하단 스크롤 버튼 공간
+                    child: _buildContent(), // 컨텐츠 빌드 함수 사용
                   ),
                 ),
-                // 스크롤 버튼들
+                // 닫기 버튼 (항상 표시)
                 Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    height: 50, // 고정 높이
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      // 그라데이션 추가
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          Colors.white.withOpacity(0.0),
-                          Colors.white.withOpacity(0.9),
+                  top: 5, // 위치 조정
+                  right: 5, // 위치 조정
+                  child: IconButton(
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.black54,
+                    ), // 색상 조정
+                    onPressed: _closeOverlay, // 닫기 함수 연결
+                  ),
+                ),
+                // 스크롤 버튼들 (결과가 있고, 스크롤 가능할 때만?)
+                if (!_isLoading &&
+                    _result != null &&
+                    (_scrollController.hasClients &&
+                        _scrollController.position.maxScrollExtent >
+                            0)) // 조건 강화
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: Container(
+                      height: 50,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.white.withOpacity(0.0),
+                            Colors.white.withOpacity(0.9),
+                            Colors.white, // 하단 확실히 가리기
+                          ],
+                          stops: const [0.0, 0.5, 1.0], // 그라데이션 정지점 조정
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.arrow_upward),
+                            onPressed: _scrollUp,
+                            color: Theme.of(context).primaryColor, // 테마 색상 사용
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.arrow_downward),
+                            onPressed: _scrollDown,
+                            color: Theme.of(context).primaryColor, // 테마 색상 사용
+                          ),
                         ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_upward),
-                          onPressed: _scrollUp,
-                          color: Colors.blue,
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.arrow_downward),
-                          onPressed: _scrollDown,
-                          color: Colors.blue,
-                        ),
-                      ],
-                    ),
                   ),
-                ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  // 컨텐츠 표시 로직 분리 (기존과 유사하게 유지, UI 개선)
+  Widget _buildContent() {
+    if (_isLoading) {
+      // 로딩 중 표시 (UI 개선)
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // 컨텐츠 크기만큼만 차지
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 20),
+              Text(
+                _phoneNumber ?? '번호 확인 중...',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '정보 검색 중...',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else if (_result != null) {
+      // 검색 결과 있음 (SearchResultWidget 사용)
+      return SearchResultWidget(
+        searchResult: _result!,
+        scrollController: _scrollController,
+        ignorePointer: true,
+      );
+    } else {
+      // 검색 결과 없음 (신규 번호 UI 개선)
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min, // 컨텐츠 크기만큼만 차지
+            children: [
+              Text(
+                _phoneNumber ?? '알 수 없는 번호',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '신규 번호 또는 등록된 정보 없음',
+                style: TextStyle(fontSize: 16, color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+              // 필요 시 추가 정보나 버튼 제공 가능
+            ],
+          ),
+        ),
+      );
+    }
   }
 }

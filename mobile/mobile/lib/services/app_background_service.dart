@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:ui'; // DartPluginRegistrant 사용 위해 추가
+import 'dart:isolate'; // <<< Isolate 사용 위해 추가 >>>
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart'; // AndroidServiceInstance 사용 위해 추가
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <<< Local Notifications 임포트 추가
@@ -30,6 +31,10 @@ const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
+  log(
+    '[BackgroundService][onStart] Service instance started. Isolate: ${Isolate.current.hashCode}',
+  );
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
@@ -107,7 +112,8 @@ Future<void> onStart(ServiceInstance service) async {
     log('[BackgroundService] Call timer started.');
   }
 
-  // ***** 1. Hive 초기화 및 Box 열기 *****
+  // <<< 로그 추가: Hive 초기화 시도 전 >>>
+  log('[BackgroundService][onStart] Attempting to initialize Hive...');
   bool hiveInitialized = false;
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
@@ -127,9 +133,9 @@ Future<void> onStart(ServiceInstance service) async {
     await Hive.openBox<List<String>>('danger_numbers');
     await Hive.openBox<List<String>>('bomb_numbers');
     hiveInitialized = true;
-    log('[BackgroundService] Hive initialized and boxes opened.');
+    log('[BackgroundService][onStart] Hive initialized successfully.');
   } catch (e) {
-    log('[BackgroundService] Error initializing Hive in background: $e');
+    log('[BackgroundService][onStart] Error initializing Hive: $e');
     service.stopSelf();
     return;
   }
@@ -224,16 +230,30 @@ Future<void> onStart(ServiceInstance service) async {
 
   // <<< 통화 상태 변경 리스너 (수정됨) >>>
   service.on('callStateChanged').listen((event) async {
-    final state = event?['state'] as String?;
-    final number = event?['number'] as String? ?? ''; // null 대신 빈 문자열
-    final callerName =
-        event?['callerName'] as String? ?? '알 수 없음'; // null 대신 기본값
-    final isConnected = event?['connected'] as bool? ?? false;
-    final reason = event?['reason'] as String? ?? '';
+    log(
+      '[BackgroundService][on:callStateChanged] Received callStateChanged event: $event',
+    );
 
-    // <<< 타이머 내부 사용 위해 현재 정보 저장 >>>
-    _currentNumberForTimer = number;
-    _currentCallerNameForTimer = callerName;
+    if (event == null) {
+      log(
+        '[BackgroundService][on:callStateChanged] Received null event. Skipping.',
+      );
+      return;
+    }
+    // <<< 상태 변수 업데이트 로그 추가 >>>
+    _currentNumberForTimer = event['number'] ?? _currentNumberForTimer;
+    _currentCallerNameForTimer =
+        event['callerName'] ?? _currentCallerNameForTimer;
+    log(
+      '[BackgroundService][on:callStateChanged] Updated timer info: Number=$_currentNumberForTimer, Name=$_currentCallerNameForTimer',
+    );
+
+    final state = event['state'] as String?;
+    final number = event['number'] as String? ?? ''; // null 대신 빈 문자열
+    final callerName =
+        event['callerName'] as String? ?? '알 수 없음'; // null 대신 기본값
+    final isConnected = event['connected'] as bool? ?? false;
+    final reason = event['reason'] as String? ?? '';
 
     log(
       '[BackgroundService] Received callStateChanged: state=$state, num=$number, name=$callerName, connected=$isConnected, reason=$reason',
@@ -303,6 +323,10 @@ Future<void> onStart(ServiceInstance service) async {
         }
       }
 
+      // <<< UI 업데이트 invoke 전 로그 >>>
+      log(
+        '[BackgroundService][on:callStateChanged] Preparing to invoke UI update (updateUiCallState).',
+      );
       // UI 스레드로 상태 업데이트 이벤트 보내기 (타이머 값 포함)
       log('[BackgroundService] Invoking UI update: updateUiCallState');
       service.invoke('updateUiCallState', {
@@ -318,26 +342,30 @@ Future<void> onStart(ServiceInstance service) async {
 
   // 즉시 연락처 동기화 요청
   service.on('startContactSyncNow').listen((event) async {
-    log('[BackgroundService] Received request for immediate contact sync.');
+    log(
+      '[BackgroundService][on:startContactSyncNow] Received immediate contact sync request.',
+    );
     await performContactBackgroundSync();
   });
 
   // 통화 기록 업로드 요청 (이벤트 이름 변경)
   service.on('uploadCallLogsNow').listen((event) async {
-    log('[BackgroundService] Received uploadCallLogsNow request.');
+    log(
+      '[BackgroundService][on:uploadCallLogsNow] Received uploadCallLogsNow request.',
+    );
     await _uploadCallLogs(); // 업로드만 수행하는 헬퍼 호출
   });
 
   // <<< 즉시 차단 목록 동기화 요청 리스너 추가 >>>
   service.on('syncBlockedListsNow').listen((event) async {
     log(
-      '[BackgroundService] Received immediate request for blocked list sync.',
+      '[BackgroundService][on:syncBlockedListsNow] Received syncBlockedListsNow request.',
     );
     await syncBlockedLists();
   });
 
   service.on('stopService').listen((event) async {
-    log('[BackgroundService] stopService event received');
+    log('[BackgroundService][on:stopService] Received stopService event.');
     _stopCallTimerBackground();
     notificationTimer?.cancel();
     contactSyncTimer?.cancel();
@@ -347,6 +375,26 @@ Future<void> onStart(ServiceInstance service) async {
   });
 
   log('[BackgroundService] Setup complete.');
+
+  // <<< 로그 추가: 초기 작업 수행 >>>
+  log('[BackgroundService][onStart] Performing initial background tasks...');
+  await performInitialBackgroundTasks();
+  // <<< 로그 추가: 초기 작업 완료 및 서비스 준비 완료 >>>
+  log(
+    '[BackgroundService][onStart] Initial background tasks completed. Service is ready.',
+  );
+}
+
+Future<void> performInitialBackgroundTasks() async {
+  // <<< 로그 추가 >>>
+  log(
+    '[BackgroundService][performInitialBackgroundTasks] Starting initial tasks...',
+  );
+  // 필요한 초기 작업 (예: 최초 동기화 등)
+  await Future.delayed(const Duration(seconds: 5)); // 예시 딜레이
+  log(
+    '[BackgroundService][performInitialBackgroundTasks] Initial tasks finished.',
+  );
 }
 
 // --- Helper Functions for Background Tasks (Top-level) ---

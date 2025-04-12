@@ -75,30 +75,80 @@ class PhoneStateController with WidgetsBindingObserver {
   }
 
   Future<void> _onIncoming(String? number) async {
+    if (number == null || number.isEmpty) return;
+
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
+    log(
+      '[PhoneStateController] Incoming call: $number, Is default dialer: $isDef',
+    );
 
-    if (!isDef && await FlutterOverlayWindow.isPermissionGranted()) {
-      log('showOverlay');
-      final phoneData = await SearchRecordsController.searchPhone(number!);
-      final todayRecords = await SearchRecordsController.searchTodayRecord(
-        number,
-      );
-
-      final searchResult = SearchResultModel(
-        phoneNumberModel: phoneData,
-        todayRecords: todayRecords,
-      );
-
-      final data = searchResult.toJson();
-      data['phoneNumber'] = number;
-
-      FlutterOverlayWindow.shareData(data);
-      log('showOverlay done');
-    }
-    log('[PhoneState] not default => overlay shown for $number');
-
-    if (number != null && number.isNotEmpty) {
+    if (isDef) {
       final callerName = await contactsController.getContactName(number);
+      log(
+        '[PhoneStateController] Default Dialer: Notifying service for $number, name: $callerName',
+      );
+      notifyServiceCallState('onIncomingNumber', number, callerName);
+      return;
+    }
+
+    if (await FlutterOverlayWindow.isPermissionGranted()) {
+      log(
+        '[PhoneStateController] Overlay permission granted for incoming call: $number',
+      );
+
+      final ringingData = {'type': 'ringing', 'phoneNumber': number};
+      try {
+        await FlutterOverlayWindow.shareData(ringingData);
+        log(
+          '[PhoneStateController] Sent ringing state to overlay: $ringingData',
+        );
+      } catch (e) {
+        log('[PhoneStateController] Error sending ringing state: $e');
+      }
+
+      SearchResultModel? searchResultModel;
+      try {
+        final phoneData = await SearchRecordsController.searchPhone(number);
+        final todayRecords = await SearchRecordsController.searchTodayRecord(
+          number,
+        );
+
+        if (phoneData != null ||
+            (todayRecords != null && todayRecords.isNotEmpty)) {
+          searchResultModel = SearchResultModel(
+            phoneNumberModel: phoneData,
+            todayRecords: todayRecords,
+          );
+        }
+        log(
+          '[PhoneStateController] Search completed for $number. Result found: ${searchResultModel != null}',
+        );
+      } catch (e) {
+        log('[PhoneStateController] Error during search for $number: $e');
+        searchResultModel = null;
+      }
+
+      final resultData = {
+        'type': 'result',
+        'phoneNumber': number,
+        'searchResult': searchResultModel?.toJson(),
+      };
+      try {
+        await FlutterOverlayWindow.shareData(resultData);
+        log(
+          '[PhoneStateController] Sent result state to overlay: type=result, number=$number, hasResult=${searchResultModel != null}',
+        );
+      } catch (e) {
+        log('[PhoneStateController] Error sending result state: $e');
+      }
+    } else {
+      log(
+        '[PhoneStateController] Overlay permission not granted for incoming call: $number',
+      );
+      final callerName = await contactsController.getContactName(number);
+      log(
+        '[PhoneStateController] No Overlay Permission: Notifying service for $number, name: $callerName',
+      );
       notifyServiceCallState('onIncomingNumber', number, callerName);
     }
   }
@@ -130,6 +180,10 @@ class PhoneStateController with WidgetsBindingObserver {
     bool? connected,
     String? reason,
   }) {
+    log(
+      '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected',
+    );
+
     final service = FlutterBackgroundService();
     String state;
     bool isConnectedValue = connected ?? false;
@@ -151,21 +205,32 @@ class PhoneStateController with WidgetsBindingObserver {
 
     if (state == 'unknown') {
       log(
-        '[PhoneStateController] Unknown stateMethod $stateMethod, not invoking service.',
+        '[PhoneStateController][notifyServiceCallState] Unknown stateMethod $stateMethod, not invoking service.',
       );
       return;
     }
 
-    log(
-      '[PhoneStateController] Invoking service: callStateChanged - state: $state, number: $number, name: $callerName, connected: $isConnectedValue, reason: $reasonValue',
-    );
-    service.invoke('callStateChanged', {
+    final payload = {
       'state': state,
       'number': number,
       'callerName': callerName.isNotEmpty ? callerName : '알 수 없음',
       'connected': isConnectedValue,
       'reason': reasonValue,
-    });
+    };
+
+    log(
+      '[PhoneStateController][notifyServiceCallState] Invoking service with callStateChanged. Payload: $payload',
+    );
+    try {
+      service.invoke('callStateChanged', payload);
+      log(
+        '[PhoneStateController][notifyServiceCallState] Successfully invoked service with callStateChanged.',
+      );
+    } catch (e) {
+      log(
+        '[PhoneStateController][notifyServiceCallState] Error invoking service: $e',
+      );
+    }
   }
 
   void _processIncomingCall(String number, String callerName) async {
