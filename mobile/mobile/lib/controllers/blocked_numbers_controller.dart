@@ -8,6 +8,7 @@ import '../models/blocked_history.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/graphql/search_api.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class BlockedNumbersController {
   static const String _blockedHistoryKey = 'blocked_history';
@@ -222,13 +223,8 @@ class BlockedNumbersController {
       await _blockedNumbersBox.addAll(currentList);
     }
 
-    try {
-      log('[BlockedNumbers] Updating server with new blocked list...');
-      final serverNumbers = await BlockApi.updateBlockedNumbers(currentList);
-      log('[BlockedNumbers] Server update successful.');
-    } catch (e) {
-      log('[BlockedNumbers] Error updating server blocked numbers: $e');
-    }
+    log('[BlockedNumbers] Requesting background sync after adding number...');
+    FlutterBackgroundService().invoke('syncBlockedListsNow');
   }
 
   Future<void> removeBlockedNumber(String number) async {
@@ -246,28 +242,8 @@ class BlockedNumbersController {
       await _blockedNumbersBox.addAll(currentList);
     }
 
-    try {
-      log('[BlockedNumbers] Updating server after removing blocked number...');
-      await BlockApi.updateBlockedNumbers(currentList);
-      log('[BlockedNumbers] Server update successful after removal.');
-    } catch (e) {
-      log('[BlockedNumbers] Error updating server after removal: $e');
-    }
-  }
-
-  Future<void> _loadDangerNumbers() async {
-    if (_isAutoBlockDanger) {
-      final numbers = await SearchApi.getPhoneNumbersByType(99);
-      _dangerNumbers = numbers.map((n) => n.phoneNumber).toList();
-    }
-  }
-
-  Future<void> _loadBombCallsNumbers() async {
-    if (_isBombCallsBlocked && _bombCallsCount > 0) {
-      final numbers = await BlockApi.getBlockNumbers(_bombCallsCount);
-      _bombCallsNumbers =
-          numbers.map((n) => n['phoneNumber'] as String).toList();
-    }
+    log('[BlockedNumbers] Requesting background sync after removing number...');
+    FlutterBackgroundService().invoke('syncBlockedListsNow');
   }
 
   Future<void> setAutoBlockDanger(bool value) async {
@@ -277,9 +253,10 @@ class BlockedNumbersController {
     }
     _isAutoBlockDanger = value;
     await _settingsBox.put('isAutoBlockDanger', value);
-    if (value) {
-      await _loadDangerNumbers();
-    }
+    log(
+      '[BlockedNumbers] Requesting background sync after setting AutoBlockDanger...',
+    );
+    FlutterBackgroundService().invoke('syncBlockedListsNow');
   }
 
   Future<void> setBombCallsBlocked(bool value) async {
@@ -289,9 +266,10 @@ class BlockedNumbersController {
     }
     _isBombCallsBlocked = value;
     await _settingsBox.put('isBombCallsBlocked', value);
-    if (value) {
-      await _loadBombCallsNumbers();
-    }
+    log(
+      '[BlockedNumbers] Requesting background sync after setting BombCallsBlocked...',
+    );
+    FlutterBackgroundService().invoke('syncBlockedListsNow');
   }
 
   Future<void> setBombCallsCount(int count) async {
@@ -301,9 +279,10 @@ class BlockedNumbersController {
     }
     _bombCallsCount = count;
     await _settingsBox.put('bombCallsCount', count);
-    if (_isBombCallsBlocked) {
-      await _loadBombCallsNumbers();
-    }
+    log(
+      '[BlockedNumbers] Requesting background sync after setting BombCallsCount...',
+    );
+    FlutterBackgroundService().invoke('syncBlockedListsNow');
   }
 
   Future<bool> isNumberBlockedAsync(

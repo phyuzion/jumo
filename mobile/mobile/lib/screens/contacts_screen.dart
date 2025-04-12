@@ -18,13 +18,10 @@ class ContactsScreen extends StatefulWidget {
 
 class _ContactsScreenState extends State<ContactsScreen> {
   List<PhoneBookModel> _contacts = [];
+  bool _isLoading = true;
   int? _expandedIndex;
   bool _isDefaultDialer = false;
-  bool _isLoading = true;
-
-  // 검색 모드 On/Off
   bool _isSearching = false;
-  // 검색어
   String _searchQuery = '';
 
   @override
@@ -76,15 +73,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
     await _loadContacts();
   }
 
-  /// ==========================
-  /// 필터링된 리스트 반환
-  /// ==========================
   List<PhoneBookModel> get _filteredContacts {
+    final List<PhoneBookModel> allContacts = _contacts;
+
     if (_searchQuery.isEmpty) {
-      return _contacts; // 검색어가 없으면 전체 보여주기
+      return allContacts;
     }
     final lowerQuery = _searchQuery.toLowerCase();
-    return _contacts.where((c) {
+    return allContacts.where((c) {
       final name = c.name.toLowerCase();
       final phone = c.phoneNumber.toLowerCase();
       return name.contains(lowerQuery) || phone.contains(lowerQuery);

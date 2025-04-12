@@ -115,22 +115,6 @@ class _LoginScreenState extends State<LoginScreen> {
         phoneNumber: _myNumber,
       );
 
-      // ***** 로그인 후 초기화 수행 *****
-      try {
-        log('[LoginScreen] Login success, initializing post-login data...');
-        final appController = context.read<AppController>();
-        await appController.initializePostLoginData();
-        log('[LoginScreen] Post-login initialization complete.');
-      } catch (e) {
-        log('[LoginScreen] Error during post-login initialization: $e');
-        // 초기화 실패 시 오류 처리 (예: 사용자에게 알림)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('초기화 실패: $e')));
-        setState(() => _loading = false); // 로딩 중단
-        return; // 홈 화면 이동 중단
-      }
-
       // 아이디/비번 기억하기
       if (_rememberMe) {
         await GraphQLClientManager.saveLoginCredentials(
@@ -162,67 +146,70 @@ class _LoginScreenState extends State<LoginScreen> {
       body:
           _loading
               ? const Center(child: CircularProgressIndicator())
-              : Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  children: [
-                    // 아이디
-                    TextField(
-                      controller: _loginIdCtrl,
-                      decoration: const InputDecoration(labelText: '아이디'),
-                      textInputAction: TextInputAction.next,
-                    ),
-                    // 비밀번호
-                    TextField(
-                      controller: _passwordCtrl,
-                      decoration: InputDecoration(
-                        labelText: '비밀번호',
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _showPassword
-                                ? Icons.visibility
-                                : Icons.visibility_off,
+              : SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Column(
+                    children: [
+                      // 아이디
+                      TextField(
+                        controller: _loginIdCtrl,
+                        decoration: const InputDecoration(labelText: '아이디'),
+                        textInputAction: TextInputAction.next,
+                      ),
+                      // 비밀번호
+                      TextField(
+                        controller: _passwordCtrl,
+                        decoration: InputDecoration(
+                          labelText: '비밀번호',
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _showPassword
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _showPassword = !_showPassword;
+                              });
+                            },
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _showPassword = !_showPassword;
-                            });
-                          },
+                        ),
+                        obscureText: !_showPassword,
+                        textInputAction: TextInputAction.done,
+                        onSubmitted: (_) => _onLoginPressed(),
+                      ),
+                      const SizedBox(height: 20),
+                      Row(
+                        children: [
+                          Checkbox(
+                            value: _rememberMe,
+                            onChanged: (val) {
+                              if (val != null) {
+                                setState(() => _rememberMe = val);
+                              }
+                            },
+                          ),
+                          const Text('아이디/비번 기억하기'),
+                        ],
+                      ),
+                      ElevatedButton(
+                        onPressed: _onLoginPressed,
+                        child: const Text('로그인'),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        _isNumberLoading ? '번호 확인중...' : '내 번호: $_myNumber',
+                        style: TextStyle(
+                          color:
+                              _myNumber.contains('실패') ||
+                                      _myNumber.contains('오류')
+                                  ? Colors.red
+                                  : Colors.grey,
                         ),
                       ),
-                      obscureText: !_showPassword,
-                      textInputAction: TextInputAction.done,
-                      onSubmitted: (_) => _onLoginPressed(),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Checkbox(
-                          value: _rememberMe,
-                          onChanged: (val) {
-                            if (val != null) {
-                              setState(() => _rememberMe = val);
-                            }
-                          },
-                        ),
-                        const Text('아이디/비번 기억하기'),
-                      ],
-                    ),
-                    ElevatedButton(
-                      onPressed: _onLoginPressed,
-                      child: const Text('로그인'),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      _isNumberLoading ? '번호 확인중...' : '내 번호: $_myNumber',
-                      style: TextStyle(
-                        color:
-                            _myNumber.contains('실패') || _myNumber.contains('오류')
-                                ? Colors.red
-                                : Colors.grey,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
     );

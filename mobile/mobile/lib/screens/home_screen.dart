@@ -18,6 +18,8 @@ import 'package:mobile/widgets/floating_call_widget.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -33,6 +35,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   StreamSubscription? _notificationSub;
   bool _isDefaultDialer = false;
 
+  bool _isUiReady = false;
+  String _uiReadyMessage = '앱 준비 중...';
+
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
 
@@ -46,38 +51,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    log('[HomeScreen] initState called.');
     WidgetsBinding.instance.addObserver(this);
-
-    _checkDefaultDialer();
-
-    NativeDefaultDialerMethods.notifyNativeAppInitialized();
-    log('[HomeScreen] Native app initialized notification sent.');
-
-    _loadNotificationCount();
-    _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((
-      _,
-    ) {
-      if (mounted) {
-        _loadNotificationCount();
-      }
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final authBox = context.read<Box<dynamic>>();
-        final bool isLoggedIn =
-            authBox.get('loginStatus', defaultValue: false) ?? false;
-
-        if (isLoggedIn) {
-          log('[HomeScreen] Logged in, initializing post-login data...');
-          context.read<AppController>().initializePostLoginData();
-        } else {
-          log('[HomeScreen] Not logged in, skipping post-login init.');
-        }
-        log('[HomeScreen] Initializing contacts...');
-        context.read<ContactsController>().getLocalContacts();
-      }
-    });
+    _initializeHomeScreen();
   }
 
   @override
@@ -98,17 +74,86 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _initializeHomeScreen() async {
+    if (mounted) {
+      setState(() {
+        _isUiReady = false;
+        _uiReadyMessage = '기본 설정 로딩 중...';
+      });
+    }
+
+    try {
+      final appCtrl = context.read<AppController>();
+      final contactsCtrl = context.read<ContactsController>();
+      final blockedNumsCtrl = context.read<BlockedNumbersController>();
+
+      NativeDefaultDialerMethods.notifyNativeAppInitialized();
+      log('[HomeScreen] Native app initialized notification sent.');
+
+      setState(() => _uiReadyMessage = '로컬 데이터 로딩 중...');
+      final List<Future> initialLoadFutures = [
+        contactsCtrl.getLocalContacts(),
+        blockedNumsCtrl.initialize(),
+        _loadNotificationCount(),
+        _checkDefaultDialer(),
+      ];
+      await Future.wait(initialLoadFutures);
+
+      log('[HomeScreen] Essential local data loaded. UI is ready.');
+      if (mounted) {
+        setState(() {
+          _isUiReady = true;
+        });
+      }
+
+      _requestBackgroundTasks();
+    } catch (e, st) {
+      log('[HomeScreen] Error during initialization: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _uiReadyMessage = '초기화 오류 발생';
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('앱 초기화 오류: $e')));
+      }
+    }
+
+    _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((
+      _,
+    ) {
+      if (mounted) {
+        _loadNotificationCount();
+      }
+    });
+  }
+
+  Future<void> _requestBackgroundTasks() async {
+    log('[HomeScreen] Requesting background tasks...');
+    final service = FlutterBackgroundService();
+    await context.read<AppController>().startBackgroundService();
+
+    if (await service.isRunning()) {
+      service.invoke('uploadCallLogsNow');
+      service.invoke('startContactSyncNow');
+      service.invoke('syncBlockedListsNow');
+      log('[HomeScreen] Invoked background tasks.');
+    } else {
+      log('[HomeScreen] Background service not running, cannot invoke tasks.');
+    }
+  }
+
   Future<void> _checkDefaultDialer() async {
     final isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
     if (!mounted) return;
     setState(() => _isDefaultDialer = isDefault);
   }
 
-  void _loadNotificationCount() {
+  Future<void> _loadNotificationCount() async {
     if (!mounted) return;
-
+    final count = Hive.box('notifications').length;
     setState(() {
-      _notificationCount = _notificationsBox.length;
+      _notificationCount = count;
     });
     log('[HomeScreen] Loaded notification count: $_notificationCount');
   }
@@ -155,6 +200,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isUiReady) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text(_uiReadyMessage),
+            ],
+          ),
+        ),
+      );
+    }
+
     final appController = context.watch<AppController>();
     final callStateProvider = context.watch<CallStateProvider>();
     final callState = callStateProvider.callState;
@@ -273,43 +333,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       children: [
         Scaffold(
           appBar: appBar,
-          body: Stack(
-            children: [
-              _screens[_currentIndex],
-              ValueListenableBuilder<bool>(
-                valueListenable: appController.isInitializingNotifier,
-                builder: (context, isInitializing, child) {
-                  if (!isInitializing) return const SizedBox.shrink();
-                  return Container(
-                    color: Colors.black.withOpacity(0.5),
-                    child: Center(
-                      child: Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 16),
-                            Text(
-                              appController.initializationMessage,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
+          body: Stack(children: [_screens[_currentIndex]]),
           bottomNavigationBar: BottomNavigationBar(
             currentIndex: _currentIndex,
             onTap: (idx) => setState(() => _currentIndex = idx),
