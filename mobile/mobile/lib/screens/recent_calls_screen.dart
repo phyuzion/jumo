@@ -60,8 +60,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   }
 
   Future<void> _refreshCalls() async {
+    log('[RecentCallsScreen] Refreshing calls and contacts...');
     context.read<ContactsController>().invalidateCache();
     await context.read<CallLogController>().refreshCallLogs();
+    await context.read<ContactsController>().getLocalContacts(
+      forceRefresh: true,
+    );
   }
 
   @override
