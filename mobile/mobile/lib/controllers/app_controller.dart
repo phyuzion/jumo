@@ -43,6 +43,11 @@ class AppController {
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
 
+  final ValueNotifier<bool> _isCoreInitializing = ValueNotifier(false);
+  ValueNotifier<bool> get isCoreInitializing => _isCoreInitializing;
+  String _coreInitMessage = '';
+  String get coreInitMessage => _coreInitMessage;
+
   AppController(
     this.phoneStateController,
     this.contactsController,
@@ -274,78 +279,80 @@ class AppController {
     }
   }
 
-  // 로그인 후 데이터 로딩/초기화 함수 (수정됨)
-  Future<void> initializePostLoginData() async {
-    log('[AppController] initializePostLoginData called.');
-    final totalStopwatch = Stopwatch()..start();
-    _isInitializing.value = true;
+  // <<< 새로운 핵심 데이터 및 서비스 초기화 함수 >>>
+  Future<void> performCoreInitialization() async {
+    if (_isCoreInitializing.value) {
+      log('[AppController] Core initialization already in progress. Skipping.');
+      return;
+    }
+    log('[AppController] Starting core data and service initialization...');
+    final stopwatch = Stopwatch()..start();
+    _isCoreInitializing.value = true;
+    _coreInitMessage = '초기 설정 로딩 중...';
+
     try {
-      // 1. 백그라운드 서비스 시작 (유지)
-      final stopwatchBgService = Stopwatch()..start();
-      await startBackgroundService();
+      // 1. 로컬 데이터 로딩 (HomeScreen에서 옮겨옴)
+      _coreInitMessage = '통화 기록 로딩 중...';
       log(
-        '[AppController] startBackgroundService (post-login) took: ${stopwatchBgService.elapsedMilliseconds}ms',
+        '[AppController] Refreshing call logs (local)... from performCoreInitialization',
       );
-
-      // <<< 2. BlockedNumbersController 초기화 수정 (로컬 로드 + 백그라운드 요청) >>>
-      _initializationMessage = '차단 설정 로딩 중...';
-      log(
-        '[AppController] Initializing BlockedNumbersController (local) and requesting sync...',
-      );
-      final stopwatchBlocked = Stopwatch()..start();
-      // 서버 호출 대신 로컬 데이터 로드만 하도록 initialize 수정 필요 (다음 단계에서)
-      await blockedNumbersController.initialize();
-      // 백그라운드에 즉시 동기화 요청
-      final service = FlutterBackgroundService();
-      if (await service.isRunning()) {
-        service.invoke('syncBlockedListsNow'); // <<< 즉시 동기화 요청 추가
-      }
-      log(
-        '[AppController] blockedNumbersController init(local) & sync request took: ${stopwatchBlocked.elapsedMilliseconds}ms',
-      );
-
-      // 3. 통화 기록 읽기 및 로컬 저장 (유지)
-      _initializationMessage = '통화 기록 로딩 중...';
-      log('[AppController] Refreshing call logs (local save only)...');
-      final stopwatchCallLog = Stopwatch()..start();
       await callLogController.refreshCallLogs();
+      log('[AppController] Call logs refreshed.');
+
+      _coreInitMessage = '차단 설정 로딩 중...';
       log(
-        '[AppController] callLogController.refreshCallLogs (local) took: ${stopwatchCallLog.elapsedMilliseconds}ms',
+        '[AppController] Initializing blocked numbers (local)... from performCoreInitialization',
       );
+      await blockedNumbersController.initialize(); // 로컬 초기화
+      log('[AppController] Blocked numbers initialized.');
 
-      // <<< 4. SMS 기록 읽기 및 로컬 저장 (제거) >>>
-      // _initializationMessage = 'SMS 기록 로딩 중...';
-      // log('[AppController] Refreshing SMS logs (local save only)...');
-      // final stopwatchSms = Stopwatch()..start();
-      // await smsController.refreshSms();
-      // log('[AppController] smsController.refreshSms (local) took: ${stopwatchSms.elapsedMilliseconds}ms');
-
-      // 5. 백그라운드 동기화/업로드 요청 (유지 - 통화/주소록)
-      _initializationMessage = '백그라운드 작업 요청 중...';
-      log('[AppController] Requesting background tasks (Calls, Contacts)...');
-      // final service = FlutterBackgroundService(); // 이미 위에서 인스턴스화 함
-      if (await service.isRunning()) {
-        service.invoke('uploadCallLogsNow');
-        service.invoke('startContactSyncNow');
-      } else {
-        log('[AppController] Background service not running.');
-      }
-      log('[AppController] Invoked background tasks.');
-
-      // 6. 앱 업데이트 확인 (제거됨 - 주석 유지)
-      // _initializationMessage = '업데이트 확인 중...';
-      // final stopwatchUpdate = Stopwatch()..start();
-      // await checkUpdate();
-      // log('[AppController] checkUpdate (post-login) took: ${stopwatchUpdate.elapsedMilliseconds}ms');
-
-      log('[AppController] Post-login essential initialization complete.');
-    } catch (e, st) {
-      log('[AppController] Error initializing post-login data: $e\n$st');
-    } finally {
-      _isInitializing.value = false;
-      totalStopwatch.stop();
+      // 2. 백그라운드 서비스 시작
+      _coreInitMessage = '백그라운드 서비스 시작 중...';
       log(
-        '[AppController] Total post-login essential init took: ${totalStopwatch.elapsedMilliseconds}ms',
+        '[AppController] Starting background service... from performCoreInitialization',
+      );
+      await startBackgroundService(); // 내부에서 isRunning 체크 함
+      log('[AppController] Background service start requested.');
+
+      // 3. 백그라운드 작업 요청 (서비스 시작 후)
+      _coreInitMessage = '백그라운드 작업 요청 중...';
+      log(
+        '[AppController] Requesting initial background tasks... from performCoreInitialization',
+      );
+      final service = FlutterBackgroundService();
+      await Future.delayed(const Duration(seconds: 2));
+      if (await service.isRunning()) {
+        log(
+          '[AppController] Service is running. Invoking tasks: uploadCallLogsNow, startContactSyncNow, syncBlockedListsNow...',
+        );
+        try {
+          service.invoke('uploadCallLogsNow');
+          service.invoke('startContactSyncNow');
+          service.invoke('syncBlockedListsNow');
+          log('[AppController] Successfully invoked background tasks.');
+        } catch (e) {
+          log('[AppController] Error invoking background tasks: $e');
+        }
+      } else {
+        log(
+          '[AppController] Background service is not running after start request. Cannot invoke tasks.',
+        );
+      }
+
+      // 4. 앱 업데이트 확인 등 추가 작업 (필요 시)
+
+      _coreInitMessage = '초기화 완료';
+      log('[AppController] Core data and service initialization complete.');
+    } catch (e, st) {
+      _coreInitMessage = '초기화 중 오류 발생';
+      log(
+        '[AppController] Error during core data and service initialization: $e\n$st',
+      );
+    } finally {
+      _isCoreInitializing.value = false;
+      stopwatch.stop();
+      log(
+        '[AppController] Total core data and service initialization took: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
   }

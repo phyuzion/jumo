@@ -51,16 +51,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   late AppController _appController;
   late ContactsController _contactsController;
-  late CallLogController _callLogController;
-  late BlockedNumbersController _blockedNumbersController;
 
   @override
   void initState() {
-    _checkDefaultDialer();
     super.initState();
     log('[HomeScreen] initState called.');
     WidgetsBinding.instance.addObserver(this);
     _initializeHomeScreen();
+    _checkDefaultDialer();
+    _loadNotificationCount();
   }
 
   @override
@@ -82,94 +81,63 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _initializeHomeScreen() async {
+    log('[HomeScreen] Starting HomeScreen initialization...');
     if (mounted) {
       setState(() {
         _isUiReady = false;
-        _uiReadyMessage = '기본 설정 로딩 중...';
+        _uiReadyMessage = '앱 초기화 중...';
       });
     }
 
-    log('[HomeScreen] Starting initial setup...');
     _appController = context.read<AppController>();
     _contactsController = context.read<ContactsController>();
-    _callLogController = context.read<CallLogController>();
-    _blockedNumbersController = context.read<BlockedNumbersController>();
 
-    // 네이티브 앱 초기화 완료 알림 (백그라운드 서비스에 필요)
-    NativeDefaultDialerMethods.notifyNativeAppInitialized();
-    log('[HomeScreen] Native app initialized notification sent.');
-
-    // 로그인된 사용자 정보 로드 (필요한 경우)
-    // final user = context.read<UserController>().user; // 예시
-
-    // 1. 빠른 로컬 설정 (Hive, SharedPreferences 등)
     try {
-      // 네이티브에서 통화 기록 가져오기
-      await _callLogController.refreshCallLogs();
-      // Hive에서 차단 번호 로드 (기존 방식 유지, loadRemote 제거)
-      await _blockedNumbersController.initialize();
-      // 알림 카운트 로드 등 (필요시 추가)
-      log('[HomeScreen] Loaded notification count: 0'); // 예시 로그
+      NativeDefaultDialerMethods.notifyNativeAppInitialized();
+      log('[HomeScreen] Native app initialized notification sent.');
     } catch (e) {
-      log('[HomeScreen] Error during fast local setups: $e');
-      // 에러 처리 (예: 사용자에게 알림)
+      log('[HomeScreen] Error sending native initialized notification: $e');
     }
-    log('[HomeScreen] Fast local setups done.');
 
-    // 2. 연락처 로드 (백그라운드에서 진행될 수 있음) - await 제거 또는 분리 고려
-    log('[HomeScreen] Starting contacts load (no await)...');
-    // 즉시 UI를 보여주고 백그라운드에서 연락처 로딩
+    _appController
+        .performCoreInitialization()
+        .then((_) {
+          log(
+            '[HomeScreen] AppController core initialization completed (async).',
+          );
+        })
+        .catchError((e) {
+          log(
+            '[HomeScreen] Error during AppController core initialization: $e',
+          );
+          if (mounted) {
+            setState(() {
+              _uiReadyMessage = '초기화 오류 발생';
+            });
+          }
+        });
+    log('[HomeScreen] Requested AppController core initialization.');
+
+    log('[HomeScreen] Starting contacts load (async)...');
     _contactsController
         .getLocalContacts(forceRefresh: false)
         .then((_) {
           log(
             '[ContactsController] Initial contacts load completed in background.',
           );
-          // 필요시 setState 호출 (예: 로딩 상태 변경)
         })
         .catchError((e) {
           log('[ContactsController] Error loading initial contacts: $e');
-          // 에러 처리
         });
 
-    // 3. UI 준비 완료 및 백그라운드 작업 요청
     if (mounted) {
       setState(() {
         _isUiReady = true;
       });
     }
-    log('[HomeScreen] UI is ready (Contacts loading in background).');
-
-    log('[HomeScreen] Requesting background service start...');
-    try {
-      await _appController.startBackgroundService(); // 백그라운드 서비스 시작
-      log('[HomeScreen] Background service start requested.'); // 시작 요청 로그로 변경
-
-      final service = FlutterBackgroundService(); // 서비스 인스턴스 얻기
-      // 잠시 대기하여 서비스가 시작될 시간을 확보 (선택적, 타이밍 이슈 방지용)
-      await Future.delayed(const Duration(seconds: 1));
-
-      if (await service.isRunning()) {
-        log(
-          '[HomeScreen] Background service is running. Invoking background tasks: uploadCallLogsNow, startContactSyncNow...',
-        );
-        try {
-          service.invoke('uploadCallLogsNow');
-          service.invoke('startContactSyncNow');
-          log('[HomeScreen] Successfully invoked background tasks.');
-        } catch (e) {
-          log('[HomeScreen] Error invoking background tasks: $e');
-        }
-      } else {
-        log(
-          '[HomeScreen] Background service failed to start or is not running after request.',
-        );
-      }
-    } catch (e) {
-      log(
-        '[HomeScreen] Error during background service start or task invocation: $e',
-      );
-    }
+    log(
+      '[HomeScreen] UI is ready (Core init & Contacts loading in background).',
+    );
 
     _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((
       _,
@@ -178,6 +146,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _loadNotificationCount();
       }
     });
+    log('[HomeScreen] HomeScreen initialization finished.');
   }
 
   Future<void> _checkDefaultDialer() async {

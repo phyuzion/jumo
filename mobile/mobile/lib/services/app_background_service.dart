@@ -589,41 +589,87 @@ Future<void> performInitialBackgroundTasks() async {
 
 // 통화 기록 업로드만 수행하는 함수
 Future<void> _uploadCallLogs() async {
-  log('[BackgroundService] Executing _uploadCallLogs...');
+  log('[BackgroundService][_uploadCallLogs] Function called.'); // <<< 함수 호출 로그
   try {
+    log(
+      '[BackgroundService][_uploadCallLogs] Attempting to open Hive box: call_logs...',
+    );
     final callLogBox = Hive.box('call_logs');
     if (!callLogBox.isOpen) {
-      log('[BG] call_logs box closed.');
+      log(
+        '[BackgroundService][_uploadCallLogs] Error: call_logs box is not open!',
+      ); // <<< 오류 로그
       return;
     }
+    log('[BackgroundService][_uploadCallLogs] Hive box opened successfully.');
 
-    // Hive에서 로그 읽기 (JSON 디코딩)
+    // Hive에서 로그 읽기
+    log('[BackgroundService][_uploadCallLogs] Reading logs from Hive...');
     final logString = callLogBox.get('logs', defaultValue: '[]') as String;
+    log(
+      '[BackgroundService][_uploadCallLogs] Raw log string from Hive: ${logString.substring(0, (logString.length > 100 ? 100 : logString.length))}...',
+    ); // <<< 일부만 로깅
+
     final List<Map<String, dynamic>> logsToUpload;
     try {
       final decodedList = jsonDecode(logString) as List;
       logsToUpload = decodedList.cast<Map<String, dynamic>>().toList();
+      log(
+        '[BackgroundService][_uploadCallLogs] Decoded ${logsToUpload.length} logs from Hive string.',
+      ); // <<< 개수 로깅
     } catch (e) {
-      log('[BackgroundService] Error decoding call logs for upload: $e');
+      log(
+        '[BackgroundService][_uploadCallLogs] Error decoding call logs JSON: $e',
+      ); // <<< JSON 디코딩 오류
       return;
     }
 
     if (logsToUpload.isNotEmpty) {
       // 서버 전송용 데이터 준비
+      log('[BackgroundService][_uploadCallLogs] Preparing logs for server...');
       final logsForServer = CallLogController.prepareLogsForServer(
         logsToUpload,
       );
+      log(
+        '[BackgroundService][_uploadCallLogs] Prepared ${logsForServer.length} logs for server.',
+      ); // <<< 서버용 개수 로깅
+
       if (logsForServer.isNotEmpty) {
-        await LogApi.updateCallLog(logsForServer);
-        log('[BackgroundService] Uploaded call logs.');
-        // TODO: 업로드 성공 시 Hive 데이터 삭제 또는 상태 변경 고려
+        log(
+          '[BackgroundService][_uploadCallLogs] Attempting to upload ${logsForServer.length} logs via LogApi.updateCallLog...',
+        ); // <<< 업로드 시도 로그
+        try {
+          await LogApi.updateCallLog(logsForServer);
+          log(
+            '[BackgroundService][_uploadCallLogs] Successfully uploaded call logs via API.',
+          ); // <<< 업로드 성공 로그
+          // TODO: 업로드 성공 시 Hive 데이터 삭제 또는 상태 변경 고려
+          // 예: await callLogBox.put('logs', '[]'); // 성공 시 비우기
+        } catch (apiError) {
+          log(
+            '[BackgroundService][_uploadCallLogs] Error calling LogApi.updateCallLog: $apiError',
+          ); // <<< API 호출 오류
+        }
+      } else {
+        log(
+          '[BackgroundService][_uploadCallLogs] No logs needed preparation for server (prepareLogsForServer returned empty).',
+        );
       }
     } else {
-      log('[BackgroundService] No call logs in Hive to upload.');
+      log(
+        '[BackgroundService][_uploadCallLogs] No logs found in Hive to upload.',
+      );
     }
-  } catch (e) {
-    log('[BackgroundService] Error handling _uploadCallLogs: $e');
+  } catch (e, st) {
+    // <<< 전체 함수 에러 처리 강화
+    log(
+      '[BackgroundService][_uploadCallLogs] General error in _uploadCallLogs: $e',
+    );
+    log('[BackgroundService][_uploadCallLogs] StackTrace: $st');
   }
+  log(
+    '[BackgroundService][_uploadCallLogs] Function finished.',
+  ); // <<< 함수 종료 로그
 }
 
 // SMS 새로고침 및 업로드 함수 (주기적 타이머가 호출)
