@@ -41,32 +41,86 @@ Future<void> onStart(ServiceInstance service) async {
 
   Timer? callTimer;
   int ongoingSeconds = 0;
-  // <<< 현재 상태 정보 저장용 변수 (타이머 내부에서 사용) >>>
   String _currentNumberForTimer = "";
   String _currentCallerNameForTimer = "";
 
-  // <<< 기본 전화 앱 여부 확인 (서비스 시작 시 한 번만) >>>
-  bool isDefaultDialer = true; // 기본값은 true로 설정 (오류 방지)
+  // <<< Hive 초기화 (기존 코드 유지) >>>
+  bool hiveInitialized = false;
+  Box? settingsBox;
   try {
-    // AndroidServiceInstance 확인 후 호출 (Android 전용 기능이므로)
-    if (service is AndroidServiceInstance) {
-      isDefaultDialer = await NativeDefaultDialerMethods.isDefaultDialer();
-      log(
-        '[BackgroundService][onStart] Checked default dialer status: $isDefaultDialer',
-      );
-    } else {
-      log(
-        '[BackgroundService][onStart] Not an Android instance, cannot check default dialer. Assuming false.',
-      );
-      isDefaultDialer = false; // 다른 플랫폼이거나 확인 불가 시 false 간주
+    final appDocumentDir = await getApplicationDocumentsDirectory();
+    Hive.init(appDocumentDir.path);
+    if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
+      Hive.registerAdapter(BlockedHistoryAdapter());
     }
+    await Hive.openBox('settings');
+    await Hive.openBox<BlockedHistory>('blocked_history');
+    await Hive.openBox('call_logs');
+    await Hive.openBox('sms_logs');
+    await Hive.openBox('last_sync_state');
+    await Hive.openBox('notifications');
+    await Hive.openBox('auth');
+    await Hive.openBox('display_noti_ids');
+    await Hive.openBox('blocked_numbers');
+    await Hive.openBox<List<String>>('danger_numbers');
+    await Hive.openBox<List<String>>('bomb_numbers');
+    hiveInitialized = true;
+    log('[BackgroundService][onStart] Hive initialized successfully.');
   } catch (e) {
-    log(
-      '[BackgroundService][onStart] Error checking default dialer status: $e',
-    );
-    // 에러 발생 시 false로 간주하여 오버레이 시도
-    isDefaultDialer = false;
+    log('[BackgroundService][onStart] Error initializing Hive: $e');
+    service.stopSelf();
+    return;
   }
+
+  if (!hiveInitialized) {
+    // settingsBox null check 제거 (어차피 여기서 사용 안 함)
+    log(
+      '[BackgroundService][onStart] Hive initialization failed. Stopping service.',
+    );
+    service.stopSelf();
+    return;
+  }
+
+  // <<< 기본 전화 앱 여부 확인 로직 삭제 (아래 Helper 함수 사용) >>>
+  // bool isDefaultDialer = false;
+  // try { ... } catch (e) { ... }
+
+  // --- Helper Function ---
+  // 메인 Isolate에 isDefaultDialer 상태를 요청하고 응답을 기다리는 함수
+  Future<bool> _fetchIsDefaultDialerFromMain() async {
+    final completer = Completer<bool>();
+    StreamSubscription? subscription;
+
+    // 응답 리스너 설정 (한 번만 수신)
+    subscription = service.on('respondDefaultDialerStatus').listen((event) {
+      final bool isDefault = event?['isDefault'] ?? false;
+      log(
+        '[BackgroundService] Received respondDefaultDialerStatus: $isDefault',
+      );
+      if (!completer.isCompleted) {
+        completer.complete(isDefault);
+      }
+      subscription?.cancel(); // 리스너 정리
+    });
+
+    // 타임아웃 추가 (메인 Isolate 응답이 없을 경우 대비)
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!completer.isCompleted) {
+        log(
+          '[BackgroundService] Timeout waiting for respondDefaultDialerStatus. Assuming false.',
+        );
+        completer.complete(false); // 타임아웃 시 기본값 false
+        subscription?.cancel();
+      }
+    });
+
+    // 메인 Isolate에 요청 보내기
+    log('[BackgroundService] Sending requestDefaultDialerStatus to main.');
+    service.invoke('requestDefaultDialerStatus');
+
+    return completer.future;
+  }
+  // --- End Helper Function ---
 
   // <<< 시간 포맷 함수 정의 먼저 >>>
   String _formatDurationBackground(int seconds) {
@@ -138,31 +192,6 @@ Future<void> onStart(ServiceInstance service) async {
 
   // <<< 로그 추가: Hive 초기화 시도 전 >>>
   log('[BackgroundService][onStart] Attempting to initialize Hive...');
-  bool hiveInitialized = false;
-  try {
-    final appDocumentDir = await getApplicationDocumentsDirectory();
-    Hive.init(appDocumentDir.path);
-    if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
-      Hive.registerAdapter(BlockedHistoryAdapter());
-    }
-    await Hive.openBox('settings');
-    await Hive.openBox<BlockedHistory>('blocked_history');
-    await Hive.openBox('call_logs');
-    await Hive.openBox('sms_logs');
-    await Hive.openBox('last_sync_state');
-    await Hive.openBox('notifications');
-    await Hive.openBox('auth');
-    await Hive.openBox('display_noti_ids');
-    await Hive.openBox('blocked_numbers');
-    await Hive.openBox<List<String>>('danger_numbers');
-    await Hive.openBox<List<String>>('bomb_numbers');
-    hiveInitialized = true;
-    log('[BackgroundService][onStart] Hive initialized successfully.');
-  } catch (e) {
-    log('[BackgroundService][onStart] Error initializing Hive: $e');
-    service.stopSelf();
-    return;
-  }
 
   // Hive 초기화 실패 시 종료
   if (!hiveInitialized) return;
@@ -417,7 +446,13 @@ Future<void> onStart(ServiceInstance service) async {
           '[BackgroundService][BroadcastReceiver] Parsed state: $state, incomingNumber: $incomingNumber',
         );
 
-        isDefaultDialer = await NativeDefaultDialerMethods.isDefaultDialer();
+        // <<< 여기서 실시간으로 isDefaultDialer 상태 확인 >>>
+        bool isDefaultDialer = await _fetchIsDefaultDialerFromMain();
+        log(
+          '[BackgroundService][BroadcastReceiver] Fetched isDefaultDialer status: $isDefaultDialer',
+        );
+
+        // 이제 isDefaultDialer 값을 사용
         if (!isDefaultDialer) {
           if (state == 'RINGING' &&
               incomingNumber != null &&
