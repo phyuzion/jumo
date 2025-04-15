@@ -523,18 +523,32 @@ Future<void> onStart(ServiceInstance service) async {
             }
           } else if (state == 'IDLE') {
             log(
-              '[BackgroundService][BroadcastReceiver] IDLE state detected. Closing overlay (if active).',
+              '[BackgroundService][BroadcastReceiver] IDLE state detected. Scheduling overlay close after 10 seconds...',
             );
-            try {
-              if (await overlay_window.FlutterOverlayWindow.isActive()) {
-                await overlay_window.FlutterOverlayWindow.closeOverlay();
-                log('[BackgroundService][BroadcastReceiver] Closed overlay.');
-              }
-            } catch (e) {
+            // <<< 10초 지연 후 닫기 >>>
+            Future.delayed(const Duration(seconds: 10), () async {
               log(
-                '[BackgroundService][BroadcastReceiver] Error closing overlay: $e',
+                '[BackgroundService][Delayed Task] Attempting to close overlay after 10s delay...',
               );
-            }
+              try {
+                // 10초 후에도 여전히 활성 상태인지 확인
+                if (await overlay_window.FlutterOverlayWindow.isActive()) {
+                  await overlay_window.FlutterOverlayWindow.closeOverlay();
+                  log(
+                    '[BackgroundService][Delayed Task] Closed overlay after 10s delay.',
+                  );
+                } else {
+                  log(
+                    '[BackgroundService][Delayed Task] Overlay was not active after 10s. No need to close.',
+                  );
+                }
+              } catch (e) {
+                log(
+                  '[BackgroundService][Delayed Task] Error closing overlay after delay: $e',
+                );
+              }
+            });
+            // <<< 지연 로직 끝 >>>
           }
         } else {
           log(

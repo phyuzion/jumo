@@ -273,7 +273,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
                   child: Padding(
                     padding: const EdgeInsets.only(
                       bottom: 50,
-                      top: 40,
+                      top: 0,
                     ), // 상단 닫기, 하단 스크롤 버튼 공간
                     child: _buildContent(), // 컨텐츠 빌드 함수 사용
                   ),
@@ -291,11 +291,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
                   ),
                 ),
                 // 스크롤 버튼들 (결과가 있고, 스크롤 가능할 때만?)
-                if (!_isLoading &&
-                    _result != null &&
-                    (_scrollController.hasClients &&
-                        _scrollController.position.maxScrollExtent >
-                            0)) // 조건 강화
+                if (!_isLoading && _result != null)
                   Positioned(
                     bottom: 0,
                     left: 0,
