@@ -138,7 +138,7 @@ class LocalNotificationService {
       channelDescription: '부재중 전화 알림',
       importance: Importance.high,
       priority: Priority.high,
-      // icon: 'missed_icon', // 필요 시 아이콘 지정
+      icon: 'missed_icon', // 필요 시 아이콘 지정
     );
     final details = NotificationDetails(android: androidDetails);
     final title = '부재중 전화';

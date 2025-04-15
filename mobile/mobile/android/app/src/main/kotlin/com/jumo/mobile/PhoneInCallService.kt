@@ -115,7 +115,15 @@ class PhoneInCallService : InCallService() {
 
     /** 거절 */
     private fun rejectTopCall() {
-        activeCalls.lastOrNull()?.reject(Call.REJECT_REASON_DECLINED)
+        Log.d("PhoneInCallService", "[rejectTopCall] Attempting to reject/disconnect call...")
+        val callToReject = activeCalls.lastOrNull()
+        if (callToReject != null) {
+            // reject() 대신 disconnect() 사용
+            Log.d("PhoneInCallService", "[rejectTopCall] Using disconnect() for call: $callToReject, State: ${callToReject.state}")
+            callToReject.disconnect()
+        } else {
+            Log.d("PhoneInCallService", "[rejectTopCall] No active call found to disconnect.")
+        }
     }
 
     /** 종료 */
