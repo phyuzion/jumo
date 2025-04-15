@@ -425,65 +425,14 @@ Future<void> onStart(ServiceInstance service) async {
           if (state == 'RINGING' &&
               incomingNumber != null &&
               incomingNumber.isNotEmpty) {
-            log(
-              '[BackgroundService][BroadcastReceiver] RINGING detected for $incomingNumber. Handling overlay...',
-            );
-
-            // <<< Hive에서 화면 크기 읽어오기 >>>
-            int screenWidth = 350; // 기본 너비
-            int screenHeight = 500; // 기본 높이
-            try {
-              final settingsBox = await Hive.openBox('settings');
-              // Hive에 double로 저장했으므로 double로 읽고 int로 변환
-              final double? storedWidth =
-                  settingsBox.get('screenWidth') as double?;
-              final double? storedHeight =
-                  settingsBox.get('screenHeight') as double?;
-              if (storedWidth != null && storedHeight != null) {
-                screenWidth = storedWidth.floor(); // floor()로 내림하여 int 변환
-                screenHeight = storedHeight.floor();
-                log(
-                  '[BackgroundService][BroadcastReceiver] Loaded screen size from Hive: W=$screenWidth, H=$screenHeight',
-                );
-              } else {
-                log(
-                  '[BackgroundService][BroadcastReceiver] Screen size not found in Hive, using defaults.',
-                );
-              }
-            } catch (e) {
-              log(
-                '[BackgroundService][BroadcastReceiver] Error reading screen size from Hive: $e. Using defaults.',
-              );
-            }
-
-            await SystemAlertWindow.showSystemWindow(
-              height: screenHeight, // <<< 읽어온 값 사용
-              width: screenWidth, // <<< 읽어온 값 사용
-              gravity: SystemWindowGravity.BOTTOM,
-              prefMode: SystemWindowPrefMode.OVERLAY,
-              notificationTitle: incomingNumber,
-              notificationBody: '전화 수신 중...',
-            );
-            log(
-              '[BackgroundService][BroadcastReceiver] showSystemWindow called.',
-            );
-
-            await Future.delayed(const Duration(milliseconds: 500));
             final ringingData = {
               'type': 'ringing',
               'phoneNumber': incomingNumber,
             };
-            // <<< sendMessageToOverlay 사용 >>>
             await SystemAlertWindow.sendMessageToOverlay(ringingData);
-            log(
-              '[BackgroundService][BroadcastReceiver] Sent ringing data via sendMessageToOverlay.',
-            );
 
             SearchResultModel? searchResultModel;
             try {
-              log(
-                '[BackgroundService][BroadcastReceiver] Attempting search using SearchRecordsController for $incomingNumber...',
-              );
               final phoneData = await SearchRecordsController.searchPhone(
                 incomingNumber,
               );
@@ -491,29 +440,13 @@ Future<void> onStart(ServiceInstance service) async {
                   await SearchRecordsController.searchTodayRecord(
                     incomingNumber,
                   );
-              log(
-                '[BackgroundService][BroadcastReceiver] searchTodayRecord result: ${todayRecords?.length ?? 0} records found.',
-              );
-              log(
-                '[BackgroundService][BroadcastReceiver] Today Records data: $todayRecords',
-              );
-
-              if (phoneData != null ||
-                  (todayRecords != null && todayRecords.isNotEmpty)) {
-                searchResultModel = SearchResultModel(
-                  phoneNumberModel: phoneData,
-                  todayRecords: todayRecords,
-                );
-              }
-              log(
-                '[BackgroundService][BroadcastReceiver] Search completed via Controller for $incomingNumber. Result found: ${searchResultModel != null}',
+              searchResultModel = SearchResultModel(
+                phoneNumberModel: phoneData,
+                todayRecords: todayRecords,
               );
             } catch (e, stackTrace) {
               log(
-                '[BackgroundService][BroadcastReceiver] Error during search via Controller: $e',
-              );
-              log(
-                '[BackgroundService][BroadcastReceiver] StackTrace: $stackTrace',
+                '[BackgroundService][BroadcastReceiver] Error searching records: $e\n$stackTrace',
               );
               searchResultModel = null;
             }
@@ -537,19 +470,17 @@ Future<void> onStart(ServiceInstance service) async {
             log(
               '[BackgroundService][BroadcastReceiver] IDLE state detected. Closing overlay...',
             );
-            try {
-              // <<< 오버레이 닫기 (system_alert_window 사용) >>>
-              await SystemAlertWindow.closeSystemWindow(
-                prefMode: SystemWindowPrefMode.OVERLAY,
-              );
-              log(
-                '[BackgroundService][BroadcastReceiver] closeSystemWindow called.',
-              );
-            } catch (e) {
-              log(
-                '[BackgroundService][BroadcastReceiver] Error closing overlay: $e',
-              );
-            }
+            Future.delayed(const Duration(seconds: 10), () async {
+              try {
+                await SystemAlertWindow.closeSystemWindow(
+                  prefMode: SystemWindowPrefMode.OVERLAY,
+                );
+              } catch (e) {
+                log(
+                  '[BackgroundService][BroadcastReceiver] Error closing overlay: $e',
+                );
+              }
+            });
           }
         } else {
           log(
@@ -560,21 +491,13 @@ Future<void> onStart(ServiceInstance service) async {
     });
 
     await receiver.start();
-    log(
-      '[BackgroundService][onStart] BroadcastReceiver started successfully for $phoneStateAction.',
-    );
   } catch (e) {
     log(
       '[BackgroundService][onStart] Error setting up or starting BroadcastReceiver: $e',
     );
   }
 
-  log('[BackgroundService] Setup complete.');
-
-  // <<< 로그 추가: 초기 작업 수행 >>>
-  log('[BackgroundService][onStart] Performing initial background tasks...');
   await performInitialBackgroundTasks();
-  // <<< 로그 추가: 초기 작업 완료 및 서비스 준비 완료 >>>
   log(
     '[BackgroundService][onStart] Initial background tasks completed. Service is ready.',
   );
@@ -585,7 +508,6 @@ Future<void> performInitialBackgroundTasks() async {
   log(
     '[BackgroundService][performInitialBackgroundTasks] Starting initial tasks...',
   );
-  // 필요한 초기 작업 (예: 최초 동기화 등)
   await Future.delayed(const Duration(seconds: 5)); // 예시 딜레이
   log(
     '[BackgroundService][performInitialBackgroundTasks] Initial tasks finished.',

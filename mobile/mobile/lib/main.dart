@@ -36,8 +36,21 @@ import 'package:hive_ce/hive.dart';
 
 /// 오버레이 전용 엔트리
 @pragma('vm:entry-point')
-void overlayMain() {
+Future<void> overlayMain() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // <<< 오버레이 Isolate 위한 Hive 초기화 >>>
+  try {
+    final appDocumentDir = await getApplicationDocumentsDirectory();
+    await Hive.initFlutter(appDocumentDir.path);
+    // 필요한 어댑터 등록
+    if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
+      Hive.registerAdapter(BlockedHistoryAdapter());
+    }
+    log('[overlayMain] Hive initialized successfully.');
+  } catch (e) {
+    log('[overlayMain] Error initializing Hive: $e');
+  }
 
   runApp(
     MaterialApp(
