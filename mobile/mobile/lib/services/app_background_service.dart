@@ -25,8 +25,7 @@ import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/app_controller.dart'; // <<< FOREGROUND_SERVICE_NOTIFICATION_ID 사용 위해
 import 'package:flutter/material.dart'; // <<< Timer 등 기본 요소 위해
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
-import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart'
-    as overlay_window; // <<< 이름 충돌 해결
+import 'package:system_alert_window/system_alert_window.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
@@ -430,42 +429,55 @@ Future<void> onStart(ServiceInstance service) async {
               '[BackgroundService][BroadcastReceiver] RINGING detected for $incomingNumber. Handling overlay...',
             );
 
-            final ringingData = {
-              'type': 'ringing',
-              'phoneNumber': incomingNumber,
-            };
+            // <<< Hive에서 화면 크기 읽어오기 >>>
+            int screenWidth = 350; // 기본 너비
+            int screenHeight = 500; // 기본 높이
             try {
-              await overlay_window.FlutterOverlayWindow.shareData(ringingData);
-              log(
-                '[BackgroundService][BroadcastReceiver] Sent ringing state via shareData.',
-              );
-
-              if (!await overlay_window.FlutterOverlayWindow.isActive()) {
-                await overlay_window.FlutterOverlayWindow.showOverlay(
-                  enableDrag: true,
-                  alignment: overlay_window.OverlayAlignment.bottomCenter,
-                  height: overlay_window.WindowSize.matchParent,
-                  width: overlay_window.WindowSize.matchParent,
-                  overlayTitle: incomingNumber,
-                  overlayContent: "전화 수신 중...",
-                  flag: overlay_window.OverlayFlag.defaultFlag,
-                  visibility:
-                      overlay_window.NotificationVisibility.visibilityPublic,
-                  positionGravity: overlay_window.PositionGravity.auto,
-                );
+              final settingsBox = await Hive.openBox('settings');
+              // Hive에 double로 저장했으므로 double로 읽고 int로 변환
+              final double? storedWidth =
+                  settingsBox.get('screenWidth') as double?;
+              final double? storedHeight =
+                  settingsBox.get('screenHeight') as double?;
+              if (storedWidth != null && storedHeight != null) {
+                screenWidth = storedWidth.floor(); // floor()로 내림하여 int 변환
+                screenHeight = storedHeight.floor();
                 log(
-                  '[BackgroundService][BroadcastReceiver] Requested to show overlay.',
+                  '[BackgroundService][BroadcastReceiver] Loaded screen size from Hive: W=$screenWidth, H=$screenHeight',
                 );
               } else {
                 log(
-                  '[BackgroundService][BroadcastReceiver] Overlay already active. Only sent shareData.',
+                  '[BackgroundService][BroadcastReceiver] Screen size not found in Hive, using defaults.',
                 );
               }
             } catch (e) {
               log(
-                '[BackgroundService][BroadcastReceiver] Error showing overlay or sending ringing data: $e',
+                '[BackgroundService][BroadcastReceiver] Error reading screen size from Hive: $e. Using defaults.',
               );
             }
+
+            await SystemAlertWindow.showSystemWindow(
+              height: screenHeight, // <<< 읽어온 값 사용
+              width: screenWidth, // <<< 읽어온 값 사용
+              gravity: SystemWindowGravity.BOTTOM,
+              prefMode: SystemWindowPrefMode.OVERLAY,
+              notificationTitle: incomingNumber,
+              notificationBody: '전화 수신 중...',
+            );
+            log(
+              '[BackgroundService][BroadcastReceiver] showSystemWindow called.',
+            );
+
+            await Future.delayed(const Duration(milliseconds: 500));
+            final ringingData = {
+              'type': 'ringing',
+              'phoneNumber': incomingNumber,
+            };
+            // <<< sendMessageToOverlay 사용 >>>
+            await SystemAlertWindow.sendMessageToOverlay(ringingData);
+            log(
+              '[BackgroundService][BroadcastReceiver] Sent ringing data via sendMessageToOverlay.',
+            );
 
             SearchResultModel? searchResultModel;
             try {
@@ -512,9 +524,9 @@ Future<void> onStart(ServiceInstance service) async {
               'searchResult': searchResultModel?.toJson(),
             };
             try {
-              await overlay_window.FlutterOverlayWindow.shareData(resultData);
+              await SystemAlertWindow.sendMessageToOverlay(resultData);
               log(
-                '[BackgroundService][BroadcastReceiver] Sent result state via shareData.',
+                '[BackgroundService][BroadcastReceiver] Sent result state via sendMessageToOverlay.',
               );
             } catch (e) {
               log(
@@ -523,32 +535,21 @@ Future<void> onStart(ServiceInstance service) async {
             }
           } else if (state == 'IDLE') {
             log(
-              '[BackgroundService][BroadcastReceiver] IDLE state detected. Scheduling overlay close after 10 seconds...',
+              '[BackgroundService][BroadcastReceiver] IDLE state detected. Closing overlay...',
             );
-            // <<< 10초 지연 후 닫기 >>>
-            Future.delayed(const Duration(seconds: 10), () async {
-              log(
-                '[BackgroundService][Delayed Task] Attempting to close overlay after 10s delay...',
+            try {
+              // <<< 오버레이 닫기 (system_alert_window 사용) >>>
+              await SystemAlertWindow.closeSystemWindow(
+                prefMode: SystemWindowPrefMode.OVERLAY,
               );
-              try {
-                // 10초 후에도 여전히 활성 상태인지 확인
-                if (await overlay_window.FlutterOverlayWindow.isActive()) {
-                  await overlay_window.FlutterOverlayWindow.closeOverlay();
-                  log(
-                    '[BackgroundService][Delayed Task] Closed overlay after 10s delay.',
-                  );
-                } else {
-                  log(
-                    '[BackgroundService][Delayed Task] Overlay was not active after 10s. No need to close.',
-                  );
-                }
-              } catch (e) {
-                log(
-                  '[BackgroundService][Delayed Task] Error closing overlay after delay: $e',
-                );
-              }
-            });
-            // <<< 지연 로직 끝 >>>
+              log(
+                '[BackgroundService][BroadcastReceiver] closeSystemWindow called.',
+              );
+            } catch (e) {
+              log(
+                '[BackgroundService][BroadcastReceiver] Error closing overlay: $e',
+              );
+            }
           }
         } else {
           log(
