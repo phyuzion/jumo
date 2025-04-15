@@ -14,16 +14,12 @@ import 'package:mobile/graphql/log_api.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mobile/models/blocked_history.dart';
-import 'package:call_e_log/call_log.dart';
 import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
 import 'package:mobile/graphql/search_api.dart';
 import 'package:mobile/graphql/block_api.dart';
 import 'package:mobile/utils/constants.dart';
-import 'package:flutter/foundation.dart';
-import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
-import 'package:mobile/controllers/app_controller.dart'; // <<< FOREGROUND_SERVICE_NOTIFICATION_ID 사용 위해
-import 'package:flutter/material.dart'; // <<< Timer 등 기본 요소 위해
+import 'package:mobile/controllers/app_controller.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
 import 'package:system_alert_window/system_alert_window.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
@@ -421,6 +417,7 @@ Future<void> onStart(ServiceInstance service) async {
           '[BackgroundService][BroadcastReceiver] Parsed state: $state, incomingNumber: $incomingNumber',
         );
 
+        isDefaultDialer = await NativeDefaultDialerMethods.isDefaultDialer();
         if (!isDefaultDialer) {
           if (state == 'RINGING' &&
               incomingNumber != null &&

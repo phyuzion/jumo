@@ -42,13 +42,6 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
 
   @override
   Widget build(BuildContext context) {
-    // <<< 전달받은 카운트다운 값 로깅 >>>
-    if (widget.callState == CallState.ended) {
-      log(
-        '[Island] Building for ended state. Countdown: ${widget.endedCountdownSeconds}',
-      );
-    }
-
     double fabSize = 60.0;
     double barHeightIdle = 60.0;
     double barHeightActive = 70.0;
