@@ -17,7 +17,6 @@ import 'package:mobile/utils/app_event_bus.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:mobile/services/native_default_dialer_methods.dart';
 
 // <<< 포그라운드 서비스 알림 ID 상수 추가 >>>
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
@@ -144,29 +143,6 @@ class AppController {
     service.on('removeExpiredNotifications').listen((event) async {
       await removeExpiredNotifications();
     });
-
-    // <<< 기본 전화 앱 상태 요청 처리 리스너 추가 >>>
-    service.on('requestDefaultDialerStatus').listen((event) async {
-      log(
-        '[AppController] Received requestDefaultDialerStatus from background.',
-      );
-      try {
-        final bool isDefault =
-            await NativeDefaultDialerMethods.isDefaultDialer();
-        log('[AppController] Checked isDefaultDialer status: $isDefault');
-        // 백그라운드로 결과 응답 보내기
-        service.invoke('respondDefaultDialerStatus', {'isDefault': isDefault});
-        log('[AppController] Sent respondDefaultDialerStatus to background.');
-      } catch (e) {
-        log('[AppController] Error handling requestDefaultDialerStatus: $e');
-        // 오류 발생 시에도 응답은 보내주는 것이 좋음 (예: 기본값 false)
-        service.invoke('respondDefaultDialerStatus', {
-          'isDefault': false,
-          'error': e.toString(),
-        });
-      }
-    });
-    // <<< 리스너 추가 끝 >>>
 
     // 안드로이드/iOS 설정
     await service.configure(
