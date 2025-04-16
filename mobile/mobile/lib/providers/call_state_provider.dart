@@ -40,6 +40,7 @@ class CallStateProvider with ChangeNotifier {
   bool get isConnected => _isConnected;
   bool get isPopupVisible => _isPopupVisible;
   String get callEndReason {
+    log('[Provider] Getting callEndReason: $_callEndReason');
     return _callEndReason;
   }
 

@@ -164,6 +164,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
         width: screenWidth,
         gravity: SystemWindowGravity.BOTTOM,
         prefMode: SystemWindowPrefMode.OVERLAY,
+        isDisableClicks: false,
         notificationTitle: _phoneNumber!, // null 아님 보장됨
         notificationBody: _isLoading ? '정보 검색 중...' : '결과 확인', // 상태 반영
       );
