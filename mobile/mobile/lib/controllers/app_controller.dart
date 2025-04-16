@@ -17,6 +17,7 @@ import 'package:mobile/utils/app_event_bus.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:mobile/services/native_default_dialer_methods.dart';
 
 // <<< 포그라운드 서비스 알림 ID 상수 추가 >>>
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;

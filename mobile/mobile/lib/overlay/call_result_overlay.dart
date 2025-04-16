@@ -6,10 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
 import 'package:system_alert_window/system_alert_window.dart';
-import 'package:hive_ce/hive.dart';
-import 'package:hive_ce_flutter/hive_flutter.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:mobile/models/blocked_history.dart';
+import 'package:hive/hive.dart';
 
 class CallResultOverlay extends StatefulWidget {
   const CallResultOverlay({Key? key}) : super(key: key);
@@ -27,27 +24,10 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
 
   StreamSubscription? _overlayListenerSubscription; // 리스너 구독 관리
 
-  // <<< Hive 초기화 Future 저장 변수 >>>
-  Future<void>? _hiveInitFuture;
-
   @override
   void initState() {
     super.initState();
-    // <<< Hive 초기화 Future 저장 >>>
-    _hiveInitFuture = _initializeHive();
     _listenToOverlayEvents();
-  }
-
-  // <<< 오버레이 Isolate 위한 Hive 초기화 (Future 반환) >>>
-  Future<void> _initializeHive() async {
-    final appDocumentDir = await getApplicationDocumentsDirectory();
-    await Hive.initFlutter(appDocumentDir.path);
-
-    // TypeAdapter 등록
-    if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
-      Hive.registerAdapter(BlockedHistoryAdapter());
-      log('BlockedHistoryAdapter registered.');
-    }
   }
 
   @override
@@ -123,65 +103,54 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
 
   // 오버레이를 표시해야 할 때만 호출 (중복 호출 방지)
   Future<void> _showOverlayIfNeeded() async {
-    // if (_isOverlayVisible) return; // 필요 시 주석 해제
-    if (_phoneNumber == null) return;
+    if (_isOverlayVisible) {
+      log(
+        '[CallResultOverlay] Overlay already visible. Skipping showOverlay call.',
+      );
+      return;
+    }
+
+    if (_phoneNumber == null) {
+      log('[CallResultOverlay] Cannot show overlay without phone number.');
+      return;
+    }
 
     log(
-      '[CallResultOverlay] Attempting to show/update overlay for $_phoneNumber using SystemAlertWindow...',
+      '[CallResultOverlay] Attempting to show overlay for $_phoneNumber using SystemAlertWindow...',
     );
+    /*
     try {
-      // <<< Hive 초기화 완료 기다리기 >>>
-      await _hiveInitFuture;
-      log('[CallResultOverlay] Hive initialization confirmed complete.');
-
       // <<< Hive에서 화면 크기 읽어오기 >>>
-      int screenWidth = 350;
-      int screenHeight = 500;
-      try {
-        final settingsBox = await Hive.openBox('settings');
-        final double? storedWidth = settingsBox.get('screenWidth') as double?;
-        final double? storedHeight = settingsBox.get('screenHeight') as double?;
-        if (storedWidth != null && storedHeight != null) {
-          screenWidth = storedWidth.floor();
-          screenHeight = storedHeight.floor();
-          log(
-            '[CallResultOverlay] Loaded screen size from Hive: W=$screenWidth, H=$screenHeight',
-          );
-        } else {
-          log(
-            '[CallResultOverlay] No screen size found in Hive. Using defaults.',
-          );
-        }
-      } catch (e) {
-        log(
-          '[CallResultOverlay] Error reading screen size from Hive: $e. Using defaults.',
-        );
-      }
+      int screenWidth = 350; // 기본 너비
+      int screenHeight = 500; // 기본 높이
 
       // <<< SystemAlertWindow API 사용 및 읽어온 크기 적용 >>>
       await SystemAlertWindow.showSystemWindow(
-        height: screenHeight,
-        width: screenWidth,
+        height: screenHeight, // <<< 읽어온 값 사용
+        width: screenWidth, // <<< 읽어온 값 사용
         gravity: SystemWindowGravity.BOTTOM,
         prefMode: SystemWindowPrefMode.OVERLAY,
-        isDisableClicks: false,
-        notificationTitle: _phoneNumber!, // null 아님 보장됨
-        notificationBody: _isLoading ? '정보 검색 중...' : '결과 확인', // 상태 반영
+        notificationTitle: _phoneNumber!, // <<< null 아님 보장
+        notificationBody: '전화 수신 중...',
+        // <<< system_alert_window에는 flag, visibility, alignment 등 직접적 파라미터 없음 >>>
+        // <<< 필요 시 header/body/footer 위젯으로 UI 구성 >>>
       );
-      log('[CallResultOverlay] showSystemWindow called successfully.');
-      if (!_isOverlayVisible) {
-        setState(() {
-          _isOverlayVisible = true;
-        });
-      }
+
+      setState(() {
+        _isOverlayVisible = true;
+      });
+      log(
+        '[CallResultOverlay] Overlay shown successfully using SystemAlertWindow.',
+      );
     } catch (e) {
-      log('[CallResultOverlay] Error showing/updating overlay: $e');
-      if (mounted && _isOverlayVisible) {
-        setState(() {
-          _isOverlayVisible = false;
-        });
-      }
+      log(
+        '[CallResultOverlay] Error showing overlay using SystemAlertWindow: $e',
+      );
+      setState(() {
+        _isOverlayVisible = false;
+      });
     }
+    */
   }
 
   // 닫기 버튼 등에서 오버레이를 닫을 때 상태 업데이트
