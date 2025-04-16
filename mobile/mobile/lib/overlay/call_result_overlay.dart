@@ -141,11 +141,9 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
         final settingsBox = await Hive.openBox('settings');
         final double? storedWidth = settingsBox.get('screenWidth') as double?;
         final double? storedHeight = settingsBox.get('screenHeight') as double?;
-        log('storedWidth: $storedWidth');
-        log('storedHeight: $storedHeight');
         if (storedWidth != null && storedHeight != null) {
           screenWidth = storedWidth.floor();
-          screenHeight = (storedHeight * 0.5).floor();
+          screenHeight = storedHeight.floor();
           log(
             '[CallResultOverlay] Loaded screen size from Hive: W=$screenWidth, H=$screenHeight',
           );
@@ -164,10 +162,10 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
       await SystemAlertWindow.showSystemWindow(
         height: screenHeight,
         width: screenWidth,
-        gravity: SystemWindowGravity.CENTER,
+        gravity: SystemWindowGravity.BOTTOM,
         prefMode: SystemWindowPrefMode.OVERLAY,
-        notificationTitle: _phoneNumber!,
-        notificationBody: _isLoading ? '정보 검색 중...' : '결과 확인',
+        notificationTitle: _phoneNumber!, // null 아님 보장됨
+        notificationBody: _isLoading ? '정보 검색 중...' : '결과 확인', // 상태 반영
       );
       log('[CallResultOverlay] showSystemWindow called successfully.');
       if (!_isOverlayVisible) {
@@ -210,7 +208,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
   void _scrollUp() {
     // Clamp 추가 및 예외 처리 보강
     if (_scrollController.hasClients) {
-      final newOffset = _scrollController.offset - 200;
+      final newOffset = _scrollController.offset - 100;
       _scrollController.animateTo(
         newOffset.clamp(
           0.0,
@@ -225,7 +223,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
   void _scrollDown() {
     // Clamp 추가 및 예외 처리 보강
     if (_scrollController.hasClients) {
-      final newOffset = _scrollController.offset + 200;
+      final newOffset = _scrollController.offset + 100;
       _scrollController.animateTo(
         newOffset.clamp(
           0.0,
@@ -254,7 +252,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
 
     // 최소/최대 높이 설정 (예시: 최소 20%, 최대 60%)
     double minHeightFactor = 0.2;
-    double maxHeightFactor = 1.0;
+    double maxHeightFactor = 0.6;
 
     // 로딩 중일 때 고정 높이 또는 최소 높이 사용
     if (_isLoading) {
@@ -291,17 +289,14 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
             minHeight: size.height * minHeightFactor,
             maxHeight: size.height * maxHeightFactor,
           ),
-          margin: const EdgeInsets.symmetric(
-            vertical: 10,
-            horizontal: 10,
-          ), // 여백 유지
+          margin: const EdgeInsets.symmetric(horizontal: 20), // 여백 유지
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(15), // 약간 둥글게
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 5,
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 15,
                 spreadRadius: 2,
                 offset: const Offset(0, 4),
               ),
@@ -311,27 +306,29 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
             borderRadius: BorderRadius.circular(15),
             child: Stack(
               children: [
-                // 컨텐츠 영역 (패딩 복원)
+                // 컨텐츠 영역
                 Positioned.fill(
-                  // top: 30, // <<< 핸들용 top 패딩 제거
                   child: Padding(
-                    // <<< bottom 패딩 복원 >>>
-                    padding: const EdgeInsets.only(bottom: 50, top: 0),
-                    child: _buildContent(),
+                    padding: const EdgeInsets.only(
+                      bottom: 50,
+                      top: 0,
+                    ), // 상단 닫기, 하단 스크롤 버튼 공간
+                    child: _buildContent(), // 컨텐츠 빌드 함수 사용
                   ),
                 ),
-
-                // 닫기 버튼 (원래 위치)
+                // 닫기 버튼 (항상 표시)
                 Positioned(
-                  top: 5,
-                  right: 5,
+                  top: 5, // 위치 조정
+                  right: 5, // 위치 조정
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.black54),
-                    onPressed: _closeOverlay,
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.black54,
+                    ), // 색상 조정
+                    onPressed: _closeOverlay, // 닫기 함수 연결
                   ),
                 ),
-
-                // <<< 스크롤 버튼들 복원 >>>
+                // 스크롤 버튼들 (결과가 있고, 스크롤 가능할 때만?)
                 if (!_isLoading && _result != null)
                   Positioned(
                     bottom: 0,
@@ -347,9 +344,9 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
                           colors: [
                             Colors.white.withOpacity(0.0),
                             Colors.white.withOpacity(0.9),
-                            Colors.white,
+                            Colors.white, // 하단 확실히 가리기
                           ],
-                          stops: const [0.0, 0.5, 1.0],
+                          stops: const [0.0, 0.5, 1.0], // 그라데이션 정지점 조정
                         ),
                       ),
                       child: Row(
@@ -358,12 +355,12 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
                           IconButton(
                             icon: const Icon(Icons.arrow_upward),
                             onPressed: _scrollUp,
-                            color: Theme.of(context).primaryColor,
+                            color: Theme.of(context).primaryColor, // 테마 색상 사용
                           ),
                           IconButton(
                             icon: const Icon(Icons.arrow_downward),
                             onPressed: _scrollDown,
-                            color: Theme.of(context).primaryColor,
+                            color: Theme.of(context).primaryColor, // 테마 색상 사용
                           ),
                         ],
                       ),
