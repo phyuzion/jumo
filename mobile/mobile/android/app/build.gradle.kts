@@ -24,7 +24,7 @@ android {
     defaultConfig {
         applicationId = "com.jumo.mobile"
         minSdk = 24
-        targetSdk = 34
+        targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
