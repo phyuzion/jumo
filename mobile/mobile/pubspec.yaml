@@ -38,8 +38,8 @@ dependencies:
   crypto: ^3.0.6
   dio: ^5.8.0+1
   gql_dio_link: ^1.0.1+1
+  flutter_overlay_window_sdk34: ^0.4.7
   flutter_broadcasts_4m: ^0.4.2
-  system_alert_window: ^2.0.4
 
 dev_dependencies:
   flutter_test:

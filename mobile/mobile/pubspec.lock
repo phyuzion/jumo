@@ -491,6 +491,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_overlay_window_sdk34:
+    dependency: "direct main"
+    description:
+      name: flutter_overlay_window_sdk34
+      sha256: a4eb64319406ab96d2518662f0c97d224eeb6263c0a2575053c3a92a6f725538
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.7"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -1314,14 +1322,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.1"
-  system_alert_window:
-    dependency: "direct main"
-    description:
-      name: system_alert_window
-      sha256: "7ea0b4006e1d654493d75b5912d4a3b8d29b5f2f49c542bd7a1d98c38229aadf"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.0.4"
   term_glyph:
     dependency: transitive
     description:

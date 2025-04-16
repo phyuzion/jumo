@@ -175,7 +175,6 @@ class _MyAppStatefulState extends State<MyAppStateful>
       _initializeAppController();
       _handleInitialPayload();
       _listenToBackgroundService();
-      _saveScreenSizeToHive();
     });
   }
 
@@ -275,27 +274,6 @@ class _MyAppStatefulState extends State<MyAppStateful>
       }
     });
     log('[_MyAppStatefulState] Listening to background service UI updates.');
-  }
-
-  Future<void> _saveScreenSizeToHive() async {
-    await Future.delayed(Duration.zero);
-    if (!mounted) return;
-
-    try {
-      final size = MediaQuery.of(context).size;
-      final screenWidth = size.width;
-      final screenHeight = size.height;
-      log(
-        '[_MyAppStatefulState] Saving screen size: Width=$screenWidth, Height=$screenHeight',
-      );
-
-      final settingsBox = await Hive.openBox('settings');
-      await settingsBox.put('screenWidth', screenWidth);
-      await settingsBox.put('screenHeight', screenHeight);
-      log('[_MyAppStatefulState] Screen size saved to Hive.');
-    } catch (e) {
-      log('[_MyAppStatefulState] Error saving screen size to Hive: $e');
-    }
   }
 
   @override

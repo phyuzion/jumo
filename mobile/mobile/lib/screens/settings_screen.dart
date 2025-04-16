@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
@@ -12,7 +13,6 @@ import 'package:mobile/widgets/blocked_numbers_dialog.dart';
 import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/app_controller.dart';
-import 'package:system_alert_window/system_alert_window.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -121,15 +121,13 @@ class _SettingsScreenState extends State<SettingsScreen>
     final defDialer = await NativeDefaultDialerMethods.isDefaultDialer();
 
     // (B) 오버레이 권한 여부
-    final overlayOk = await SystemAlertWindow.checkPermissions(
-      prefMode: SystemWindowPrefMode.OVERLAY,
-    );
+    final overlayOk = await FlutterOverlayWindow.isPermissionGranted();
 
     if (!mounted) return;
     setState(() {
       _checking = false;
       _isDefaultDialer = defDialer;
-      _overlayGranted = overlayOk ?? false;
+      _overlayGranted = overlayOk;
     });
   }
 
@@ -149,9 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   /// 오버레이 권한
   Future<void> _onRequestOverlayPermission() async {
-    final result = await SystemAlertWindow.requestPermissions(
-      prefMode: SystemWindowPrefMode.OVERLAY,
-    );
+    final result = await FlutterOverlayWindow.requestPermission();
     // result == true 면 성공
     if (!mounted) return;
     if (result == true) {

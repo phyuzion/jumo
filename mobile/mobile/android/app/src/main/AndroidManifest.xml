@@ -19,7 +19,6 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
 
     <application
@@ -82,6 +81,13 @@
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="dataSync"
         />
+
+        <service android:name="flutter.overlay.window.flutter_overlay_window.OverlayService" 
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Phone call"/>
+        </service>
 
         <!-- Flutter Local Notifications receivers (for scheduled alarms, etc.) -->
         <receiver
