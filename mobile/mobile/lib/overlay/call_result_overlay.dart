@@ -3,9 +3,10 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
-import 'package:flutter_overlay_window_sdk34/flutter_overlay_window_sdk34.dart';
 import 'package:mobile/models/search_result_model.dart';
 import 'package:mobile/widgets/search_result_widget.dart';
+import 'package:system_alert_window/system_alert_window.dart';
+import 'package:hive/hive.dart';
 
 class CallResultOverlay extends StatefulWidget {
   const CallResultOverlay({Key? key}) : super(key: key);
@@ -41,7 +42,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
     _overlayListenerSubscription?.cancel();
 
     // 새 리스너 등록
-    _overlayListenerSubscription = FlutterOverlayWindow.overlayListener.listen((
+    _overlayListenerSubscription = SystemAlertWindow.overlayListener.listen((
       data,
     ) {
       if (data is! Map<String, dynamic>) {
@@ -103,8 +104,10 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
   // 오버레이를 표시해야 할 때만 호출 (중복 호출 방지)
   Future<void> _showOverlayIfNeeded() async {
     if (_isOverlayVisible) {
-      log('[CallResultOverlay] Overlay already visible. Skipping showOverlay.');
-      return; // 이미 표시되어 있으면 아무것도 안 함
+      log(
+        '[CallResultOverlay] Overlay already visible. Skipping showOverlay call.',
+      );
+      return;
     }
 
     if (_phoneNumber == null) {
@@ -112,37 +115,42 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
       return;
     }
 
-    log('[CallResultOverlay] Attempting to show overlay for $_phoneNumber');
+    log(
+      '[CallResultOverlay] Attempting to show overlay for $_phoneNumber using SystemAlertWindow...',
+    );
+    /*
     try {
-      // 기존 오버레이가 혹시 남아있을 경우 대비하여 닫기 시도 (선택적)
-      // if (await FlutterOverlayWindow.isActive()) {
-      //   await FlutterOverlayWindow.closeOverlay();
-      //   log('[CallResultOverlay] Closed existing overlay before showing new one.');
-      // }
+      // <<< Hive에서 화면 크기 읽어오기 >>>
+      int screenWidth = 350; // 기본 너비
+      int screenHeight = 500; // 기본 높이
 
-      await FlutterOverlayWindow.showOverlay(
-        enableDrag: true, // 필요에 따라 설정 조정
-        alignment: OverlayAlignment.bottomCenter, // 필요에 따라 설정 조정
-        height: WindowSize.matchParent, // 필요에 따라 설정 조정
-        width: WindowSize.matchParent, // 필요에 따라 설정 조정
-        overlayTitle: _phoneNumber!, // 알림용 제목
-        overlayContent: "전화 수신 중...", // 알림용 내용
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
-        positionGravity: PositionGravity.auto,
+      // <<< SystemAlertWindow API 사용 및 읽어온 크기 적용 >>>
+      await SystemAlertWindow.showSystemWindow(
+        height: screenHeight, // <<< 읽어온 값 사용
+        width: screenWidth, // <<< 읽어온 값 사용
+        gravity: SystemWindowGravity.BOTTOM,
+        prefMode: SystemWindowPrefMode.OVERLAY,
+        notificationTitle: _phoneNumber!, // <<< null 아님 보장
+        notificationBody: '전화 수신 중...',
+        // <<< system_alert_window에는 flag, visibility, alignment 등 직접적 파라미터 없음 >>>
+        // <<< 필요 시 header/body/footer 위젯으로 UI 구성 >>>
+      );
+
+      setState(() {
+        _isOverlayVisible = true;
+      });
+      log(
+        '[CallResultOverlay] Overlay shown successfully using SystemAlertWindow.',
+      );
+    } catch (e) {
+      log(
+        '[CallResultOverlay] Error showing overlay using SystemAlertWindow: $e',
       );
       setState(() {
-        // <<< setState 추가
-        _isOverlayVisible = true; // 오버레이 표시 성공 상태 업데이트
-      });
-      log('[CallResultOverlay] Overlay shown successfully.');
-    } catch (e) {
-      log('[CallResultOverlay] Error showing overlay: $e');
-      setState(() {
-        // <<< setState 추가
-        _isOverlayVisible = false; // 에러 발생 시 상태 초기화
+        _isOverlayVisible = false;
       });
     }
+    */
   }
 
   // 닫기 버튼 등에서 오버레이를 닫을 때 상태 업데이트
@@ -151,7 +159,7 @@ class _CallResultOverlayState extends State<CallResultOverlay> {
     // setState(() { _isOverlayVisible = false; });
 
     try {
-      await FlutterOverlayWindow.closeOverlay();
+      await SystemAlertWindow.closeSystemWindow();
       setState(() {
         // <<< setState 추가
         _isOverlayVisible = false; // 오버레이 닫힘 상태 업데이트
