@@ -17,10 +17,10 @@ class DropdownMenusWidget extends StatelessWidget {
               builder: (context) => const NotificationDialog(),
             );
             break;
-          case 'reportError':
-            // 예: 오류 신고 로직 / 신고 페이지 이동
-            Navigator.pushNamed(context, '/reportError');
-            break;
+          // case 'reportError':
+          //   // 예: 오류 신고 로직 / 신고 페이지 이동
+          //   Navigator.pushNamed(context, '/reportError');
+          //   break;
           case 'logout':
             GraphQLClientManager.logout();
             break;
@@ -32,10 +32,10 @@ class DropdownMenusWidget extends StatelessWidget {
               value: 'notifications',
               child: Text('알림'),
             ),
-            const PopupMenuItem<String>(
-              value: 'reportError',
-              child: Text('오류 신고'),
-            ),
+            // const PopupMenuItem<String>(
+            //   value: 'reportError',
+            //   child: Text('오류 신고'),
+            // ),
             const PopupMenuItem<String>(value: 'logout', child: Text('로그아웃')),
           ],
       // (선택) 아이콘을 지정하지 않으면 기본 3점 점메뉴처럼 보입니다.
