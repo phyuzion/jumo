@@ -8,40 +8,82 @@ import 'package:mobile/graphql/log_api.dart';
 import 'package:mobile/utils/constants.dart';
 
 class SmsController {
-  static const storageKey = 'sms_logs';
-  Box get _smsLogBox => Hive.box(storageKey);
+  static const String _storageKey = 'sms_logs';
+  static const String _lastSyncKey = 'lastSmsUploadTimestamp';
+  Box get _smsLogBox => Hive.box(_storageKey);
+  Box get _settingsBox => Hive.box('settings');
 
-  /// 최신 SMS 가져와 로컬(Hive) 저장 + 백그라운드 서비스에 업로드 요청
+  /// 최신 SMS 가져와 변경된 내역만 서버 업로드
   Future<void> refreshSms() async {
     try {
-      final messages = await SmsInbox.getAllSms(count: 30);
+      // 1. 마지막 업로드 시간 확인
+      final int lastUploadTimestamp =
+          _settingsBox.get(_lastSyncKey, defaultValue: 0) as int;
 
-      final smsList = <Map<String, dynamic>>[];
+      // 2. 최신 SMS 읽기
+      final messages = await SmsInbox.getAllSms(count: 30); // Inbox만 읽는 한계 인지
+
+      // 3. 메시지 처리 및 로컬 캐시용 목록 생성
+      final List<Map<String, dynamic>> processedSmsList = []; // 로컬 저장용 전체 목록
+      int latestTimestampInFetched = lastUploadTimestamp; // 읽어온 것 중 최신 시간
+
       for (final msg in messages) {
-        final map = {
-          'address': normalizePhone(msg.address ?? ''),
-          'body': msg.body ?? '',
-          'date': localEpochToUtcEpoch(msg.date ?? 0),
-          'type': msg.type ?? '',
-        };
-        if ((map['address'] as String).isNotEmpty) {
-          smsList.add(map);
+        final address = normalizePhone(msg.address ?? '');
+        final body = msg.body ?? '';
+        final dateMillis = localEpochToUtcEpoch(msg.date ?? 0);
+        final type = msg.type?.toString() ?? 'UNKNOWN';
+
+        if (address.isNotEmpty && dateMillis > 0) {
+          // 날짜 유효성 체크 추가
+          final smsMap = {
+            'address': address,
+            'body': body,
+            'date': dateMillis,
+            'type': type,
+          };
+          processedSmsList.add(smsMap);
+          if (dateMillis > latestTimestampInFetched) {
+            latestTimestampInFetched = dateMillis;
+          }
         }
       }
-      await _smsLogBox.put('logs', jsonEncode(smsList));
+      // 로컬 캐시는 항상 최신 30개로 업데이트 (기존 방식)
+      await _smsLogBox.put('logs', jsonEncode(processedSmsList));
 
-      // 서버 업로드 요청 (백그라운드)
-      final smsForServer = prepareSmsForServer(smsList);
-      if (smsForServer.isNotEmpty) {
-        await LogApi.updateSMSLog(smsForServer);
+      // 4. 새로 업로드할 메시지 필터링
+      final List<Map<String, dynamic>> newSmsToUpload =
+          processedSmsList.where((sms) {
+            return (sms['date'] as int) > lastUploadTimestamp;
+          }).toList();
+
+      // 5. 새 메시지 업로드 및 마지막 타임스탬프 업데이트
+      if (newSmsToUpload.isNotEmpty) {
+        // 업로드 전 시간순 정렬 (오래된 것부터)
+        newSmsToUpload.sort(
+          (a, b) => (a['date'] as int).compareTo(b['date'] as int),
+        );
+        // 업로드할 배치 중 가장 최신 타임스탬프 찾기
+        final int latestTimestampInNewBatch =
+            newSmsToUpload.last['date'] as int;
+
+        final smsForServer = prepareSmsForServer(newSmsToUpload);
+        if (smsForServer.isNotEmpty) {
+          try {
+            bool uploadSuccess = await LogApi.updateSMSLog(smsForServer);
+            if (uploadSuccess) {
+              await _settingsBox.put(_lastSyncKey, latestTimestampInNewBatch);
+            }
+          } catch (uploadError) {
+            log('[SmsController] LogApi.updateSMSLog FAILED: $uploadError');
+          }
+        }
       }
     } catch (e, st) {
       log('[SmsController] refreshSms error: $e\n$st');
     }
   }
 
-  /// 서버 전송용 데이터 준비 (static으로 변경)
-  static List<Map<String, dynamic>> prepareSmsForServer(
+  List<Map<String, dynamic>> prepareSmsForServer(
     List<Map<String, dynamic>> localSms,
   ) {
     return localSms.map((m) {
@@ -57,17 +99,5 @@ class SmsController {
         'smsType': smsType,
       };
     }).toList();
-  }
-
-  /// 로컬(Hive)에 저장된 smsLogs 읽기
-  List<Map<String, dynamic>> getSavedSms() {
-    final logString = _smsLogBox.get('logs', defaultValue: '[]') as String;
-    try {
-      final decodedList = jsonDecode(logString) as List;
-      return decodedList.cast<Map<String, dynamic>>().toList();
-    } catch (e) {
-      log('[SmsController] Error decoding SMS logs from Hive: $e');
-      return [];
-    }
   }
 }

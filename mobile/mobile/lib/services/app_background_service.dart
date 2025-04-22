@@ -271,9 +271,9 @@ Future<void> onStart(ServiceInstance service) async {
   });
 
   // SMS 동기화 타이머 (15분 유지)
-  smsSyncTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+  smsSyncTimer = Timer.periodic(const Duration(minutes: 10), (timer) async {
     log('[BackgroundService] Starting periodic SMS sync...');
-    await _smsController.refreshSms(); // 읽기+저장+업로드 헬퍼 호출
+    _smsController.refreshSms(); // 읽기+저장+업로드 헬퍼 호출
   });
 
   // --- 이벤트 기반 작업들 ---
