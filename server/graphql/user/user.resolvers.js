@@ -292,8 +292,8 @@ module.exports = {
 
       // 중복 제거 및 시간순 정렬
       const uniqueLogs = callLogs.filter((log, index, self) =>
-        index === self.findIndex((t) => 
-          t.phoneNumber === log.phoneNumber && 
+        index === self.findIndex((t) =>
+          t.phoneNumber === log.phoneNumber &&
           t.time.getTime() === log.time.getTime()
         )
       ).sort((a, b) => b.time - a.time).slice(0, 200);
@@ -313,7 +313,7 @@ module.exports = {
         }));
 
         if (operations.length > 0) {
-          await CallLog.bulkWrite(operations, { 
+          await CallLog.bulkWrite(operations, {
             session,
             ordered: false
           });
@@ -324,7 +324,7 @@ module.exports = {
       try {
         const oneDayAgo = new Date();
         oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-        
+
         const recentLogs = logs.filter(log => {
           const dt = parseDateTime(log.time);
           return dt >= oneDayAgo;
@@ -335,43 +335,27 @@ module.exports = {
             // 각 로그에 대해 upsert 수행
             for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
-              
-              // 기존 레코드 조회
-              const existing = await TodayRecord.findOne({
-                phoneNumber: log.phoneNumber,
-                userName: user.name
-              }).session(session);
 
-              if (existing) {
-                // 기존 레코드가 있고 새로운 통화가 더 최신인 경우만 업데이트
-                if (dt > existing.createdAt) {
-                  await TodayRecord.findOneAndUpdate(
-                    { _id: existing._id },
-                    {
-                      $set: {
-                        userType: user.userType,
-                        callType: log.callType,
-                        createdAt: dt
-                      }
-                    },
-                    { session }
-                  );
-                }
-              } else {
-                // 새 레코드 생성
-                await TodayRecord.create([{
+              await TodayRecord.findOneAndUpdate(
+                {
                   phoneNumber: log.phoneNumber,
                   userName: user.name,
-                  userType: user.userType,
-                  callType: log.callType,
-                  createdAt: dt
-                }], { session });
-              }
+                  interactionType: 'CALL'
+                },
+                {
+                  $set: {
+                    userType: user.userType,
+                    interactionType: 'CALL',
+                    createdAt: dt
+                  }
+                },
+                { upsert: true, new: true, session }
+              );
             }
           });
         }
       } catch (error) {
-        console.error('TodayRecord 업데이트 실패:', error);
+        console.error('TodayRecord 업데이트 실패 (CallLog):', error);
         throw new Error('통화 기록 업데이트 중 오류가 발생했습니다.');
       }
 
@@ -407,8 +391,8 @@ module.exports = {
       // 중복 제거 및 시간순 정렬
       const uniqueLogs = smsLogs
         .filter((log, index, self) =>
-          index === self.findIndex((t) => 
-            t.phoneNumber === log.phoneNumber && 
+          index === self.findIndex((t) =>
+            t.phoneNumber === log.phoneNumber &&
             t.time.getTime() === log.time.getTime()
           )
         )
@@ -430,14 +414,51 @@ module.exports = {
         }));
 
         if (operations.length > 0) {
-          await SmsLog.bulkWrite(operations, { 
+          await SmsLog.bulkWrite(operations, {
             session,
             ordered: false
           });
         }
       });
 
-      return true;
+      // 2. TodayRecord 업데이트
+      try {
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+        // 최근 24시간 내 로그만 필터링 (SmsLog 업데이트 시 사용한 uniqueLogs 활용)
+        const recentLogs = uniqueLogs.filter(log => log.time >= oneDayAgo);
+
+        if (recentLogs.length > 0) {
+          await withTransaction(async (session) => {
+            // 각 로그에 대해 upsert 수행
+            for (const log of recentLogs) {
+              // findOneAndUpdate로 SMS 타입 TodayRecord 업데이트/생성
+              await TodayRecord.findOneAndUpdate(
+                {
+                  phoneNumber: log.phoneNumber,
+                  userName: user.name, // user 객체 필요 (리졸버 시작 시 가져옴)
+                  interactionType: 'SMS' // <<< 필터 조건: SMS 타입
+                },
+                {
+                  $set: {
+                    userType: user.userType, // user 객체 필요
+                    interactionType: 'SMS', // <<< 저장 데이터: SMS 타입
+                    createdAt: log.time // SMS 시간으로 업데이트
+                  }
+                },
+                { upsert: true, new: true, session } // upsert 옵션 사용
+              );
+            }
+          });
+        }
+      } catch (error) {
+        console.error('TodayRecord 업데이트 실패 (SmsLog):', error);
+        // 여기서 에러를 throw하면 전체 뮤테이션이 실패할 수 있음. 로깅만 할 수도 있음.
+        // throw new Error('SMS 기록 업데이트 중 오류가 발생했습니다.');
+      }
+
+      return true; // SmsLog 업데이트 성공 여부 반환 (기존과 동일)
     },
 
     // (새로 추가) 로그인 유저의 settings 저장
