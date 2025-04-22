@@ -4,6 +4,7 @@ import 'dart:developer';
 import 'package:mobile/services/native_methods.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/providers/call_state_provider.dart';
+import 'package:mobile/utils/constants.dart'; // <<< normalizePhone 임포트
 // TODO: Import constants if needed (normalizePhone etc.)
 
 // OnCallScreen의 핵심 UI를 담당하는 위젯
@@ -70,12 +71,10 @@ class OnCallContents extends StatelessWidget {
           ),
         ),
 
-        // --- 중간 버튼 영역 (Card 제거) ---
+        const Spacer(), // 상단 정보와 하단 버튼 그룹 사이 공간
+        // --- 중간 버튼 영역 (음소거, 통화대기, 스피커) ---
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 40.0,
-            vertical: 10.0,
-          ), // 패딩 조정
+          padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 10.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -104,29 +103,59 @@ class OnCallContents extends StatelessWidget {
           ),
         ),
 
-        const Spacer(), // 하단 종료 버튼 위 공간
-        // --- 하단 종료 버튼 ---
+        // --- 하단 버튼 영역 (검색, 종료, 문자) ---
         Padding(
           padding: const EdgeInsets.only(bottom: 20.0, top: 10.0),
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: const CircleBorder(),
-              padding: const EdgeInsets.all(18), // 크기 약간 줄임
-            ),
-            onPressed: onHangUp, // <<< 외부 콜백 직접 사용
-            child: const Icon(
-              Icons.call_end,
-              color: Colors.white,
-              size: 30,
-            ), // 크기 약간 줄임
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // 검색 버튼
+              _buildActionButton(
+                icon: Icons.search,
+                label: '검색',
+                color: Colors.orange,
+                onTap: () => _onTapSearch(context, number),
+              ),
+              // 통화 종료 버튼
+              _buildActionButton(
+                icon: Icons.call_end,
+                label: '종료',
+                color: Colors.red,
+                onTap: onHangUp,
+              ),
+              // 문자 버튼
+              _buildActionButton(
+                icon: Icons.message,
+                label: '문자',
+                color: Colors.blue, // 문자 색상
+
+                onTap: () => _onTapMessage(context, number),
+              ),
+            ],
           ),
         ),
       ],
     );
   }
 
-  // 아이콘 버튼 빌더 (OnCallScreen 스타일 참고, 라벨 포함)
+  // 검색 버튼 탭 핸들러
+  void _onTapSearch(BuildContext context, String number) {
+    Navigator.pushNamed(
+      context,
+      '/search',
+      arguments: {'number': normalizePhone(number), 'isRequested': false},
+    );
+    // TODO: Close popup after navigation? (Notify HomeScreen)
+  }
+
+  // <<< 문자 보내기 핸들러 추가 >>>
+  Future<void> _onTapMessage(BuildContext context, String number) async {
+    log('[CallEndedContent] Message button tapped for $number');
+    await NativeMethods.openSmsApp(number);
+    // TODO: Close popup?
+  }
+
+  // 아이콘 버튼 빌더 (CallEndedContent 스타일 참고, 활성/비활성 상태 추가)
   Widget _buildIconButton({
     required BuildContext context,
     required IconData icon,
@@ -151,4 +180,38 @@ class OnCallContents extends StatelessWidget {
       ),
     );
   }
+
+  // 액션 버튼 빌더 (call_ended_content.dart 스타일 - 원형 배경)
+  Widget _buildActionButton({
+    required IconData icon,
+    required Color color,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 55,
+            height: 55,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 28),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.black87, fontSize: 12),
+        ),
+      ],
+    );
+  }
 }
+
+// <<< 아래 함수는 utils/constants.dart 에 정의되어 있다면 제거해도 됩니다 >>>
+// String normalizePhone(String phone) {
+//   // TODO: Implement actual phone normalization logic if needed
+//   return phone.replaceAll(RegExp(r'[^0-9+]'), '');
+// }
