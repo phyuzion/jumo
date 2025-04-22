@@ -14,16 +14,8 @@ class SmsController {
   /// 최신 SMS 가져와 로컬(Hive) 저장 + 백그라운드 서비스에 업로드 요청
   Future<void> refreshSms() async {
     try {
-      // SMS 읽기 (권한 필요)
-      final stepWatch = Stopwatch()..start();
-      // count 제한 확인 (필요 시 조정)
       final messages = await SmsInbox.getAllSms(count: 30);
-      log(
-        '[SmsController] SmsInbox.getAllSms() took: ${stepWatch.elapsedMilliseconds}ms, count: ${messages.length}',
-      );
-      stepWatch.reset();
 
-      stepWatch.start();
       final smsList = <Map<String, dynamic>>[];
       for (final msg in messages) {
         final map = {
@@ -36,18 +28,7 @@ class SmsController {
           smsList.add(map);
         }
       }
-      log(
-        '[SmsController] Processing SMS took: ${stepWatch.elapsedMilliseconds}ms',
-      );
-      stepWatch.reset();
-
-      // 로컬(Hive) 저장 (JSON 문자열)
-      stepWatch.start();
       await _smsLogBox.put('logs', jsonEncode(smsList));
-      log(
-        '[SmsController] Saving SMS to Hive took: ${stepWatch.elapsedMilliseconds}ms',
-      );
-      stepWatch.stop();
 
       // 서버 업로드 요청 (백그라운드)
       final smsForServer = prepareSmsForServer(smsList);
