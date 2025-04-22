@@ -12,7 +12,7 @@ import 'package:mobile/widgets/blocked_numbers_dialog.dart';
 import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/app_controller.dart';
-import 'package:system_alert_window/system_alert_window.dart';
+//import 'package:system_alert_window/system_alert_window.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -29,8 +29,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   /// 기본 전화앱 여부
   bool _isDefaultDialer = false;
 
+  /* overlay removed
   /// 오버레이 권한 여부
   bool _overlayGranted = false;
+  */
 
   /// 유저 정보
   String _phoneNumber = '(unknown)';
@@ -120,16 +122,20 @@ class _SettingsScreenState extends State<SettingsScreen>
     // (A) 기본 전화앱 여부
     final defDialer = await NativeDefaultDialerMethods.isDefaultDialer();
 
+    /* overlay removed
     // (B) 오버레이 권한 여부
     final overlayOk = await SystemAlertWindow.checkPermissions(
       prefMode: SystemWindowPrefMode.OVERLAY,
     );
+    */
 
     if (!mounted) return;
     setState(() {
       _checking = false;
       _isDefaultDialer = defDialer;
+      /* overlay removed
       _overlayGranted = overlayOk ?? false;
+      */
     });
   }
 
@@ -147,6 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
+  /* overlay removed
   /// 오버레이 권한
   Future<void> _onRequestOverlayPermission() async {
     final result = await SystemAlertWindow.requestPermissions(
@@ -173,6 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen>
       }
     }
   }
+*/
 
   /// 비밀번호 변경
   Future<void> _onChangePassword() async {
@@ -544,7 +552,10 @@ class _SettingsScreenState extends State<SettingsScreen>
                     _blockedNumbersController.blockedHistory,
                   ),
             ),
-          ] else ...[
+          ],
+
+          /*overlay removed
+          else ...[
             // 오버레이 권한 (기본 전화앱이 아닐 때만 표시)
             SwitchListTile(
               secondary: const Icon(Icons.window),
@@ -556,7 +567,7 @@ class _SettingsScreenState extends State<SettingsScreen>
               },
             ),
           ],
-
+          */
           const Divider(),
 
           // 비밀번호 변경

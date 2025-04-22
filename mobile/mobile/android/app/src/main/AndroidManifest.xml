@@ -13,7 +13,9 @@
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- overlay removed
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

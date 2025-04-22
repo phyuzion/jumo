@@ -52,12 +52,10 @@ class GraphQLClientManager {
           password: savedPw,
           phoneNumber: myNumber,
         );
-        log(
-          '[GraphQL] tryAutoLogin: Re-login success with $savedId, $myNumber',
-        );
+        log('[GraphQL] tryAutoLogin: Re-login success with $loginResult');
       } catch (e) {
         log('[GraphQL] tryAutoLogin failed: $e');
-        await logout();
+        //await logout();
       }
     }
   }

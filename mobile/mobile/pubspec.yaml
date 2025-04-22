@@ -39,7 +39,6 @@ dependencies:
   dio: ^5.8.0+1
   gql_dio_link: ^1.0.1+1
   flutter_broadcasts_4m: ^0.4.2
-  system_alert_window: ^2.0.4
 
 dev_dependencies:
   flutter_test:

@@ -21,10 +21,7 @@ import 'package:mobile/utils/constants.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
-import 'package:system_alert_window/system_alert_window.dart';
-import 'package:mobile/controllers/search_records_controller.dart';
-import 'package:mobile/models/search_result_model.dart';
-import 'package:mobile/services/native_default_dialer_methods.dart';
+//import 'package:system_alert_window/system_alert_window.dart';
 
 const int CALL_STATUS_NOTIFICATION_ID = 1111; // 통화 상태 알림 전용 ID
 const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
@@ -452,6 +449,7 @@ Future<void> onStart(ServiceInstance service) async {
           '[BackgroundService][BroadcastReceiver] Fetched isDefaultDialer status: $isDefaultDialer',
         );
 
+        /* overlay removed
         // 이제 isDefaultDialer 값을 사용
         if (!isDefaultDialer) {
           if (state == 'RINGING' &&
@@ -519,6 +517,7 @@ Future<void> onStart(ServiceInstance service) async {
             '[BackgroundService][BroadcastReceiver] Default dialer is active. Skipping overlay logic.',
           );
         }
+        */
       }
     });
 

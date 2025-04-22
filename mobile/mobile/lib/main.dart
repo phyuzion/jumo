@@ -8,7 +8,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
-import 'package:mobile/overlay/call_result_overlay.dart';
+import 'package:mobile/deprecated/call_result_overlay.dart';
 import 'package:mobile/screens/board_screen.dart';
 import 'package:mobile/screens/content_detail_screen.dart';
 import 'package:mobile/screens/content_edit_screen.dart';
@@ -34,6 +34,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:hive_ce/hive.dart';
 
+/* overlay removed
 /// 오버레이 전용 엔트리
 @pragma('vm:entry-point')
 Future<void> overlayMain() async {
@@ -78,7 +79,7 @@ Future<void> overlayMain() async {
     ),
   );
 }
-
+*/
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

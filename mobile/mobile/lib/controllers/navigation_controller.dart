@@ -1,10 +1,8 @@
 import 'dart:developer';
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
-import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';

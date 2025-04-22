@@ -112,8 +112,9 @@ class MainActivity : FlutterFragmentActivity() {
     private fun requestSetDefaultDialer() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
-            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER) &&
-                !roleManager.isRoleHeld(RoleManager.ROLE_DIALER)) {
+            if (roleManager.isRoleAvailable(RoleManager.ROLE_DIALER)
+            // &&!roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
+            ) {
                 val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_DIALER)
                 roleRequestLauncher.launch(intent)
             } else {

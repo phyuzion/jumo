@@ -34,20 +34,6 @@ List<PhoneBookModel> _parseContacts(List<Contact> contacts) {
   return result;
 }
 
-// compute 함수를 사용하기 위해 top-level 함수로 분리
-Map<String, Map<String, String>> _parseContactsToMap(List<Contact> contacts) {
-  final Map<String, Map<String, String>> resultMap = {};
-  for (var c in contacts) {
-    if (c.phones.isNotEmpty) {
-      final phone = normalizePhone(c.phones.first.number.trim());
-      final name =
-          c.displayName.trim().isNotEmpty ? c.displayName.trim() : '(No Name)';
-      resultMap[c.id] = {'name': name, 'phoneNumber': phone};
-    }
-  }
-  return resultMap;
-}
-
 // 해시 계산 헬퍼 함수
 String _calculateContactHash(Contact contact) {
   // 해시 계산에 사용할 데이터 조합 (ID, 이름, 첫번째 전화번호)
