@@ -4,8 +4,8 @@ import 'dart:developer';
 
 import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:mobile/graphql/log_api.dart';
 import 'package:mobile/utils/constants.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 
 class SmsController {
   static const storageKey = 'sms_logs';
@@ -13,13 +13,11 @@ class SmsController {
 
   /// 최신 SMS 가져와 로컬(Hive) 저장 + 백그라운드 서비스에 업로드 요청
   Future<void> refreshSms() async {
-    final stopwatch = Stopwatch()..start(); // 전체 시간 측정 시작
-    log('[SmsController] Refreshing SMS...');
     try {
       // SMS 읽기 (권한 필요)
       final stepWatch = Stopwatch()..start();
       // count 제한 확인 (필요 시 조정)
-      final messages = await SmsInbox.getAllSms(count: 10);
+      final messages = await SmsInbox.getAllSms(count: 30);
       log(
         '[SmsController] SmsInbox.getAllSms() took: ${stepWatch.elapsedMilliseconds}ms, count: ${messages.length}',
       );
@@ -54,21 +52,10 @@ class SmsController {
       // 서버 업로드 요청 (백그라운드)
       final smsForServer = prepareSmsForServer(smsList);
       if (smsForServer.isNotEmpty) {
-        final service = FlutterBackgroundService();
-        if (await service.isRunning()) {
-          log('[SmsController] Invoking uploadSmsLogs...');
-          service.invoke('uploadSmsLogs', {'sms': smsForServer});
-        } else {
-          log('[SmsController] Background service not running for SMS upload.');
-        }
+        await LogApi.updateSMSLog(smsForServer);
       }
     } catch (e, st) {
       log('[SmsController] refreshSms error: $e\n$st');
-    } finally {
-      stopwatch.stop();
-      log(
-        '[SmsController] Total refreshSms took: ${stopwatch.elapsedMilliseconds}ms',
-      );
     }
   }
 

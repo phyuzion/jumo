@@ -40,7 +40,7 @@ Future<void> onStart(ServiceInstance service) async {
   int ongoingSeconds = 0;
   String _currentNumberForTimer = "";
   String _currentCallerNameForTimer = "";
-
+  SmsController _smsController = SmsController();
   // <<< Hive 초기화 (기존 코드 유지) >>>
   bool hiveInitialized = false;
   Box? settingsBox;
@@ -271,9 +271,9 @@ Future<void> onStart(ServiceInstance service) async {
   });
 
   // SMS 동기화 타이머 (15분 유지)
-  smsSyncTimer = Timer.periodic(const Duration(minutes: 15), (timer) async {
+  smsSyncTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
     log('[BackgroundService] Starting periodic SMS sync...');
-    await _refreshAndUploadSms(); // 읽기+저장+업로드 헬퍼 호출
+    await _smsController.refreshSms(); // 읽기+저장+업로드 헬퍼 호출
   });
 
   // --- 이벤트 기반 작업들 ---
@@ -543,41 +543,6 @@ Future<void> performInitialBackgroundTasks() async {
   log(
     '[BackgroundService][performInitialBackgroundTasks] Initial tasks finished.',
   );
-}
-
-// --- Helper Functions for Background Tasks (Top-level) ---
-
-// SMS 새로고침 및 업로드 함수 (주기적 타이머가 호출)
-Future<void> _refreshAndUploadSms() async {
-  log('[BackgroundService] Executing _refreshAndUploadSms...');
-  try {
-    final smsLogBox = Hive.box('sms_logs');
-    if (!smsLogBox.isOpen) {
-      log('[BG] sms_logs box closed.');
-      return;
-    }
-
-    final messages = await SmsInbox.getAllSms(count: 10);
-    final smsList = <Map<String, dynamic>>[];
-    // ... (파싱 로직)
-    for (final msg in messages) {
-      /* ... */
-    }
-
-    await smsLogBox.put('logs', jsonEncode(smsList));
-    log('[BackgroundService] Saved ${smsList.length} sms logs locally.');
-
-    // 서버 업로드
-    final smsForServer = SmsController.prepareSmsForServer(smsList);
-    if (smsForServer.isNotEmpty) {
-      // TODO: 업로드 실패 시 재시도 로직 추가 필요
-      await LogApi.updateSMSLog(smsForServer);
-      log('[BackgroundService] Uploaded sms logs after refresh.');
-    }
-  } catch (e) {
-    log('[BackgroundService] Error handling _refreshAndUploadSms: $e');
-    // TODO: 권한 오류 등 처리
-  }
 }
 
 // 차단 목록 관련 동기화 함수 (로직 강화)

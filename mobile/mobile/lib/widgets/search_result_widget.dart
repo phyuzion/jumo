@@ -363,37 +363,36 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
     final yearStr = (dt != null) ? '${dt.year}' : '';
     final dateStr = formatDateOnly(r.createdAt);
     final timeStr = formatTimeOnly(r.createdAt);
-
-    // userType 컬러
     final userTypeColor = _pickColorForUserType(r.userType);
 
-    // callType에 따른 아이콘 설정
+    // <<< interactionType에 따른 아이콘 및 색상 설정 >>>
     IconData iconData;
     Color iconColor;
-    switch (r.callType.toLowerCase()) {
-      case 'in':
-        iconData = Icons.call_received;
-        iconColor = Colors.green;
-        break;
-      case 'out':
-        iconData = Icons.call_made;
-        iconColor = Colors.blue;
-        break;
-      case 'miss':
-        iconData = Icons.call_missed;
-        iconColor = Colors.red;
-        break;
-      default:
-        iconData = Icons.phone;
-        iconColor = Colors.grey;
+    if (r.interactionType == 'SMS') {
+      iconData = Icons.message; // 문자 아이콘
+      iconColor = Colors.blue; // 예: 파란색
+    } else {
+      // 'CALL' 또는 'UNKNOWN' 등 기본값
+      iconData = Icons.phone; // 전화 아이콘 (기존 callType 구분 로직 제거)
+      iconColor = Colors.green; // 예: 초록색
+      // 필요 시 기존 callType 로직을 여기에 추가할 수도 있지만, 모델에서 제거했으므로 불필요
+      /*
+      switch (r.callType.toLowerCase()) { // callType 필드 이제 없음!
+        case 'in': iconData = Icons.call_received; iconColor = Colors.green; break;
+        case 'out': iconData = Icons.call_made; iconColor = Colors.blue; break;
+        case 'miss': iconData = Icons.call_missed; iconColor = Colors.red; break;
+        default: iconData = Icons.phone; iconColor = Colors.grey;
+      }
+      */
     }
+    // <<< 아이콘 설정 끝 >>>
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Icon(iconData, color: iconColor, size: 22),
+          Icon(iconData, color: iconColor, size: 22), // <<< 수정된 아이콘/색상 사용
           const SizedBox(width: 8),
           Expanded(
             child: Text(

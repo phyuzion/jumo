@@ -3,7 +3,7 @@ class TodayRecord {
   final String phoneNumber;
   final String userName;
   final String userType;
-  final String callType;
+  final String interactionType;
   final String createdAt;
 
   TodayRecord({
@@ -11,7 +11,7 @@ class TodayRecord {
     required this.phoneNumber,
     required this.userName,
     required this.userType,
-    required this.callType,
+    required this.interactionType,
     required this.createdAt,
   });
 
@@ -21,7 +21,7 @@ class TodayRecord {
       phoneNumber: json['phoneNumber'] as String,
       userName: json['userName'] as String,
       userType: json['userType'] as String? ?? '일반',
-      callType: json['callType'] as String,
+      interactionType: json['interactionType'] as String? ?? 'UNKNOWN',
       createdAt: json['createdAt'] as String,
     );
   }
@@ -32,7 +32,7 @@ class TodayRecord {
       'phoneNumber': phoneNumber,
       'userName': userName,
       'userType': userType,
-      'callType': callType,
+      'interactionType': interactionType,
       'createdAt': createdAt,
     };
   }

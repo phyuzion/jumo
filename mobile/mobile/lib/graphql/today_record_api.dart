@@ -10,7 +10,7 @@ class TodayRecordApi {
         phoneNumber
         userName
         userType
-        callType
+        interactionType
         createdAt
       }
     }
