@@ -6,12 +6,10 @@ import 'dart:developer';
 import 'package:mobile/widgets/incoming_call_content.dart'; // <<< 새 위젯 임포트
 import 'package:mobile/widgets/on_call_contents.dart'; // <<< 새 위젯 임포트
 import 'package:mobile/widgets/call_ended_content.dart'; // <<< 새 위젯 임포트
-import 'package:mobile/controllers/contacts_controller.dart'; // <<< 컨트롤러 임포트
 import 'package:mobile/controllers/search_records_controller.dart'; // <<< 컨트롤러 임포트
 import 'package:mobile/models/search_result_model.dart'; // <<< 모델 임포트
 import 'package:provider/provider.dart'; // <<< Provider 임포트
 import 'package:mobile/utils/constants.dart'; // normalizePhone
-import 'package:mobile/controllers/phone_state_controller.dart'; // <<< PhoneStateController 임포트
 import 'dart:async';
 
 class FloatingCallWidget extends StatefulWidget {
@@ -45,14 +43,12 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   bool _isLoading = false;
   String? _error;
   SearchResultModel? _searchResult;
-  String _loadedCallerName = ''; // 로드된 이름 저장
 
   @override
   void initState() {
     super.initState();
-    _loadedCallerName = widget.callerName;
     if (widget.isVisible && widget.callState == CallState.incoming) {
-      _loadIncomingData();
+      _loadSearchResult();
     }
   }
 
@@ -60,14 +56,11 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   void didUpdateWidget(FloatingCallWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // <<< 데이터 로딩 조건 수정 >>>
+    // <<< 데이터 로딩 조건 수정 (searchResult 로딩만 고려) >>>
     bool needsLoad = false;
     if (widget.isVisible && widget.callState == CallState.incoming) {
-      // 팝업이 열렸거나 번호가 변경되었는지 확인
       bool visibilityChanged = !oldWidget.isVisible && widget.isVisible;
       bool numberChanged = oldWidget.number != widget.number;
-
-      // 이전에 로딩된 결과가 있고 번호가 같다면 로드 안 함
       bool alreadyLoadedWithSameNumber =
           (_searchResult != null || _error != null) && !numberChanged;
 
@@ -75,49 +68,31 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
           !_isLoading &&
           !alreadyLoadedWithSameNumber) {
         needsLoad = true;
-        log(
-          '[FloatingCallWidget] Needs incoming data load. VisibleChanged: $visibilityChanged, NumberChanged: $numberChanged, IsLoading: $_isLoading, AlreadyLoaded: $alreadyLoadedWithSameNumber',
-        );
       }
     }
 
-    // 팝업이 닫혔거나 상태가 incoming이 아니면 로딩 중단/초기화 (선택적)
     if (!widget.isVisible || widget.callState != CallState.incoming) {
       if (_isLoading) {
-        // TODO: Cancel ongoing network requests if possible
-        log(
-          '[FloatingCallWidget] Cancelling potential load due to state/visibility change.',
-        );
         if (mounted) setState(() => _isLoading = false);
       }
-      // _searchResult = null; // 필요 시 결과 초기화
-      // _loadedCallerName = '';
     }
 
     if (needsLoad) {
-      _loadIncomingData();
+      _loadSearchResult();
     }
   }
 
-  // <<< 데이터 로딩 함수 (재진입 방지 추가) >>>
-  Future<void> _loadIncomingData() async {
-    if (!mounted || _isLoading) return; // <<< 재진입 방지
+  Future<void> _loadSearchResult() async {
+    if (!mounted || _isLoading) return;
     setState(() {
       _isLoading = true;
       _error = null;
       _searchResult = null;
     });
-    log('[FloatingCallWidget] Loading incoming data for ${widget.number}...');
 
     try {
       final normalizedNumber = normalizePhone(widget.number);
-      // <<< PhoneStateController 통해 이름 조회 >>>
-      final contactsCtrl = context.read<ContactsController>();
-      _loadedCallerName = await contactsCtrl.getContactName(widget.number);
-      if (!mounted) return;
-      setState(() {});
 
-      // 검색 데이터 로드 (SearchRecordsController 사용)
       final phoneData = await SearchRecordsController.searchPhone(
         normalizedNumber,
       );
@@ -126,27 +101,20 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         normalizedNumber,
       );
       if (!mounted) return;
-
       setState(() {
         _searchResult = SearchResultModel(
           phoneNumberModel: phoneData,
           todayRecords: todayRecords,
         );
-        _isLoading = false;
+        _isLoading = false; // 로딩 완료
       });
-      log('[FloatingCallWidget] Incoming data loaded successfully.');
     } catch (e, st) {
-      log('[FloatingCallWidget] Error loading incoming data: $e\n$st');
+      log('[FloatingCallWidget] Error loading search data: $e\n$st');
       if (mounted) {
         setState(() {
           _error = '데이터 로딩 실패';
           _isLoading = false;
         });
-      }
-    } finally {
-      // <<< finally 블록 추가하여 로딩 상태 확실히 해제 >>>
-      if (mounted) {
-        setState(() => _isLoading = false);
       }
     }
   }
@@ -154,6 +122,10 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   @override
   Widget build(BuildContext context) {
     double panelBorderRadius = 20.0;
+
+    // <<< Provider에서 직접 이름 가져오기 >>>
+    final callStateProvider = context.watch<CallStateProvider>();
+    final currentCallerName = callStateProvider.callerName;
 
     // --- 확장 팝업 컨텐츠 결정 ---
     Widget popupContent;
@@ -163,20 +135,16 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         break;
       case CallState.incoming:
         popupContent = IncomingCallContent(
-          callerName: _loadedCallerName,
+          callerName: currentCallerName,
           number: widget.number,
           searchResult: _searchResult,
           isLoading: _isLoading,
           error: _error,
-          // TODO: Add onAccept/onReject callbacks
         );
         break;
       case CallState.active:
         popupContent = OnCallContents(
-          callerName:
-              _loadedCallerName.isNotEmpty
-                  ? _loadedCallerName
-                  : widget.callerName,
+          callerName: currentCallerName,
           number: widget.number,
           connected: widget.connected,
           onHangUp: widget.onHangUp,
@@ -185,15 +153,9 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         break;
       case CallState.ended:
         popupContent = CallEndedContent(
-          callerName:
-              _loadedCallerName.isNotEmpty
-                  ? _loadedCallerName
-                  : widget.callerName,
+          callerName: currentCallerName,
           number: widget.number,
-          reason: context.read<CallStateProvider>().callEndReason,
-        );
-        log(
-          '[FloatingCallWidget] Passing reason to CallEndedContent: ${context.read<CallStateProvider>().callEndReason}',
+          reason: callStateProvider.callEndReason,
         );
         break;
       default:

@@ -52,12 +52,24 @@ class CallStateProvider with ChangeNotifier {
   bool get isSpeakerOn => _isSpeakerOn;
   int get endedCountdownSeconds => _endedCountdownSeconds; // <<< Getter 추가
 
-  // 생성자 수정
+  // 생성자 수정: 리스너 등록
   CallStateProvider(
     this.phoneStateController,
     this.callLogController,
     this.contactsController,
-  );
+  ) {
+    contactsController.addListener(_onContactsUpdated); // <<< 리스너 등록
+  }
+
+  // <<< 연락처 업데이트 리스너 메소드 >>>
+  void _onContactsUpdated() {
+    // 연락처 로딩이 완료되었고, 현재 번호가 있으며, 이름이 아직 없거나 '알 수 없음'일 때
+    if (!contactsController.isLoading &&
+        _number.isNotEmpty &&
+        (_callerName.isEmpty || _callerName == '알 수 없음')) {
+      _fetchAndUpdateCallerName(_number); // 이름 조회 재시도
+    }
+  }
 
   // 상태 업데이트 메소드 수정
   Future<void> updateCallState({
@@ -93,7 +105,14 @@ class CallStateProvider with ChangeNotifier {
       _number = number;
       _isConnected = isConnected;
       _callEndReason = reason;
-      _callerName = callerName; // 이름은 shouldFetchName과 별개로 우선 업데이트
+      // Provider의 _callerName은 _fetchAndUpdateCallerName에서만 업데이트되도록 초기 업데이트에서 제외하거나,
+      // 들어온 callerName 값이 유효할 때만 업데이트 (예: '알 수 없음'이 아닐 때)
+      if (callerName.isNotEmpty && callerName != '알 수 없음') {
+        _callerName = callerName;
+      } else if (_number != number) {
+        // 번호가 바뀌면 이전 이름 정보는 유효하지 않으므로 초기화
+        _callerName = '';
+      }
     }
     if (state == CallState.active) {
       _duration = duration;
@@ -162,20 +181,23 @@ class CallStateProvider with ChangeNotifier {
     if (needsNotify) {
       notifyListeners();
     }
+    // 초기 이름 조회 시도
     if (shouldFetchName) {
-      _fetchAndUpdateCallerName(number); // 이름 비동기 조회 시작
+      _fetchAndUpdateCallerName(number);
     }
   }
 
-  // 이름 비동기 조회 및 업데이트 함수 (수정)
+  // 이름 비동기 조회 및 업데이트 함수 (재시도 로직 제거)
   Future<void> _fetchAndUpdateCallerName(String number) async {
-    log('[Provider] Fetching caller name for $number...');
     try {
       String fetchedName = await contactsController.getContactName(number);
+
+      // 이름이 실제로 변경되었을 때만 업데이트 및 알림
       if (fetchedName.isNotEmpty && _callerName != fetchedName) {
-        log('[Provider] Caller name updated: $fetchedName');
         _callerName = fetchedName;
         notifyListeners();
+      } else {
+        log('[Provider] Fetched name is same as current: "$_callerName"');
       }
     } catch (e) {
       log('[Provider] Error fetching caller name: $e');
@@ -185,9 +207,7 @@ class CallStateProvider with ChangeNotifier {
   // 팝업 토글 메소드 (UI에서 호출)
   void togglePopup() {
     _isPopupVisible = !_isPopupVisible;
-    log('[Provider] Popup toggled: $_isPopupVisible');
     notifyListeners();
-    // }
   }
 
   // Ended 상태 후 Idle 전환 타이머 시작 (수정)
@@ -216,7 +236,6 @@ class CallStateProvider with ChangeNotifier {
   void _cancelEndedStateTimer() {
     if (_endedStateTimer?.isActive ?? false) {
       _endedStateTimer!.cancel();
-      log('[Provider] Canceled ended state timer.');
     }
     _endedStateTimer = null;
     _endedCountdownSeconds = 10; // <<< 카운트다운 리셋
@@ -228,11 +247,9 @@ class CallStateProvider with ChangeNotifier {
     try {
       await NativeMethods.toggleMute(newState);
       _isMuted = newState;
-      log('[Provider] Mute toggled: $_isMuted');
       notifyListeners();
     } catch (e) {
       log('[Provider] Error toggling mute: $e');
-      // 에러 발생 시 상태 롤백 등 처리?
     }
   }
 
@@ -241,7 +258,6 @@ class CallStateProvider with ChangeNotifier {
     try {
       await NativeMethods.toggleHold(newState);
       _isHold = newState;
-      log('[Provider] Hold toggled: $_isHold');
       notifyListeners();
     } catch (e) {
       log('[Provider] Error toggling hold: $e');
@@ -253,7 +269,6 @@ class CallStateProvider with ChangeNotifier {
     try {
       await NativeMethods.toggleSpeaker(newState);
       _isSpeakerOn = newState;
-      log('[Provider] Speaker toggled: $_isSpeakerOn');
       notifyListeners();
     } catch (e) {
       log('[Provider] Error toggling speaker: $e');
@@ -263,9 +278,6 @@ class CallStateProvider with ChangeNotifier {
   // 버튼 상태 초기화 메소드
   void resetButtonStates() {
     if (_isMuted || _isHold || _isSpeakerOn) {
-      log(
-        '[Provider] Resetting button states: Mute=false, Hold=false, Speaker=false',
-      );
       _isMuted = false;
       _isHold = false;
       _isSpeakerOn = false;
@@ -285,7 +297,6 @@ class CallStateProvider with ChangeNotifier {
           '[Provider] Proximity Sensor Event: $event -> isNear: $isNear',
         ); // <<< 로그 추가
       });
-      log('[Provider] Proximity sensor listener started successfully.');
     } catch (e) {
       log('[Provider] Error starting proximity listener: $e');
     }
@@ -295,7 +306,6 @@ class CallStateProvider with ChangeNotifier {
   void _stopProximityListener() {
     _proximitySensorSubscription?.cancel();
     _proximitySensorSubscription = null;
-    log('[Provider] Proximity sensor listener stopped.');
   }
 
   // 앱 종료 등 리소스 해제 시 타이머 및 센서 리스너 정리
@@ -303,6 +313,7 @@ class CallStateProvider with ChangeNotifier {
   void dispose() {
     _cancelEndedStateTimer();
     _stopProximityListener(); // <<< dispose 시 리스너 중지 추가
+    contactsController.removeListener(_onContactsUpdated); // <<< 리스너 제거
     super.dispose();
   }
 }
