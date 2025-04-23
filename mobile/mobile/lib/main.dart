@@ -33,6 +33,7 @@ import 'package:mobile/models/blocked_history.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:mobile/utils/constants.dart';
 
 /* overlay removed
 /// 오버레이 전용 엔트리
@@ -80,7 +81,7 @@ Future<void> overlayMain() async {
   );
 }
 */
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -94,15 +95,88 @@ void main() async {
   final appDocumentDir = await getApplicationDocumentsDirectory();
   await Hive.initFlutter(appDocumentDir.path);
 
-  // TypeAdapter 등록
+  // --- 앱 버전 체크 및 Hive 초기화 로직 ---
+  const storedAppVersionKey = 'appVersion';
+  Box settingsBox; // Box 변수 선언
+  try {
+    settingsBox = await Hive.openBox('settings'); // 설정 박스 먼저 열기 시도
+  } catch (e) {
+    log(
+      '[AppInit] Failed to open settings box initially, attempting delete and retry: $e',
+    );
+    // settings box 열기 실패 시 삭제 후 재시도 (파일 손상 등 대비)
+    try {
+      await Hive.deleteBoxFromDisk('settings');
+      settingsBox = await Hive.openBox('settings');
+    } catch (e2) {
+      log('[AppInit] Failed to open settings box even after delete: $e2');
+      // 여기서 앱 실행을 중단하거나 안전 모드로 진입하는 등의 처리 필요
+      return;
+    }
+  }
+
+  final storedVersion = settingsBox.get(storedAppVersionKey) as String?;
+  log(
+    '[AppInit] Current App Version: $APP_VERSION, Stored Version: $storedVersion',
+  );
+
+  if (storedVersion == null || storedVersion != APP_VERSION) {
+    log('[AppInit] App version mismatch or first run. Clearing Hive boxes...');
+    try {
+      // <<< 초기화할 Hive Box 이름 목록 수정 >>>
+      const boxNamesToClear = [
+        'settings',
+        'blocked_history',
+        'call_logs',
+        'sms_logs',
+        'last_sync_state',
+        'notifications',
+        // 'auth', // <<< 로그인 정보 유지를 위해 제거!
+        'display_noti_ids',
+        'blocked_numbers',
+        'danger_numbers',
+        'bomb_numbers',
+      ];
+
+      // settingsBox는 이미 열려 있으므로 close 먼저 수행
+      await settingsBox.close();
+
+      for (final boxName in boxNamesToClear) {
+        log('[AppInit] Deleting Hive box: $boxName');
+        try {
+          // 개별 박스 삭제 에러 처리
+          await Hive.deleteBoxFromDisk(boxName);
+        } catch (deleteError) {
+          log('[AppInit] Error deleting box $boxName: $deleteError');
+          // 특정 박스 삭제 실패 시 로깅만 하고 계속 진행할 수 있음
+        }
+      }
+
+      // 버전 정보를 저장하기 위해 settings Box 다시 열기
+      settingsBox = await Hive.openBox('settings');
+      await settingsBox.put(storedAppVersionKey, APP_VERSION);
+      log(
+        '[AppInit] Hive boxes cleared and current version ($APP_VERSION) stored.',
+      );
+    } catch (e, st) {
+      log('[AppInit] Error clearing Hive boxes: $e\n$st');
+    }
+  } else {
+    log('[AppInit] App version matches. Skipping Hive box clearing.');
+  }
+  // --- 버전 체크 및 초기화 로직 끝 ---
+
+  // TypeAdapter 등록 (삭제 후 다시 등록 필요 시 여기에 위치하는 것이 안전)
   if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
     Hive.registerAdapter(BlockedHistoryAdapter());
     log('BlockedHistoryAdapter registered.');
   }
 
-  // ***** 모든 Box 열기를 먼저 완료 *****
+  // ***** 모든 Box 열기 (초기화 과정에서 닫혔을 수 있으므로 다시 열기) *****
   try {
-    await Hive.openBox('settings');
+    // settingsBox는 위에서 이미 다시 열었음
+    if (!settingsBox.isOpen)
+      settingsBox = await Hive.openBox('settings'); // 만약을 위해 isOpen 체크 후 열기
     await Hive.openBox<BlockedHistory>('blocked_history');
     await Hive.openBox('call_logs');
     await Hive.openBox('sms_logs');
@@ -111,11 +185,12 @@ void main() async {
     await Hive.openBox('auth');
     await Hive.openBox('display_noti_ids');
     await Hive.openBox('blocked_numbers');
+    await Hive.openBox<List<String>>('danger_numbers'); // <<< openBox 추가
+    await Hive.openBox<List<String>>('bomb_numbers'); // <<< openBox 추가
     log('All Hive boxes opened successfully in main.');
   } catch (e) {
     log('Error opening Hive boxes in main: $e');
-    // Box 열기 실패 시 앱 실행 중단 또는 오류 처리 필요
-    return; // 예: 앱 실행 중단
+    return;
   }
 
   // ***** Box 열기 완료 후 컨트롤러 생성 *****

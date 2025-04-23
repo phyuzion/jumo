@@ -292,8 +292,8 @@ module.exports = {
 
       // 중복 제거 및 시간순 정렬
       const uniqueLogs = callLogs.filter((log, index, self) =>
-        index === self.findIndex((t) =>
-          t.phoneNumber === log.phoneNumber &&
+        index === self.findIndex((t) => 
+          t.phoneNumber === log.phoneNumber && 
           t.time.getTime() === log.time.getTime()
         )
       ).sort((a, b) => b.time - a.time).slice(0, 200);
@@ -313,7 +313,7 @@ module.exports = {
         }));
 
         if (operations.length > 0) {
-          await CallLog.bulkWrite(operations, {
+          await CallLog.bulkWrite(operations, { 
             session,
             ordered: false
           });
@@ -324,7 +324,7 @@ module.exports = {
       try {
         const oneDayAgo = new Date();
         oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-
+        
         const recentLogs = logs.filter(log => {
           const dt = parseDateTime(log.time);
           return dt >= oneDayAgo;
@@ -335,8 +335,8 @@ module.exports = {
             // 각 로그에 대해 upsert 수행
             for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
-
-              await TodayRecord.findOneAndUpdate(
+              
+                  await TodayRecord.findOneAndUpdate(
                 {
                   phoneNumber: log.phoneNumber,
                   userName: user.name,
@@ -344,10 +344,10 @@ module.exports = {
                 },
                 {
                   $set: {
-                    userType: user.userType,
+                  userType: user.userType,
                     interactionType: 'CALL',
-                    createdAt: dt
-                  }
+                  createdAt: dt
+              }
                 },
                 { upsert: true, new: true, session }
               );
@@ -391,8 +391,8 @@ module.exports = {
       // 중복 제거 및 시간순 정렬
       const uniqueLogs = smsLogs
         .filter((log, index, self) =>
-          index === self.findIndex((t) =>
-            t.phoneNumber === log.phoneNumber &&
+          index === self.findIndex((t) => 
+            t.phoneNumber === log.phoneNumber && 
             t.time.getTime() === log.time.getTime()
           )
         )
@@ -414,7 +414,7 @@ module.exports = {
         }));
 
         if (operations.length > 0) {
-          await SmsLog.bulkWrite(operations, {
+          await SmsLog.bulkWrite(operations, { 
             session,
             ordered: false
           });

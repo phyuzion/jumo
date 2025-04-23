@@ -342,6 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen>
           // (1) 업데이트 알림 ListTile 수정
           if (_updateAvailable)
             ListTile(
+              // isThreeLine: true, // subtitle이 여러 줄이 될 수 있음을 명시 (선택적)
               title: const Text(
                 '새로운 버전 설치 가능!',
                 style: TextStyle(
@@ -349,23 +350,51 @@ class _SettingsScreenState extends State<SettingsScreen>
                   color: Colors.blue,
                 ),
               ),
-              subtitle: Text(
-                '서버 버전: $_serverVersion / 현재 버전: $APP_VERSION\n보안 이슈로 설치가 안될 경우 [직접 다운로드]로 설치하세요.',
-              ),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
+              subtitle: Column(
+                // <<< subtitle에 Column 사용
+                crossAxisAlignment: CrossAxisAlignment.start, // 텍스트 왼쪽 정렬
                 children: [
-                  ElevatedButton(
-                    onPressed: _onTapUpdateInstall,
-                    child: const Text('업데이트'),
+                  Text(
+                    // <<< 기존 subtitle 텍스트
+                    '서버 버전: $_serverVersion / 현재 버전: $APP_VERSION\n보안 이슈로 설치가 안될 경우 [직접 다운로드]로 설치하세요.',
                   ),
-                  const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: _onTapDirectDownload,
-                    child: const Text('직접 다운로드'),
+                  const SizedBox(height: 8), // 텍스트와 버튼 사이 간격
+                  Row(
+                    // <<< 버튼들을 담을 Row
+                    mainAxisAlignment: MainAxisAlignment.end, // 버튼들을 오른쪽으로 정렬
+                    children: [
+                      ElevatedButton(
+                        // <<< 업데이트 버튼
+                        onPressed: _onTapUpdateInstall,
+                        // 버튼 크기 조절 (선택적)
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          textStyle: TextStyle(fontSize: 13),
+                        ),
+                        child: const Text('업데이트'),
+                      ),
+                      const SizedBox(width: 8), // 버튼 사이 간격
+                      TextButton(
+                        // <<< 직접 다운로드 버튼
+                        onPressed: _onTapDirectDownload,
+                        // 버튼 크기 조절 (선택적)
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          textStyle: TextStyle(fontSize: 13),
+                        ),
+                        child: const Text('직접 다운로드'),
+                      ),
+                    ],
                   ),
                 ],
               ),
+              // trailing 제거
             ),
           ListTile(
             leading: const Icon(Icons.phone_android),
