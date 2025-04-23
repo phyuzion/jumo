@@ -12,6 +12,8 @@ import 'package:mobile/widgets/blocked_numbers_dialog.dart';
 import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:developer';
 //import 'package:system_alert_window/system_alert_window.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -87,10 +89,43 @@ class _SettingsScreenState extends State<SettingsScreen>
     });
   }
 
-  /// (B) [업데이트] 버튼을 누를 때
-  Future<void> _onTapUpdate() async {
+  /// (B-1) [업데이트] 버튼 탭 시 동작 (기존 방식: 자동 다운로드 및 설치 시도)
+  Future<void> _onTapUpdateInstall() async {
     final updateCtrl = UpdateController();
-    await updateCtrl.downloadAndInstallApk();
+    try {
+      await updateCtrl.downloadAndInstallApk();
+    } catch (e) {
+      log('Error during download/install: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('업데이트 중 오류 발생: $e')));
+    }
+  }
+
+  /// (B-2) [직접 다운로드] 버튼 탭 시 동작 (URL 실행)
+  Future<void> _onTapDirectDownload() async {
+    final Uri apkUrl = Uri.parse(
+      'https://jumo-vs8e.onrender.com/download/app.apk',
+    );
+
+    try {
+      if (await canLaunchUrl(apkUrl)) {
+        await launchUrl(apkUrl, mode: LaunchMode.externalApplication);
+      } else {
+        log('Could not launch $apkUrl');
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('다운로드 링크를 열 수 없습니다.')));
+      }
+    } catch (e) {
+      log('Error launching URL: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('링크를 여는 중 오류 발생: $e')));
+    }
   }
 
   @override
@@ -304,20 +339,32 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       body: ListView(
         children: [
-          // (1) 만약 서버 버전이 내 버전과 다르면 => "업데이트가 있습니다." 버튼
+          // (1) 업데이트 알림 ListTile 수정
           if (_updateAvailable)
             ListTile(
               title: const Text(
-                '업데이트가 있습니다!',
+                '새로운 버전 설치 가능!',
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.red,
+                  color: Colors.blue,
                 ),
               ),
-              subtitle: Text('서버 버전: $_serverVersion\n현재 버전: $APP_VERSION'),
-              trailing: ElevatedButton(
-                onPressed: _onTapUpdate,
-                child: const Text('업데이트'),
+              subtitle: Text(
+                '서버 버전: $_serverVersion / 현재 버전: $APP_VERSION\n보안 이슈로 설치가 안될 경우 [직접 다운로드]로 설치하세요.',
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    onPressed: _onTapUpdateInstall,
+                    child: const Text('업데이트'),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _onTapDirectDownload,
+                    child: const Text('직접 다운로드'),
+                  ),
+                ],
               ),
             ),
           ListTile(

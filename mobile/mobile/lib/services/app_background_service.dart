@@ -23,7 +23,9 @@ import 'package:mobile/controllers/app_controller.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
 
-const int CALL_STATUS_NOTIFICATION_ID = 1111; // 통화 상태 알림 전용 ID
+SmsController? _backgroundSmsController;
+
+const int CALL_STATUS_NOTIFICATION_ID = 1111;
 const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
 
 @pragma('vm:entry-point')
@@ -33,6 +35,10 @@ Future<void> onStart(ServiceInstance service) async {
     '[BackgroundService][onStart] Service instance started. Isolate: ${Isolate.current.hashCode}',
   );
 
+  // <<< 1. 시작 시 짧은 딜레이 추가 >>>
+  await Future.delayed(const Duration(milliseconds: 500));
+  log('[BackgroundService][onStart] Initial delay complete.');
+
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
@@ -40,10 +46,9 @@ Future<void> onStart(ServiceInstance service) async {
   int ongoingSeconds = 0;
   String _currentNumberForTimer = "";
   String _currentCallerNameForTimer = "";
-  SmsController _smsController = SmsController();
-  // <<< Hive 초기화 (기존 코드 유지) >>>
+
+  // <<< 2. Hive 초기화 >>>
   bool hiveInitialized = false;
-  Box? settingsBox;
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
     Hive.init(appDocumentDir.path);
@@ -68,9 +73,7 @@ Future<void> onStart(ServiceInstance service) async {
     service.stopSelf();
     return;
   }
-
   if (!hiveInitialized) {
-    // settingsBox null check 제거 (어차피 여기서 사용 안 함)
     log(
       '[BackgroundService][onStart] Hive initialization failed. Stopping service.',
     );
@@ -78,11 +81,49 @@ Future<void> onStart(ServiceInstance service) async {
     return;
   }
 
-  // <<< 기본 전화 앱 여부 확인 로직 삭제 (아래 Helper 함수 사용) >>>
-  // bool isDefaultDialer = false;
-  // try { ... } catch (e) { ... }
+  // <<< SmsController 인스턴스 생성 (Hive 초기화 이후) >>>
+  _backgroundSmsController = SmsController();
 
-  // --- Helper Function ---
+  // <<< 3. 초기 알림 설정 (Hive 초기화 이후 + 추가 딜레이) >>>
+  try {
+    await Future.delayed(const Duration(milliseconds: 200)); // 추가 딜레이
+    if (service is AndroidServiceInstance) {
+      if (await service.isForegroundService()) {
+        log(
+          '[BackgroundService] Setting initial foreground notification (delayed).',
+        );
+        flutterLocalNotificationsPlugin.show(
+          FOREGROUND_SERVICE_NOTIFICATION_ID,
+          'KOLPON 감지 중',
+          '실시간 통화 감지 중',
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              FOREGROUND_SERVICE_CHANNEL_ID,
+              'KOLPON 서비스 상태',
+              icon: 'ic_bg_service_small',
+              ongoing: true,
+              autoCancel: false,
+              importance: Importance.low,
+              priority: Priority.low,
+              playSound: false,
+              enableVibration: false,
+              onlyAlertOnce: true,
+            ),
+          ),
+          payload: 'idle',
+        );
+        log('[BackgroundService] Initial foreground notification set.');
+      } else {
+        log(
+          '[BackgroundService] Service is not in foreground mode, skipping initial notification.',
+        );
+      }
+    }
+  } catch (e) {
+    log('[BackgroundService][onStart] Error setting initial notification: $e');
+  }
+
+  // --- Helper Function 정의 --- (코드 순서 변경 가능성에 유의)
   // 메인 Isolate에 isDefaultDialer 상태를 요청하고 응답을 기다리는 함수
   Future<bool> _fetchIsDefaultDialerFromMain() async {
     final completer = Completer<bool>();
@@ -117,7 +158,6 @@ Future<void> onStart(ServiceInstance service) async {
 
     return completer.future;
   }
-  // --- End Helper Function ---
 
   // <<< 시간 포맷 함수 정의 먼저 >>>
   String _formatDurationBackground(int seconds) {
@@ -187,40 +227,6 @@ Future<void> onStart(ServiceInstance service) async {
     log('[BackgroundService] Call timer started.');
   }
 
-  // <<< 로그 추가: Hive 초기화 시도 전 >>>
-  log('[BackgroundService][onStart] Attempting to initialize Hive...');
-
-  // Hive 초기화 실패 시 종료
-  if (!hiveInitialized) return;
-
-  // <<< 서비스 시작 시 초기 알림 설정 >>>
-  if (service is AndroidServiceInstance) {
-    if (await service.isForegroundService()) {
-      log('[BackgroundService] Setting initial foreground notification.');
-      flutterLocalNotificationsPlugin.show(
-        FOREGROUND_SERVICE_NOTIFICATION_ID,
-        'KOLPON 감지 중', // 초기 제목
-        '실시간 통화 감지 중', // 초기 내용
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            FOREGROUND_SERVICE_CHANNEL_ID,
-            'KOLPON 서비스 상태',
-            icon: 'ic_bg_service_small',
-            ongoing: true,
-            autoCancel: false,
-            importance: Importance.low,
-            priority: Priority.low,
-            playSound: false,
-            enableVibration: false,
-            onlyAlertOnce: true,
-          ),
-        ),
-        payload: 'idle', // 초기 페이로드
-      );
-    }
-  }
-  // <<< 초기 알림 설정 끝 >>>
-
   log('[BackgroundService] Setting up periodic timers and event listeners...');
 
   // --- 주기적 작업들 ---
@@ -273,7 +279,7 @@ Future<void> onStart(ServiceInstance service) async {
   // SMS 동기화 타이머 (15분 유지)
   smsSyncTimer = Timer.periodic(const Duration(minutes: 10), (timer) async {
     log('[BackgroundService] Starting periodic SMS sync...');
-    _smsController.refreshSms(); // 읽기+저장+업로드 헬퍼 호출
+    _backgroundSmsController?.refreshSms(); // 읽기+저장+업로드 헬퍼 호출
   });
 
   // --- 이벤트 기반 작업들 ---
