@@ -2,6 +2,7 @@
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:mobile/graphql/client.dart';
 import 'package:mobile/models/phone_number_model.dart';
+import 'dart:developer';
 
 class SearchApi {
   static const _getPhoneNumberQuery = r'''
@@ -28,6 +29,12 @@ class SearchApi {
           interactionType
           createdAt
         }
+        isRegisteredUser
+        registeredUserInfo {
+          userName
+          userRegion
+          userType
+        }
       }
     }
   ''';
@@ -37,6 +44,9 @@ class SearchApi {
     bool isRequested = false,
   }) async {
     final client = GraphQLClientManager.client;
+
+    await client.resetStore(refetchQueries: false);
+    log('[SearchApi] GraphQL cache reset.');
 
     final options = QueryOptions(
       document: gql(_getPhoneNumberQuery),
@@ -48,9 +58,22 @@ class SearchApi {
     GraphQLClientManager.handleExceptions(result);
 
     final data = result.data?['getPhoneNumber'];
-    if (data == null) return null;
+    log('[SearchApi] Raw data received from server for $phone: $data');
 
-    return PhoneNumberModel.fromJson(data);
+    if (data == null) {
+      log('[SearchApi] No data received from server for $phone.');
+      return null;
+    }
+
+    try {
+      log('[SearchApi] Attempting to parse data into PhoneNumberModel...');
+      final model = PhoneNumberModel.fromJson(data as Map<String, dynamic>);
+      log('[SearchApi] Parsed model: ${model.toJson()}');
+      return model;
+    } catch (e, st) {
+      log('[SearchApi] Error parsing PhoneNumberModel: $e\n$st');
+      return null;
+    }
   }
 
   /// ====== 새로 추가: getPhoneNumbersByType ======

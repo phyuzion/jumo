@@ -1,5 +1,31 @@
 import 'package:mobile/models/today_record.dart';
 
+class RegisteredUserInfoModel {
+  final String userName;
+  final String? userRegion;
+  final String userType;
+
+  RegisteredUserInfoModel({
+    required this.userName,
+    this.userRegion,
+    required this.userType,
+  });
+
+  factory RegisteredUserInfoModel.fromJson(Map<String, dynamic> json) {
+    return RegisteredUserInfoModel(
+      userName: json['userName'] as String? ?? '',
+      userRegion: json['userRegion'] as String?,
+      userType: json['userType'] as String? ?? '일반',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'userName': userName,
+    'userRegion': userRegion,
+    'userType': userType,
+  };
+}
+
 class PhoneNumberModel {
   final String id;
   final String phoneNumber;
@@ -7,6 +33,8 @@ class PhoneNumberModel {
   final int blockCount;
   final List<PhoneRecordModel> records;
   final List<TodayRecord> todayRecords;
+  final bool isRegisteredUser;
+  final RegisteredUserInfoModel? registeredUserInfo;
 
   PhoneNumberModel({
     required this.id,
@@ -15,6 +43,8 @@ class PhoneNumberModel {
     required this.blockCount,
     required this.records,
     required this.todayRecords,
+    required this.isRegisteredUser,
+    this.registeredUserInfo,
   });
 
   factory PhoneNumberModel.fromJson(Map<String, dynamic> json) {
@@ -29,13 +59,21 @@ class PhoneNumberModel {
             ?.map((e) => TodayRecord.fromJson(e))
             .toList();
 
+    final userInfoJson = json['registeredUserInfo'];
+    final RegisteredUserInfoModel? userInfo =
+        userInfoJson != null
+            ? RegisteredUserInfoModel.fromJson(userInfoJson)
+            : null;
+
     return PhoneNumberModel(
-      id: json['id'] as String,
-      phoneNumber: json['phoneNumber'] as String,
+      id: json['id'] as String? ?? json['phoneNumber'] as String? ?? '',
+      phoneNumber: json['phoneNumber'] as String? ?? '',
       type: json['type'] as int? ?? 0,
       blockCount: json['blockCount'] as int? ?? 0,
       records: recs ?? [],
       todayRecords: todayRecs ?? [],
+      isRegisteredUser: json['isRegisteredUser'] as bool? ?? false,
+      registeredUserInfo: userInfo,
     );
   }
 
@@ -47,6 +85,8 @@ class PhoneNumberModel {
       'blockCount': blockCount,
       'records': records.map((r) => r.toJson()).toList(),
       'todayRecords': todayRecords.map((r) => r.toJson()).toList(),
+      'isRegisteredUser': isRegisteredUser,
+      'registeredUserInfo': registeredUserInfo?.toJson(),
     };
   }
 }
