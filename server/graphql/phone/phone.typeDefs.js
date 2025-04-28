@@ -13,6 +13,13 @@ module.exports = gql`
     phoneNumber: String # phoneNumber 필드 추가 (Nullable 또는 Non-nullable?)
   }
 
+  type RegisteredUserInfo {
+    # ID는 필요 없을 수 있음 (식별은 phoneNumber로)
+    userName: String!
+    userRegion: String
+    userType: String!
+  }
+
   type PhoneNumber {
     id: ID!
     phoneNumber: String!
@@ -20,6 +27,8 @@ module.exports = gql`
     blockCount: Int!
     records: [Record!]!
     todayRecords: [TodayRecord]
+    isRegisteredUser: Boolean!
+    registeredUserInfo: RegisteredUserInfo
   }
 
   type BlockNumber {

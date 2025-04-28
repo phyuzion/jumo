@@ -181,73 +181,103 @@ module.exports = {
   Query: {
     async getPhoneNumber(_, { phoneNumber, isRequested }, { tokenData }) {
       if (!tokenData) throw new AuthenticationError('로그인이 필요합니다.');
-      if (!phoneNumber || phoneNumber.trim() === '') {
+      const normalizedPhoneNumber = phoneNumber?.trim();
+      if (!normalizedPhoneNumber) {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
 
-      // 유저이고 isRequested가 true일 때만 검색 횟수 체크
+      // --- 검색 횟수 체크 로직 (동일) ---
       if (isRequested && tokenData.userId) {
         const user = await User.findById(tokenData.userId).select('searchCount lastSearchTime grade');
         if (!user) {
           throw new UserInputError('유저를 찾을 수 없습니다.');
         }
-
-        // 오늘 날짜의 시작 시간 (00:00:00)
         const today = new Date();
         today.setHours(0, 0, 0, 0);
-        console.log('today=', today);
-        console.log('user.lastSearchTime=', user.lastSearchTime);
-
-        // 마지막 검색 시간이 오늘이 아니면 카운트 리셋
         if (!user.lastSearchTime || user.lastSearchTime < today) {
           user.searchCount = 0;
         }
-
-        // grade에 해당하는 limit 값 가져오기
         const grade = await Grade.findOne({ name: user.grade });
         if (!grade) {
           throw new UserInputError('유효하지 않은 등급입니다.');
         }
-
-        // limit 값보다 크면 에러
         if (user.searchCount >= grade.limit) {
           throw new ForbiddenError('오늘의 검색 제한을 초과했습니다. 내일 다시 시도해주세요.');
         }
-
-        // 검색 횟수 증가 및 시간 업데이트
         user.searchCount += 1;
         user.lastSearchTime = new Date();
         await user.save();
       }
+      // --- 검색 횟수 체크 로직 끝 ---
 
-      // <<< PhoneNumber 정보와 TodayRecord 정보를 병렬로 조회 >>>
-      const [phoneDoc, todayDocs] = await Promise.all([
-        PhoneNumber.findOne({ phoneNumber }).lean(), // lean() 사용 권장
-        TodayRecord.find({ phoneNumber }).sort({ createdAt: -1 }).lean(),
+      // <<< 사용자 정보, PhoneNumber 정보, TodayRecord 정보를 병렬로 조회 >>>
+      const [registeredUser, phoneDoc, todayDocs] = await Promise.all([
+        User.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
+        PhoneNumber.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
+        TodayRecord.find({ phoneNumber: normalizedPhoneNumber }).sort({ createdAt: -1 }).lean(),
       ]);
 
-      if (!phoneDoc) return null; // PhoneNumber 정보가 없으면 null 반환
-
-      // <<< TodayRecord 결과 포맷팅 (기존 TodayRecord Resolver와 유사하게) >>>
+      // TodayRecord 포맷팅 (항상 수행)
       const formattedTodayRecords = todayDocs.map(record => ({
-        id: record._id,
+        id: record._id.toString(),
         phoneNumber: record.phoneNumber,
         userName: record.userName,
         userType: record.userType,
         interactionType: record.interactionType,
-        createdAt: record.createdAt.toISOString(), // Date -> ISO String
+        createdAt: record.createdAt.toISOString(),
       }));
 
-      // <<< 결과 객체에 todayRecords 추가하여 반환 >>>
-      return {
-        ...phoneDoc, // 기존 phoneDoc 필드들
-        id: phoneDoc._id, // _id -> id 매핑 (스키마에 id!로 정의됨)
-        records: phoneDoc.records.map(r => ({
-          ...r,
-          createdAt: r.createdAt?.toISOString() // Record 내부 createdAt도 ISO String으로
-        })),
-        todayRecords: formattedTodayRecords,
-      };
+      // <<< 최종 결과 조합 >>>
+      if (registeredUser) {
+        // 사용자를 찾은 경우
+        console.log('[getPhoneNumber] Found registered user:', registeredUser.loginId);
+        return {
+          ...(phoneDoc || {}), // phoneDoc이 없을 수도 있음 (기본값 제공)
+          id: phoneDoc?._id?.toString() ?? normalizedPhoneNumber, // ID 처리
+          phoneNumber: normalizedPhoneNumber,
+          type: phoneDoc?.type ?? 0,
+          blockCount: phoneDoc?.blockCount ?? 0,
+          records: (phoneDoc?.records || []).map(r => ({ // phoneDoc이 null일 경우 빈 배열
+            ...r,
+            createdAt: r.createdAt?.toISOString()
+          })),
+          todayRecords: formattedTodayRecords, // 항상 포함
+          isRegisteredUser: true,
+          registeredUserInfo: {
+            userName: registeredUser.name || '',
+            userRegion: registeredUser.region || '',
+            userType: registeredUser.userType || '일반',
+          },
+        };
+      } else {
+        // 사용자를 찾지 못한 경우
+        console.log('[getPhoneNumber] User not found for number.');
+        if (!phoneDoc) {
+          // PhoneNumber 정보도 없으면
+          return {
+            id: normalizedPhoneNumber,
+            phoneNumber: normalizedPhoneNumber,
+            type: 0,
+            blockCount: 0,
+            records: [],
+            todayRecords: formattedTodayRecords, // TodayRecord는 있을 수 있음
+            isRegisteredUser: false,
+            registeredUserInfo: null,
+          };
+        }
+        // PhoneNumber 정보는 있는 경우
+        return {
+          ...phoneDoc,
+          id: phoneDoc._id.toString(),
+          records: phoneDoc.records.map(r => ({
+            ...r,
+            createdAt: r.createdAt?.toISOString()
+          })),
+          todayRecords: formattedTodayRecords,
+          isRegisteredUser: false,
+          registeredUserInfo: null,
+        };
+      }
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {
