@@ -67,14 +67,29 @@ class HiveBlockedNumberRepository implements BlockedNumberRepository {
 
   @override
   Future<void> addUserBlockedNumber(String number) async {
+    log('[HiveBlockedNumberRepo][addUser] Attempting to add number: $number');
     try {
-      // Hive Box는 기본적으로 key-value 저장소. value만 저장 시 자동으로 key 생성됨.
-      // 동일 번호 추가 방지를 위해 먼저 확인 후 추가 (또는 Set 사용 고려)
+      log(
+        '[HiveBlockedNumberRepo][addUser] Box state BEFORE add: ${_blockedNumbersBox.values.toList()}',
+      );
+
       if (!_blockedNumbersBox.values.contains(number)) {
         await _blockedNumbersBox.add(number);
+        log(
+          '[HiveBlockedNumberRepo][addUser] Successfully added number: $number',
+        );
+      } else {
+        log(
+          '[HiveBlockedNumberRepo][addUser] Number $number already exists, not adding again.',
+        );
       }
+      log(
+        '[HiveBlockedNumberRepo][addUser] Box state AFTER add: ${_blockedNumbersBox.values.toList()}',
+      );
     } catch (e) {
-      log('[HiveBlockedNumberRepo] Error adding user blocked number: $e');
+      log(
+        '[HiveBlockedNumberRepo][addUser] Error adding user blocked number: $e',
+      );
       rethrow;
     }
   }

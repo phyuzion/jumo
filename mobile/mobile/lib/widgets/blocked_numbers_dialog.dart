@@ -102,8 +102,7 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
           ),
 
           // 차단된 번호 목록
-          SizedBox(
-            height: 300,
+          Expanded(
             child:
                 _isLoading
                     ? const Center(child: CircularProgressIndicator())
@@ -115,6 +114,7 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
                       ),
                     )
                     : ListView.separated(
+                      shrinkWrap: true,
                       itemCount: _blockedNumbers.length,
                       separatorBuilder:
                           (context, index) => const Divider(

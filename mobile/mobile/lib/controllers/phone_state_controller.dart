@@ -4,56 +4,47 @@ import 'package:flutter/material.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/services/native_methods.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:mobile/utils/constants.dart';
 
 class PhoneStateController with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> navigatorKey;
   final CallLogController callLogController;
   final ContactsController contactsController;
+  final BlockedNumbersController _blockedNumbersController;
 
   PhoneStateController(
     this.navigatorKey,
     this.callLogController,
     this.contactsController,
+    this._blockedNumbersController,
   ) {
     WidgetsBinding.instance.addObserver(this);
   }
 
   StreamSubscription<PhoneState>? _phoneStateSubscription;
 
+  String? _lastProcessedNumber;
+  PhoneStateStatus? _lastProcessedStatus;
+  DateTime? _lastProcessedTime;
+  String? _rejectedNumber;
+
   void startListening() {
+    _phoneStateSubscription?.cancel();
     _phoneStateSubscription = PhoneState.stream.listen((event) async {
+      log(
+        '[PhoneStateController][Stream] Received event: ${event.status}, Number: ${event.number}',
+      );
       final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
-      if (isDef) return;
-
-      String? number = event.number;
-
-      switch (event.status) {
-        case PhoneStateStatus.NOTHING:
-          _onNothing();
-          if (number != null && number.isNotEmpty) {
-            notifyServiceCallState('onCallEnded', number, '');
-          }
-          break;
-        case PhoneStateStatus.CALL_INCOMING:
-          if (number != null && number.isNotEmpty) {
-            await _onIncoming(number);
-            notifyServiceCallState('onIncomingNumber', number, '');
-          }
-          break;
-        case PhoneStateStatus.CALL_STARTED:
-          if (number != null && number.isNotEmpty) {
-            await _onCallStarted(number);
-            notifyServiceCallState('onCall', number, '', connected: true);
-          }
-          break;
-        case PhoneStateStatus.CALL_ENDED:
-          if (number != null && number.isNotEmpty) {
-            await _onCallEnded(number);
-            notifyServiceCallState('onCallEnded', number, '');
-          }
-          break;
+      if (!isDef) {
+        await _handlePhoneStateEvent(event.status, event.number);
+      } else {
+        log(
+          '[PhoneStateController][Stream] Default dialer is active, ignoring event from phone_state package.',
+        );
       }
     });
   }
@@ -61,6 +52,196 @@ class PhoneStateController with WidgetsBindingObserver {
   void stopListening() {
     _phoneStateSubscription?.cancel();
     _phoneStateSubscription = null;
+    log('[PhoneStateController] Stopped listening to phone state stream.');
+  }
+
+  Future<void> handleNativeEvent(
+    String method,
+    dynamic args,
+    bool isDefault,
+  ) async {
+    log(
+      '[PhoneStateController][Native] Received event: $method, Args: $args, IsDefault: $isDefault',
+    );
+    String number = '';
+    bool connected = false;
+    String reason = '';
+    PhoneStateStatus status = PhoneStateStatus.NOTHING;
+
+    if (args != null) {
+      if (args is Map) {
+        number = args['number'] as String? ?? '';
+        connected = args['connected'] as bool? ?? false;
+        reason = args['reason'] as String? ?? '';
+      } else if (args is String) {
+        number = args;
+      }
+    }
+
+    switch (method) {
+      case 'onIncomingNumber':
+        status = PhoneStateStatus.CALL_INCOMING;
+        break;
+      case 'onCall':
+        status =
+            connected
+                ? PhoneStateStatus.CALL_STARTED
+                : PhoneStateStatus.CALL_STARTED;
+        break;
+      case 'onCallEnded':
+        status = PhoneStateStatus.CALL_ENDED;
+        break;
+    }
+
+    await _handlePhoneStateEvent(
+      status,
+      number,
+      isConnected: connected,
+      reason: reason,
+    );
+  }
+
+  bool _isDuplicateEvent(String? number, PhoneStateStatus? status) {
+    final now = DateTime.now();
+    log('[_isDuplicateEvent] Checking: number=$number, status=$status');
+    log(
+      '[_isDuplicateEvent] Last processed: number=$_lastProcessedNumber, status=$_lastProcessedStatus, time=$_lastProcessedTime',
+    );
+
+    bool isDup = false;
+    if (number == _lastProcessedNumber &&
+        status == _lastProcessedStatus &&
+        _lastProcessedTime != null &&
+        now.difference(_lastProcessedTime!).inSeconds < 2) {
+      isDup = true;
+    }
+
+    if (!isDup) {
+      _lastProcessedNumber = number;
+      _lastProcessedStatus = status;
+      _lastProcessedTime = now;
+      log('[_isDuplicateEvent] Updated last processed info.');
+    } else {
+      log('[_isDuplicateEvent] Result: Duplicate FOUND!');
+    }
+
+    return isDup;
+  }
+
+  Future<void> _handlePhoneStateEvent(
+    PhoneStateStatus status,
+    String? number, {
+    bool isConnected = false,
+    String? reason,
+  }) async {
+    if (_isDuplicateEvent(number, status)) {
+      log(
+        '[_handlePhoneStateEvent] Duplicate event ignored. Number: $number, Status: $status',
+      );
+      return;
+    }
+    log(
+      '[_handlePhoneStateEvent] Processing event. Number: $number, Status: $status',
+    );
+
+    if (number == null || number.isEmpty) {
+      if (status == PhoneStateStatus.CALL_ENDED && _rejectedNumber != null) {
+        log(
+          '[_handlePhoneStateEvent] Ignoring CALL_ENDED event with null number, possibly after rejection.',
+        );
+        _rejectedNumber = null;
+        return;
+      }
+      if (status == PhoneStateStatus.NOTHING) {
+        _onNothing();
+      }
+      return;
+    }
+
+    final normalizedNumber = normalizePhone(number);
+
+    if (status == PhoneStateStatus.CALL_ENDED &&
+        _rejectedNumber == normalizedNumber) {
+      log(
+        '[_handlePhoneStateEvent] Ignoring CALL_ENDED event for recently rejected call: $normalizedNumber',
+      );
+      _rejectedNumber = null;
+      return;
+    }
+    if (status != PhoneStateStatus.CALL_ENDED) {
+      _rejectedNumber = null;
+    }
+
+    if (status == PhoneStateStatus.CALL_INCOMING) {
+      log(
+        '[PhoneStateController] Checking block status for incoming call: $normalizedNumber',
+      );
+      bool isBlocked = false;
+      try {
+        isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
+          normalizedNumber,
+          addHistory: true,
+        );
+      } catch (e) {
+        log('[PhoneStateController] Error checking block status: $e');
+      }
+
+      if (isBlocked) {
+        log('[PhoneStateController] Call from $normalizedNumber is BLOCKED.');
+        _rejectedNumber = normalizedNumber;
+        try {
+          log('[PhoneStateController] Attempting to reject call...');
+          await NativeMethods.rejectCall();
+          log('[PhoneStateController] Reject call command sent.');
+        } catch (e) {
+          log('[PhoneStateController] Error rejecting call: $e');
+        }
+        return;
+      }
+      log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
+    }
+
+    final callerName = await contactsController.getContactName(
+      normalizedNumber,
+    );
+
+    switch (status) {
+      case PhoneStateStatus.NOTHING:
+        _onNothing();
+        notifyServiceCallState(
+          'onCallEnded',
+          normalizedNumber,
+          callerName,
+          reason: reason ?? 'missed',
+        );
+        break;
+      case PhoneStateStatus.CALL_INCOMING:
+        await _onIncoming(normalizedNumber);
+        notifyServiceCallState(
+          'onIncomingNumber',
+          normalizedNumber,
+          callerName,
+        );
+        break;
+      case PhoneStateStatus.CALL_STARTED:
+        await _onCallStarted(normalizedNumber);
+        notifyServiceCallState(
+          'onCall',
+          normalizedNumber,
+          callerName,
+          connected: isConnected,
+        );
+        break;
+      case PhoneStateStatus.CALL_ENDED:
+        await _onCallEnded(normalizedNumber);
+        notifyServiceCallState(
+          'onCallEnded',
+          normalizedNumber,
+          callerName,
+          reason: reason ?? '',
+        );
+        break;
+    }
   }
 
   void _onNothing() {
@@ -72,36 +253,16 @@ class PhoneStateController with WidgetsBindingObserver {
 
     final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
     log(
-      '[PhoneStateController] Incoming call: $number, Is default dialer: $isDef',
+      '[PhoneStateController] Incoming call processed: $number, Is default dialer: $isDef',
     );
-
-    final callerName = await contactsController.getContactName(number);
-    log(
-      '[PhoneStateController] Notifying service for incoming call: $number, name: $callerName',
-    );
-    notifyServiceCallState('onIncomingNumber', number, callerName);
   }
 
   Future<void> _onCallStarted(String? number) async {
-    log('[PhoneStateController] callStarted for number: $number');
-    if (number != null && number.isNotEmpty) {
-      final callerName = await contactsController.getContactName(number);
-      notifyServiceCallState('onCall', number, callerName, connected: true);
-    }
+    log('[PhoneStateController] callStarted processed for number: $number');
   }
 
   Future<void> _onCallEnded(String? number) async {
-    log('[PhoneStateController] callEnded for number: $number');
-    final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
-    log('[PhoneStateController] Is default dialer on call end: $isDef');
-
-    if (number != null && number.isNotEmpty) {
-      final callerName = await contactsController.getContactName(number);
-
-      // 1. 먼저 서비스에 'ended' 상태 알림 (UI 업데이트 등)
-      notifyServiceCallState('onCallEnded', number, callerName);
-      log('[PhoneStateController] Notified service about call ended.');
-    }
+    log('[PhoneStateController] callEnded processed for number: $number');
   }
 
   void notifyServiceCallState(

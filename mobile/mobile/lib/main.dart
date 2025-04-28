@@ -229,7 +229,6 @@ Future<void> main() async {
   final smsLogRepository = getIt<SmsLogRepository>();
   final blockedNumberRepository = getIt<BlockedNumberRepository>();
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
-  final syncStateRepository = getIt<SyncStateRepository>();
   final callLogContoller = CallLogController(callLogRepository);
   final contactsController = ContactsController();
   final smsController = SmsController(settingsRepository, smsLogRepository);
@@ -243,12 +242,9 @@ Future<void> main() async {
     NavigationController.navKey,
     callLogContoller,
     contactsController,
-  );
-  await NavigationController.init(
-    phoneStateController,
     blockedNumbersController,
-    contactsController,
   );
+  await NavigationController.init(phoneStateController, contactsController);
   final appController = AppController(
     phoneStateController,
     contactsController,
@@ -288,7 +284,6 @@ Future<void> main() async {
         Provider<BlockedHistoryRepository>.value(
           value: blockedHistoryRepository,
         ),
-        Provider<SyncStateRepository>.value(value: syncStateRepository),
       ],
       child: MyAppStateful(initialRoutePayload: initialRoutePayload),
     ),

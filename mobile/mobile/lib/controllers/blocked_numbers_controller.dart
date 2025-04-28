@@ -6,7 +6,6 @@ import 'package:mobile/graphql/block_api.dart';
 import '../models/blocked_number.dart';
 import '../models/blocked_history.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
-import 'package:mobile/graphql/search_api.dart';
 import 'package:mobile/repositories/settings_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/utils/constants.dart';
@@ -145,22 +144,33 @@ class BlockedNumbersController {
 
   Future<void> addBlockedNumber(String number) async {
     final normalizedNumber = normalizePhone(number);
+    log(
+      '[BlockedNumbersCtrl][add] Received request to add: $number (normalized: $normalizedNumber)',
+    );
     final currentBlocked =
         await _blockedNumberRepository.getAllUserBlockedNumbers();
     if (currentBlocked.contains(normalizedNumber)) {
-      log('[BlockedNumbers] Number $normalizedNumber already blocked.');
+      log(
+        '[BlockedNumbersCtrl][add] Number $normalizedNumber already blocked.',
+      );
       return;
     }
-    await _blockedNumberRepository.addUserBlockedNumber(normalizedNumber);
-    log('[BlockedNumbers] Requesting background sync after adding number...');
-    FlutterBackgroundService().invoke('syncBlockedListsNow');
+    try {
+      log('[BlockedNumbersCtrl][add] Calling repository to add number...');
+      await _blockedNumberRepository.addUserBlockedNumber(normalizedNumber);
+      log('[BlockedNumbersCtrl][add] Repository call finished.');
+    } catch (e) {
+      log('[BlockedNumbersCtrl][add] Error calling repository: $e');
+    }
+    log(
+      '[BlockedNumbersCtrl][add] Added number $normalizedNumber locally (invoked repo).',
+    );
   }
 
   Future<void> removeBlockedNumber(String number) async {
     final normalizedNumber = normalizePhone(number);
     await _blockedNumberRepository.removeUserBlockedNumber(normalizedNumber);
-    log('[BlockedNumbers] Requesting background sync after removing number...');
-    FlutterBackgroundService().invoke('syncBlockedListsNow');
+    log('[BlockedNumbers] Removed number $normalizedNumber locally.');
   }
 
   Future<void> setAutoBlockDanger(bool value) async {
@@ -196,6 +206,9 @@ class BlockedNumbersController {
   }) async {
     String? blockType;
     final normalizedPhoneNumber = normalizePhone(phoneNumber);
+    log(
+      '[isNumberBlockedAsync] Checking number: $normalizedPhoneNumber (Original: $phoneNumber)',
+    );
 
     final isTodayBlockedSetting = await _settingsRepository.isTodayBlocked();
     if (isTodayBlockedSetting /* && _isTodayBlockStillValid() */ ) {
@@ -222,8 +235,16 @@ class BlockedNumbersController {
     if (blockType == null) {
       final userBlockedList =
           await _blockedNumberRepository.getAllUserBlockedNumbers();
-      if (userBlockedList.contains(normalizedPhoneNumber)) {
+      log(
+        '[isNumberBlockedAsync] Checking user block: Normalized incoming = $normalizedPhoneNumber, Blocked List = $userBlockedList',
+      );
+      if (userBlockedList.any(
+        (blockedNum) => normalizedPhoneNumber.contains(blockedNum),
+      )) {
         blockType = 'user';
+        log(
+          '[isNumberBlockedAsync] Matched user block list! (incoming contains blocked)',
+        );
       }
     }
 
@@ -249,12 +270,14 @@ class BlockedNumbersController {
     }
 
     if (blockType != null) {
+      log('[isNumberBlockedAsync] Final Block Type: $blockType');
       if (addHistory) {
         await _addBlockedHistory(normalizedPhoneNumber, blockType);
       }
       return true;
     }
 
+    log('[isNumberBlockedAsync] Final Result: NOT BLOCKED');
     return false;
   }
 
