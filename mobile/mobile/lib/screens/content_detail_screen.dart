@@ -3,9 +3,10 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:flutter_quill/flutter_quill.dart';
 import 'package:flutter_quill_extensions/flutter_quill_extensions.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:mobile/graphql/contents_api.dart';
+import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/utils/constants.dart'; // formatDateString()
+import 'package:provider/provider.dart';
 
 class ContentDetailScreen extends StatefulWidget {
   final String contentId;
@@ -17,11 +18,9 @@ class ContentDetailScreen extends StatefulWidget {
 }
 
 class _ContentDetailScreenState extends State<ContentDetailScreen> {
-  bool _loading = false;
+  bool _loading = true;
   Map<String, dynamic>? _item;
   QuillController? _quillController;
-
-  Box get _authBox => Hive.box('auth');
 
   final _replyCtrl = TextEditingController();
 
@@ -30,19 +29,28 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
   @override
   void initState() {
     super.initState();
-    currentUserId = _authBox.get('userId', defaultValue: '') as String;
-    _fetchDetail();
+    _initializeScreen();
+  }
+
+  Future<void> _initializeScreen() async {
+    final authRepository = context.read<AuthRepository>();
+    currentUserId = await authRepository.getUserId() ?? '';
+
+    await _fetchDetail();
+
+    if (mounted) {
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _fetchDetail() async {
-    if (!mounted) return;
-    setState(() => _loading = true);
     try {
       final data = await ContentsApi.getSingleContent(widget.contentId);
       if (data != null) {
         _item = data;
 
-        // Quill 본문
         final contentMap = data['content'];
         if (contentMap is Map && contentMap['ops'] is List) {
           final doc = Document.fromJson(contentMap['ops']);
@@ -56,9 +64,11 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
         }
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-    } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
     }
   }
 
@@ -89,7 +99,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     return Scaffold(
       appBar: AppBar(
         leadingWidth: 30,
-        titleSpacing: 0, // 타이틀 왼쪽 간격을 0으로
+        titleSpacing: 0,
         title: _buildHeader(),
         actions: [
           if (_item != null && _canEdit)
@@ -106,10 +116,9 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     }
 
     return Container(
-      color: Colors.grey.shade100, // 전체 배경 그레이
+      color: Colors.grey.shade100,
       child: Column(
         children: [
-          // (2) 본문 + 댓글
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -124,29 +133,22 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             ),
           ),
 
-          // (3) 댓글 입력창
           _buildReplyInput(),
         ],
       ),
     );
   }
 
-  // =========================
-  // 1) 헤더: 제목/작성자/일시
-  // =========================
   Widget _buildHeader() {
     final title = _item!['title'] ?? '(제목없음)';
     final userName = _item!['userName'] ?? '(unknown)';
     final createdAtStr = formatKoreanDateTime(_item!['createdAt']);
 
-    // 제목은 왼쪽, 작성자/시간은 오른쪽
-    // BoardListView와 유사 스타일
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
       child: Row(
         children: [
-          // 제목
           Expanded(
             flex: 3,
             child: Text(
@@ -157,13 +159,11 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // 작성자 + 시간 (오른쪽)
           Expanded(
             flex: 2,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                // 작성자
                 Text(
                   userName,
                   style: const TextStyle(fontSize: 14, color: Colors.black),
@@ -172,7 +172,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
                   textAlign: TextAlign.right,
                 ),
                 const SizedBox(height: 4),
-                // 날짜
                 Text(
                   createdAtStr,
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -188,12 +187,8 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     );
   }
 
-  // =========================
-  // 2) 본문(Quill) + 댓글
-  // =========================
   Widget _buildContentCard() {
     return Container(
-      // 카드 느낌
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -208,7 +203,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          // Quill 본문
           if (_quillController != null)
             QuillEditor(
               controller: _quillController!,
@@ -240,7 +234,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 댓글 헤딩
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
           child: Text(
@@ -249,25 +242,18 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
           ),
         ),
         const SizedBox(height: 4),
-        // 댓글 목록
         for (int i = 0; i < comments.length; i++)
           _buildCommentItem(i, comments[i] as Map<String, dynamic>),
       ],
     );
   }
 
-  // 개별 댓글
   Widget _buildCommentItem(int index, Map<String, dynamic> c) {
     final userName = c['userName'] ?? '(unknown)';
     final userRegion = c['userRegion'] ?? '';
     final comment = c['comment'] ?? '';
     final createdAtStr = formatDateString(c['createdAt'] ?? '');
 
-    // 본인 댓글 or admin이면 삭제 가능(예시)
-    final commentUserId = c['userId'] ?? '';
-    final canDelete = (commentUserId == currentUserId);
-
-    // 작성자
     String authorText = userName;
     if (userRegion.isNotEmpty) authorText = '$userName ($userRegion)';
 
@@ -282,7 +268,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
         padding: const EdgeInsets.all(8),
         child: Row(
           children: [
-            // 댓글 텍스트
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -301,28 +286,22 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
                 ],
               ),
             ),
-            // 삭제 버튼
-            if (canDelete)
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () => _onDeleteReply(index),
-              ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _onDeleteReply(index),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // =========================
-  // 3) 댓글 입력 부분
-  // =========================
   Widget _buildReplyInput() {
     return Container(
       color: Colors.white,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Row(
         children: [
-          // 둥근 모서리 TextField
           Expanded(
             child: Container(
               decoration: BoxDecoration(
@@ -340,7 +319,6 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // 등록 버튼 => 아이콘
           InkWell(
             onTap: _onTapAddReply,
             child: Container(

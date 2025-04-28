@@ -1,12 +1,14 @@
 import 'dart:developer';
-// import 'package:get_storage/get_storage.dart'; // 제거
-import 'package:hive_ce/hive.dart'; // Hive 추가
+// import 'package:hive_ce/hive.dart'; // <<< 제거
 import 'package:graphql_flutter/graphql_flutter.dart';
+// import 'package:mobile/repositories/auth_repository.dart'; // <<< 제거 (UserApi는 static 유지)
 
-import 'client.dart'; // 위에서 만든 client.dart
+import 'client.dart';
 
 /// 사용자 관련 API 모음
 class UserApi {
+  // <<< 생성자 및 멤버 변수 제거 >>>
+
   // ==================== 1) userLogin ====================
   static const String _userLoginMutation = r'''
     mutation userLogin($loginId: String!, $password: String!, $phoneNumber: String!) {
@@ -29,6 +31,7 @@ class UserApi {
     }
   ''';
 
+  // <<< static 유지 >>>
   static Future<Map<String, dynamic>?> userLogin({
     required String loginId,
     required String password,
@@ -58,42 +61,29 @@ class UserApi {
     if (token == null) {
       throw Exception('accessToken이 null');
     }
-    // accessToken 저장 (GraphQLClientManager 내부에서 Hive 사용)
-    GraphQLClientManager.accessToken = token;
+    await GraphQLClientManager.setAccessToken(token);
 
-    final userData = data['user'] as Map<String, dynamic>?; // 타입 명시
+    final userData = data['user'] as Map<String, dynamic>?;
     if (userData == null) {
       throw Exception('user 필드가 null임');
     }
     log('[[userLogin]] user=$userData');
 
-    // Hive 'auth' Box 에 유저정보 저장
-    final authBox = Hive.box('auth');
-    await authBox.put('userId', userData['id']);
-    await authBox.put('userName', userData['name']);
-    await authBox.put('userType', userData['userType']);
-    await authBox.put('loginStatus', true);
-    await authBox.put('userValidUntil', userData['validUntil'] ?? '');
-    await authBox.put('userRegion', userData['region'] ?? '');
-    await authBox.put('userGrade', userData['grade'] ?? '');
-    // ***** loginId 저장 추가 *****
-    if (userData.containsKey('loginId')) {
-      await authBox.put('loginId', userData['loginId']);
-      log('[UserApi] Saved loginId to Hive: ${userData['loginId']}');
-    } else {
-      log('[UserApi] Warning: loginId not found in userLogin response.');
-    }
+    // <<< Hive 저장 로직 모두 제거 >>>
+    // await _authRepository.setToken(token); // 제거
+    // await _authRepository.setUserId(userData['id'] ?? ''); // 제거
+    // await _authRepository.setUserName(userData['name'] ?? ''); // 제거
+    // await _authRepository.setUserType(userData['userType'] ?? ''); // 제거
+    // await _authRepository.setLoginStatus(true); // 제거
+    // await _authRepository.setUserValidUntil(userData['validUntil'] ?? ''); // 제거
+    // await _authRepository.setUserRegion(userData['region'] ?? ''); // 제거
+    // await _authRepository.setUserGrade(userData['grade'] ?? ''); // 제거
+    // if (userData.containsKey('loginId')) { ... } // 제거
 
-    // 자동 로그인을 위해 ID/PW/번호 저장 (GraphQLClientManager 함수 사용)
-    await GraphQLClientManager.saveLoginCredentials(
-      loginId,
-      password,
-      phoneNumber,
-    );
+    // <<< GraphQLClientManager.saveLoginCredentials 호출 제거 >>>
 
-    // 차단 목록 저장 부분은 이미 제거됨
-
-    return data; // 결과 데이터 반환 (필요 시 사용)
+    // API 결과 데이터만 반환
+    return data;
   }
 
   // ==================== 2) userChangePassword ====================
@@ -111,6 +101,7 @@ class UserApi {
   ''';
 
   /// 비밀번호 변경
+  // <<< static 유지 >>>
   static Future<bool> userChangePassword({
     required String oldPassword,
     required String newPassword,
@@ -125,7 +116,6 @@ class UserApi {
     );
 
     final result = await client.mutate(opts);
-    // handleExceptions 호출 (Future 반환하므로 await 추가)
     await GraphQLClientManager.handleExceptions(result);
 
     final data = result.data?['userChangePassword'];
@@ -133,11 +123,9 @@ class UserApi {
       throw Exception('비밀번호 변경 응답이 null');
     }
     final success = data['success'] as bool? ?? false;
-    // 성공 시 저장된 비밀번호 업데이트 (선택적)
-    if (success) {
-      final authBox = Hive.box('auth');
-      await authBox.put('savedPassword', newPassword);
-    }
+
+    // <<< 성공 시 비밀번호 업데이트 로직 제거 >>>
+
     return success;
   }
 

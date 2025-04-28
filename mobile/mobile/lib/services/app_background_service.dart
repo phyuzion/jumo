@@ -21,6 +21,8 @@ import 'package:mobile/utils/constants.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
+import 'package:mobile/repositories/auth_repository.dart';
+import 'package:mobile/main.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
 
 SmsController? _backgroundSmsController;
@@ -47,21 +49,33 @@ Future<void> onStart(ServiceInstance service) async {
   String _currentNumberForTimer = "";
   String _currentCallerNameForTimer = "";
 
-  // <<< 2. Hive 초기화 >>>
+  // <<< Hive 초기화 >>>
   bool hiveInitialized = false;
+  late AuthRepository authRepository;
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
     Hive.init(appDocumentDir.path);
     if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
       Hive.registerAdapter(BlockedHistoryAdapter());
     }
+    final authBox = await Hive.openBox('auth');
+    authRepository = HiveAuthRepository(authBox);
+
+    if (!getIt.isRegistered<AuthRepository>()) {
+      getIt.registerSingleton<AuthRepository>(authRepository);
+      log('[BackgroundService][onStart] AuthRepository registered in GetIt.');
+    } else {
+      log(
+        '[BackgroundService][onStart] AuthRepository already registered in GetIt.',
+      );
+    }
+
     await Hive.openBox('settings');
     await Hive.openBox<BlockedHistory>('blocked_history');
     await Hive.openBox('call_logs');
     await Hive.openBox('sms_logs');
     await Hive.openBox('last_sync_state');
     await Hive.openBox('notifications');
-    await Hive.openBox('auth');
     await Hive.openBox('display_noti_ids');
     await Hive.openBox('blocked_numbers');
     await Hive.openBox<List<String>>('danger_numbers');
@@ -69,7 +83,9 @@ Future<void> onStart(ServiceInstance service) async {
     hiveInitialized = true;
     log('[BackgroundService][onStart] Hive initialized successfully.');
   } catch (e) {
-    log('[BackgroundService][onStart] Error initializing Hive: $e');
+    log(
+      '[BackgroundService][onStart] Error initializing Hive or AuthRepository: $e',
+    );
     service.stopSelf();
     return;
   }

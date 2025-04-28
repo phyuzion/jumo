@@ -1,13 +1,15 @@
 // lib/graphql/client.dart
 import 'dart:async'; // TimeoutException 사용 위해 추가
 import 'dart:developer';
-import 'package:hive_ce/hive.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:dio/dio.dart';
 import 'package:gql_dio_link/gql_dio_link.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/models/blocked_history.dart';
+import 'package:mobile/repositories/auth_repository.dart';
+import 'package:mobile/main.dart';
+import 'package:hive_ce/hive.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -16,26 +18,26 @@ const String kGraphQLPath = '/graphql';
 
 /// GraphQL 통신 공통 로직
 class GraphQLClientManager {
-  // GetStorage 인스턴스 제거
-  static Box get _authBox => Hive.box('auth');
-
-  /// AccessToken Getter / Setter
-  static String? get accessToken => _authBox.get('accessToken') as String?;
-  static set accessToken(String? token) {
+  /// AccessToken Getter / Setter (AuthRepository 사용)
+  static Future<String?> get accessToken async =>
+      await getIt<AuthRepository>().getToken();
+  static Future<void> setAccessToken(String? token) async {
     if (token == null) {
-      _authBox.delete('accessToken');
+      await getIt<AuthRepository>().clearToken();
     } else {
-      log('[GraphQL] Saving accessToken to Hive...');
-      _authBox.put('accessToken', token);
+      log('[GraphQL] Saving accessToken via AuthRepository...');
+      await getIt<AuthRepository>().setToken(token);
     }
   }
 
   // ===============================
   // 1) 자동로그인 함수 (id/pw 재로그인)
   static Future<void> tryAutoLogin() async {
-    final savedId = _authBox.get('savedLoginId') as String?;
-    final savedPw = _authBox.get('savedPassword') as String?;
-    final myNumber = _authBox.get('myNumber') as String?;
+    final authRepository = getIt<AuthRepository>();
+    final credentials = await authRepository.getSavedCredentials();
+    final savedId = credentials['id'];
+    final savedPw = credentials['password'];
+    final myNumber = await authRepository.getMyNumber();
 
     if (savedId == null ||
         savedId.isEmpty ||
@@ -52,19 +54,43 @@ class GraphQLClientManager {
           password: savedPw,
           phoneNumber: myNumber,
         );
-        log('[GraphQL] tryAutoLogin: Re-login success with $loginResult');
+        log('[GraphQL] tryAutoLogin: Re-login API call success.');
+
+        if (loginResult != null && loginResult['user'] is Map) {
+          final userData = loginResult['user'] as Map<String, dynamic>;
+          final token = loginResult['accessToken'] as String?;
+
+          if (token != null) await authRepository.setToken(token);
+          await authRepository.setUserId(userData['id'] ?? '');
+          await authRepository.setUserName(userData['name'] ?? '');
+          await authRepository.setUserType(userData['userType'] ?? '');
+          await authRepository.setLoginStatus(true);
+          await authRepository.setUserValidUntil(userData['validUntil'] ?? '');
+          await authRepository.setUserRegion(userData['region'] ?? '');
+          await authRepository.setUserGrade(userData['grade'] ?? '');
+
+          log('[GraphQL] User info saved via AuthRepository after auto-login.');
+        } else {
+          log(
+            '[GraphQL] Auto-login successful but user data format is unexpected.',
+          );
+          await logout();
+        }
       } catch (e) {
-        log('[GraphQL] tryAutoLogin failed: $e');
-        //await logout();
+        log('[GraphQL] tryAutoLogin failed during API call or saving: $e');
+        await logout();
       }
     }
   }
 
-  /// 로그아웃 (Hive 데이터 삭제)
+  /// 로그아웃 (AuthRepository 및 다른 Box clear)
   static Future<void> logout() async {
     log('[GraphQL] Logging out and clearing user data...');
     try {
-      await Hive.box('auth').clear();
+      final authRepository = getIt<AuthRepository>();
+      await authRepository.clearToken();
+      await authRepository.clearSavedCredentials();
+      await authRepository.setLoginStatus(false);
       await Hive.box('notifications').clear();
       await Hive.box('last_sync_state').clear();
       await Hive.box<BlockedHistory>('blocked_history').clear();
@@ -72,9 +98,10 @@ class GraphQLClientManager {
       await Hive.box('sms_logs').clear();
       await Hive.box('display_noti_ids').clear();
       await Hive.box('blocked_numbers').clear();
-      log('[GraphQL] Cleared user-specific Hive boxes.');
+      log('[GraphQL] Cleared auth data via AuthRepository.');
+      log('[GraphQL] Cleared other user-specific Hive boxes directly.');
     } catch (e) {
-      log('[GraphQL] Error clearing Hive boxes during logout: $e');
+      log('[GraphQL] Error clearing data during logout: $e');
     }
     NavigationController.goToDecider();
   }
@@ -106,8 +133,8 @@ class GraphQLClientManager {
     if (_dioInstance!.interceptors.whereType<InterceptorsWrapper>().isEmpty) {
       _dioInstance!.interceptors.add(
         InterceptorsWrapper(
-          onRequest: (options, handler) {
-            final token = accessToken;
+          onRequest: (options, handler) async {
+            final token = await accessToken;
             if (token != null) {
               options.headers['Authorization'] = 'Bearer $token';
             }
@@ -156,16 +183,16 @@ class GraphQLClientManager {
     return _clientInstance!;
   }
 
-  /// 자동 로그인 정보 저장 함수 추가
+  /// 자동 로그인 정보 저장 함수 추가 (AuthRepository 사용)
   static Future<void> saveLoginCredentials(
     String id,
     String pw,
     String myNumber,
   ) async {
-    await _authBox.put('savedLoginId', id);
-    await _authBox.put('savedPassword', pw);
-    await _authBox.put('myNumber', myNumber);
-    log('[GraphQL] Saved login credentials to Hive.');
+    final authRepository = getIt<AuthRepository>();
+    await authRepository.saveCredentials(id, pw);
+    await authRepository.setMyNumber(myNumber);
+    log('[GraphQL] Saved login credentials via AuthRepository.');
   }
 
   /// 헬퍼: GraphQL Exception 핸들링

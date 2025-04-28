@@ -8,7 +8,6 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
-import 'package:mobile/deprecated/call_result_overlay.dart';
 import 'package:mobile/screens/board_screen.dart';
 import 'package:mobile/screens/content_detail_screen.dart';
 import 'package:mobile/screens/content_edit_screen.dart';
@@ -34,55 +33,68 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:mobile/repositories/auth_repository.dart';
+import 'package:get_it/get_it.dart';
 
-/* overlay removed
-/// 오버레이 전용 엔트리
-@pragma('vm:entry-point')
-Future<void> overlayMain() async {
-  WidgetsFlutterBinding.ensureInitialized();
+final getIt = GetIt.instance;
 
-  // <<< 오버레이 Isolate 위한 Hive 초기화 >>>
-  try {
-    final appDocumentDir = await getApplicationDocumentsDirectory();
-    await Hive.initFlutter(appDocumentDir.path);
-    // 필요한 어댑터 등록
-    if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
-      Hive.registerAdapter(BlockedHistoryAdapter());
-    }
-    log('[overlayMain] Hive initialized successfully.');
-  } catch (e) {
-    log('[overlayMain] Error initializing Hive: $e');
+Future<void> initializeDependencies() async {
+  log('[initializeDependencies] Starting...');
+  final appDocumentDir = await getApplicationDocumentsDirectory();
+  await Hive.initFlutter(appDocumentDir.path);
+  log('[initializeDependencies] Hive initialized.');
+
+  if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
+    Hive.registerAdapter(BlockedHistoryAdapter());
+    log('[initializeDependencies] BlockedHistoryAdapter registered.');
   }
 
-  runApp(
-    MaterialApp(
-      home: CallResultOverlay(),
-      debugShowCheckedModeBanner: false,
-      debugShowMaterialGrid: false,
-      theme: ThemeData(
-        colorScheme: const ColorScheme.light(
-          primary: Colors.black,
-          onPrimary: Colors.white,
-          surface: Colors.white,
-          onSurface: Colors.black,
-        ),
-        useMaterial3: true,
-      ),
-      // 텍스트 크기 고정
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(
-            context,
-          ).copyWith(textScaler: TextScaler.linear(1.0)),
-          child: child!,
-        );
-      },
-    ),
-  );
+  try {
+    final authBox = await Hive.openBox('auth');
+    final authRepository = HiveAuthRepository(authBox);
+    getIt.registerSingleton<AuthRepository>(authRepository);
+    log('[initializeDependencies] AuthRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing AuthRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    await Future.wait([
+      Hive.openBox('settings'),
+      Hive.openBox<BlockedHistory>('blocked_history'),
+      Hive.openBox('call_logs'),
+      Hive.openBox('sms_logs'),
+      Hive.openBox('last_sync_state'),
+      Hive.openBox('notifications'),
+      Hive.openBox('display_noti_ids'),
+      Hive.openBox('blocked_numbers'),
+      Hive.openBox<List<String>>('danger_numbers'),
+      Hive.openBox<List<String>>('bomb_numbers'),
+    ]);
+    log('[initializeDependencies] Other Hive boxes opened.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] Warning: Error opening some other Hive boxes: $e',
+    );
+  }
+  log('[initializeDependencies] Finished.');
 }
-*/
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await initializeDependencies();
+  } catch (e) {
+    log('[main] Critical initialization failed: $e');
+    runApp(
+      MaterialApp(home: Scaffold(body: Center(child: Text('앱 초기화 실패: $e')))),
+    );
+    return;
+  }
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
@@ -92,36 +104,6 @@ Future<void> main() async {
       notificationAppLaunchDetails?.notificationResponse?.payload;
   log('[main] App launched with payload: $initialRoutePayload');
 
-  final appDocumentDir = await getApplicationDocumentsDirectory();
-  await Hive.initFlutter(appDocumentDir.path);
-
-  // TypeAdapter 등록
-  if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
-    Hive.registerAdapter(BlockedHistoryAdapter());
-    log('BlockedHistoryAdapter registered.');
-  }
-
-  // ***** 모든 Box 열기 *****
-  try {
-    await Hive.openBox('settings'); // 설정 박스는 여전히 필요할 수 있으므로 유지
-    await Hive.openBox<BlockedHistory>('blocked_history');
-    await Hive.openBox('call_logs');
-    await Hive.openBox('sms_logs');
-    await Hive.openBox('last_sync_state');
-    await Hive.openBox('notifications');
-    await Hive.openBox('auth'); // auth 박스 열기
-    await Hive.openBox('display_noti_ids');
-    await Hive.openBox('blocked_numbers');
-    await Hive.openBox<List<String>>('danger_numbers'); // <<< openBox 추가
-    await Hive.openBox<List<String>>('bomb_numbers'); // <<< openBox 추가
-    log('All Hive boxes opened successfully in main.');
-  } catch (e) {
-    log('Error opening Hive boxes in main: $e');
-    // Box 열기 실패 시 앱 실행 중단 또는 오류 처리 필요
-    return; // 예: 앱 실행 중단
-  }
-
-  // ***** Box 열기 완료 후 컨트롤러 생성 *****
   final contactsController = ContactsController();
   final callLogContoller = CallLogController();
   final smsController = SmsController();
@@ -131,7 +113,6 @@ Future<void> main() async {
     callLogContoller,
     contactsController,
   );
-  // NavigationController 초기화 수정
   await NavigationController.init(
     phoneStateController,
     blockedNumbersController,
@@ -148,13 +129,13 @@ Future<void> main() async {
   runApp(
     MultiProvider(
       providers: [
+        Provider<AuthRepository>.value(value: getIt<AuthRepository>()),
         Provider<PhoneStateController>.value(value: phoneStateController),
         Provider<AppController>.value(value: appController),
         Provider<SmsController>.value(value: smsController),
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
         ),
-        Provider<Box<dynamic>>.value(value: Hive.box('auth')),
         ChangeNotifierProvider.value(value: callLogContoller),
         ChangeNotifierProvider.value(value: contactsController),
         ChangeNotifierProvider(
@@ -171,7 +152,6 @@ Future<void> main() async {
   );
 }
 
-// MyApp을 StatefulWidget으로 변경하여 라이프사이클 감지
 class MyAppStateful extends StatefulWidget {
   final String? initialRoutePayload;
   const MyAppStateful({super.key, this.initialRoutePayload});

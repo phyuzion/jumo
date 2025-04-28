@@ -1,11 +1,12 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
 // import 'package:get_storage/get_storage.dart'; // 제거
-import 'package:hive_ce/hive.dart'; // Hive 추가
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
+import 'package:mobile/repositories/auth_repository.dart'; // <<< 추가
 import 'package:mobile/services/native_methods.dart'; // <<< 임포트 추가
 import 'package:mobile/utils/constants.dart'; // <<< 임포트 추가
+import 'package:provider/provider.dart'; // <<< Provider 추가
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -29,20 +30,23 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _showPassword = false;
 
   // final box = GetStorage(); // 제거
-  Box get _authBox => Hive.box('auth'); // Hive auth Box 사용
+  late AuthRepository _authRepository; // <<< AuthRepository 인스턴스 변수 추가
 
   @override
   void initState() {
     super.initState();
-    _loadInitialData();
+    // Provider를 통해 AuthRepository 인스턴스 가져오기 (initState에서는 context 사용 불가)
+    // WidgetsBinding.instance.addPostFrameCallback 사용
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _authRepository = context.read<AuthRepository>();
+      _loadInitialData();
+    });
   }
 
   // 초기 데이터 로드 (수정됨)
   Future<void> _loadInitialData() async {
-    // <<< async 추가
     if (!mounted) return;
     setState(() {
-      // 로딩 상태 시작
       _myNumber = '번호 확인중...';
       _isNumberLoading = true;
     });
@@ -55,8 +59,8 @@ class _LoginScreenState extends State<LoginScreen> {
       if (rawNumber.isNotEmpty) {
         final normalizedNumber = normalizePhone(rawNumber);
         log('[LoginScreen] My number loaded: $normalizedNumber');
-        // Hive에 저장
-        await _authBox.put('myNumber', normalizedNumber);
+        // AuthRepository 사용하여 저장
+        await _authRepository.setMyNumber(normalizedNumber); // <<< 수정
         // 상태 업데이트
         setState(() {
           _myNumber = normalizedNumber;
@@ -64,29 +68,51 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       } else {
         log('[LoginScreen] Failed to get phone number (empty).');
+        // 저장된 번호가 있는지 확인 (AuthRepository 사용)
+        final savedNumber = await _authRepository.getMyNumber(); // <<< 추가
+        if (!mounted) return;
         setState(() {
-          _myNumber = '번호 확인 실패';
+          if (savedNumber != null && savedNumber.isNotEmpty) {
+            _myNumber = savedNumber;
+            log('[LoginScreen] Loaded saved number: $savedNumber');
+          } else {
+            _myNumber = '번호 확인 실패';
+            log('[LoginScreen] No saved number found either.');
+          }
           _isNumberLoading = false;
         });
-        // TODO: 사용자에게 오류 알림 또는 재시도 옵션 제공
       }
     } catch (e) {
       log('[LoginScreen] Error getting phone number: $e');
       if (mounted) {
+        // 오류 시에도 저장된 번호 확인
+        final savedNumber = await _authRepository.getMyNumber(); // <<< 추가
+        if (!mounted) return;
         setState(() {
-          _myNumber = '번호 확인 오류';
+          if (savedNumber != null && savedNumber.isNotEmpty) {
+            _myNumber = savedNumber;
+            log('[LoginScreen] Loaded saved number after error: $savedNumber');
+          } else {
+            _myNumber = '번호 확인 오류';
+            log('[LoginScreen] No saved number found after error.');
+          }
           _isNumberLoading = false;
         });
-        // TODO: 사용자에게 오류 알림
       }
     }
 
-    // 저장된 ID/PW 로드는 그대로 유지
-    final savedId = _authBox.get('savedLoginId') as String?;
-    final savedPw = _authBox.get('savedPassword') as String?;
+    // 저장된 ID/PW 로드 (AuthRepository 사용)
+    final credentials = await _authRepository.getSavedCredentials(); // <<< 수정
+    if (!mounted) return;
+    final savedId = credentials['id'];
+    final savedPw = credentials['password'];
+
     if (savedId != null) _loginIdCtrl.text = savedId;
     if (savedPw != null) _passwordCtrl.text = savedPw;
     _rememberMe = (savedId != null && savedPw != null);
+    if (mounted) {
+      setState(() {}); // 비동기 작업 후 상태 업데이트
+    }
   }
 
   /// 로그인 버튼 or Enter key
@@ -106,23 +132,42 @@ class _LoginScreenState extends State<LoginScreen> {
         throw Exception('전화번호를 인식할 수 없습니다. 앱 권한을 확인하거나 재시작해주세요.');
       }
 
-      // 로그인 호출
-      await UserApi.userLogin(
+      // 로그인 API 호출
+      final loginResult = await UserApi.userLogin(
         loginId: loginId,
         password: password,
         phoneNumber: _myNumber,
       );
 
-      // 아이디/비번 기억하기
-      if (_rememberMe) {
-        await GraphQLClientManager.saveLoginCredentials(
-          loginId,
-          password,
-          _myNumber,
-        );
+      // <<< 로그인 성공 후 사용자 정보 저장 (AuthRepository 사용) >>>
+      if (loginResult != null && loginResult['user'] is Map) {
+        final userData = loginResult['user'] as Map<String, dynamic>; // 타입 캐스팅
+        final token = loginResult['accessToken'] as String?; // 토큰도 가져옴
+
+        // AuthRepository를 통해 정보 저장
+        if (token != null) await _authRepository.setToken(token); // 토큰 저장
+        await _authRepository.setUserId(userData['id'] ?? '');
+        await _authRepository.setUserName(userData['name'] ?? '');
+        await _authRepository.setUserType(userData['userType'] ?? '');
+        await _authRepository.setLoginStatus(true);
+        await _authRepository.setUserValidUntil(userData['validUntil'] ?? '');
+        await _authRepository.setUserRegion(userData['region'] ?? '');
+        await _authRepository.setUserGrade(userData['grade'] ?? '');
+
+        log('[LoginScreen] User info saved via AuthRepository after login.');
       } else {
-        await _authBox.delete('savedLoginId');
-        await _authBox.delete('savedPassword');
+        // 로그인 결과가 예상과 다를 경우 예외 처리 또는 로깅
+        log(
+          '[LoginScreen] Login successful but user data format is unexpected.',
+        );
+        // 필요하다면 여기서 throw Exception(...) 가능
+      }
+
+      // 아이디/비번 기억하기 (기존 로직 유지)
+      if (_rememberMe) {
+        await _authRepository.saveCredentials(loginId, password);
+      } else {
+        await _authRepository.clearSavedCredentials();
       }
 
       if (!mounted) return;
@@ -130,7 +175,6 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
     } finally {
-      // 로딩 상태 해제는 try 블록 내부에서 처리하거나 여기서 한 번 더 확인
       if (mounted && _loading) {
         setState(() => _loading = false);
       }

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/models/blocked_history.dart';
+import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/widgets/dropdown_menus_widet.dart'; // formatDateString
@@ -37,10 +37,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   */
 
   /// 유저 정보
-  String _phoneNumber = '(unknown)';
-  String _loginId = '(no id)';
-  String _userName = '(no name)';
-  String _userRegion = '(no region)';
+  String _phoneNumber = '(정보 로딩중)';
+  String _loginId = '(정보 로딩중)';
+  String _userName = '(정보 로딩중)';
+  String _userRegion = '(정보 로딩중)';
   String _validUntil = '';
   String _userGrade = '일반';
 
@@ -55,28 +55,22 @@ class _SettingsScreenState extends State<SettingsScreen>
   // 콜폭 차단 횟수 입력 컨트롤러
   late final TextEditingController _bombCallsCountController;
 
-  // Hive Box 사용
-  Box get _authBox => Hive.box('auth');
-
   @override
   void initState() {
     super.initState();
 
     WidgetsBinding.instance.addObserver(this);
 
-    // Hive에서 유저 정보 읽어오기
-    _loadUserInfo();
-
-    _checkStatus();
-    _checkVersionManually();
+    // initState 이후 프레임에서 비동기 작업 수행
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeSettings();
+    });
 
     // 3) 차단 설정 컨트롤러 초기화
     _blockedNumbersController = context.read<BlockedNumbersController>();
 
     // 4) 콜폭 차단 횟수 입력 컨트롤러 초기화
-    _bombCallsCountController = TextEditingController(
-      text: _blockedNumbersController.bombCallsCount.toString(),
-    );
+    _bombCallsCountController = TextEditingController();
   }
 
   /// (A) 업데이트 체크(수동)
@@ -151,27 +145,70 @@ class _SettingsScreenState extends State<SettingsScreen>
     }
   }
 
+  // 설정 화면 초기화 (비동기 작업 포함)
+  Future<void> _initializeSettings() async {
+    // 병렬로 실행 가능한 작업들
+    final List<Future> futures = [
+      _loadUserInfo(), // 사용자 정보 로드
+      _checkStatus(), // 기본 전화앱, 권한 등 상태 확인
+      _checkVersionManually(), // 버전 체크
+    ];
+    // 모든 작업이 완료될 때까지 기다림
+    await Future.wait(futures);
+
+    // 모든 데이터 로드 후 콜폭 차단 횟수 컨트롤러 텍스트 설정
+    if (mounted) {
+      _bombCallsCountController.text =
+          _blockedNumbersController.bombCallsCount.toString();
+      // 최종 상태 업데이트
+      setState(() {});
+    }
+  }
+
+  // Hive에서 사용자 정보 로드 (AuthRepository 사용)
+  Future<void> _loadUserInfo() async {
+    final authRepository = context.read<AuthRepository>();
+
+    // 여러 정보를 병렬로 가져올 수 있음
+    final results = await Future.wait([
+      authRepository.getMyNumber(),
+      authRepository.getSavedCredentials(), // loginId 가져오기 위함
+      authRepository.getUserName(),
+      authRepository.getUserRegion(),
+      authRepository.getUserGrade(),
+      authRepository.getUserValidUntil(),
+    ]);
+
+    if (!mounted) return;
+
+    // 결과 할당
+    _phoneNumber = (results[0] as String?) ?? '(정보 없음)';
+    final credentials = results[1] as Map<String, String?>;
+    _loginId = credentials['id'] ?? '(정보 없음)'; // 저장된 ID 사용
+    _userName = (results[2] as String?) ?? '(정보 없음)';
+    _userRegion = (results[3] as String?) ?? '(정보 없음)';
+    _userGrade = (results[4] as String?) ?? '일반';
+    final rawValidUntil = (results[5] as String?) ?? '';
+    _validUntil = formatDateString(rawValidUntil);
+
+    // 상태 업데이트는 _initializeSettings 마지막에 한 번만 호출
+    // setState(() {});
+  }
+
   Future<void> _checkStatus() async {
-    setState(() => _checking = true);
+    // checkStatus 시작 시 로딩 상태 설정은 _initializeSettings에서 이미 처리
+    // setState(() => _checking = true); // 제거
 
     // (A) 기본 전화앱 여부
     final defDialer = await NativeDefaultDialerMethods.isDefaultDialer();
 
-    /* overlay removed
-    // (B) 오버레이 권한 여부
-    final overlayOk = await SystemAlertWindow.checkPermissions(
-      prefMode: SystemWindowPrefMode.OVERLAY,
-    );
-    */
-
     if (!mounted) return;
-    setState(() {
-      _checking = false;
-      _isDefaultDialer = defDialer;
-      /* overlay removed
-      _overlayGranted = overlayOk ?? false;
-      */
-    });
+    // 로딩 상태 해제 및 UI 업데이트는 _initializeSettings 마지막에 한 번만
+    // setState(() {
+    //   _checking = false;
+    //   _isDefaultDialer = defDialer;
+    // });
+    _isDefaultDialer = defDialer; // 변수 값만 업데이트
   }
 
   /// 기본 전화앱 등록
@@ -306,25 +343,15 @@ class _SettingsScreenState extends State<SettingsScreen>
     );
   }
 
-  // Hive에서 사용자 정보 로드
-  void _loadUserInfo() {
-    // 기본값을 사용하여 안전하게 로드
-    _phoneNumber = _authBox.get('myNumber', defaultValue: '(unknown)');
-    // 'savedLoginId' 대신 'loginId' 키 사용
-    _loginId = _authBox.get('loginId', defaultValue: '(no id)');
-    _userName = _authBox.get('userName', defaultValue: '(no name)');
-    _userRegion = _authBox.get('userRegion', defaultValue: '(no region)');
-    _userGrade = _authBox.get('userGrade', defaultValue: '일반');
-    final rawValidUntil =
-        _authBox.get('userValidUntil', defaultValue: '') as String;
-    _validUntil = formatDateString(rawValidUntil);
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_checking) {
-      return const Center(child: CircularProgressIndicator());
-    }
+    // 초기 로딩 표시는 다른 방식으로 처리하거나, _initializeSettings 시작 시
+    // 특정 위젯(예: 전체 화면 로딩 인디케이터)을 표시하도록 할 수 있음.
+    // 여기서는 build 메서드 초반 로딩 체크는 제거하고 각 ListTile에서
+    // 초기값('(정보 로딩중)')이 표시되도록 함.
+    // if (_checking) {
+    //   return const Center(child: CircularProgressIndicator());
+    // }
 
     return Scaffold(
       appBar: PreferredSize(
@@ -658,9 +685,17 @@ class _SettingsScreenState extends State<SettingsScreen>
             leading: const Icon(Icons.logout),
             title: const Text('로그아웃'),
             onTap: () async {
+              // 로그아웃 시 정리 작업 (기존 로직 복원)
               final appController = context.read<AppController>();
               await appController.cleanupOnLogout();
+              // GraphQLClientManager 로그아웃 호출 (기존 방식 복원)
               await GraphQLClientManager.logout();
+              if (!mounted) return;
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
             },
           ),
         ],
