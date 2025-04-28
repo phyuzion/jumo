@@ -185,8 +185,10 @@ module.exports = {
       if (!normalizedPhoneNumber) {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
+      // <<< 로그 추가: 입력된 번호 확인 >>>
+      console.log(`[getPhoneNumber] Received request for phone: ${normalizedPhoneNumber}`);
 
-      // --- 검색 횟수 체크 로직 (동일) ---
+      // --- 검색 횟수 체크 로직 (복원) ---
       if (isRequested && tokenData.userId) {
         const user = await User.findById(tokenData.userId).select('searchCount lastSearchTime grade');
         if (!user) {
@@ -210,14 +212,18 @@ module.exports = {
       }
       // --- 검색 횟수 체크 로직 끝 ---
 
-      // <<< 사용자 정보, PhoneNumber 정보, TodayRecord 정보를 병렬로 조회 >>>
+      // <<< 사용자 정보, PhoneNumber 정보, TodayRecord 정보를 병렬로 조회 (복원) >>>
+      // <<< 로그 추가: 사용자 검색 조건 확인 >>>
+      console.log(`[getPhoneNumber] Searching for user with phoneNumber: ${normalizedPhoneNumber}`);
       const [registeredUser, phoneDoc, todayDocs] = await Promise.all([
         User.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
         PhoneNumber.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
         TodayRecord.find({ phoneNumber: normalizedPhoneNumber }).sort({ createdAt: -1 }).lean(),
       ]);
+      // <<< 로그 추가: 사용자 검색 결과 확인 >>>
+      console.log(`[getPhoneNumber] Found user result: ${registeredUser ? registeredUser.loginId : 'null'}`);
 
-      // TodayRecord 포맷팅 (항상 수행)
+      // TodayRecord 포맷팅 (항상 수행) (복원)
       const formattedTodayRecords = todayDocs.map(record => ({
         id: record._id.toString(),
         phoneNumber: record.phoneNumber,
@@ -227,23 +233,23 @@ module.exports = {
         createdAt: record.createdAt.toISOString(),
       }));
 
-      // <<< 최종 결과 조합 >>>
+      // <<< 최종 결과 조합 (복원 및 수정) >>>
       if (registeredUser) {
         // 사용자를 찾은 경우
         console.log('[getPhoneNumber] Found registered user:', registeredUser.loginId);
         return {
-          ...(phoneDoc || {}), // phoneDoc이 없을 수도 있음 (기본값 제공)
-          id: phoneDoc?._id?.toString() ?? normalizedPhoneNumber, // ID 처리
+          ...(phoneDoc || {}), // phoneDoc 정보도 같이 반환
+          id: phoneDoc?._id?.toString() ?? normalizedPhoneNumber, // ID는 phoneDoc 우선, 없으면 번호
           phoneNumber: normalizedPhoneNumber,
           type: phoneDoc?.type ?? 0,
           blockCount: phoneDoc?.blockCount ?? 0,
-          records: (phoneDoc?.records || []).map(r => ({ // phoneDoc이 null일 경우 빈 배열
+          records: (phoneDoc?.records || []).map(r => ({
             ...r,
             createdAt: r.createdAt?.toISOString()
           })),
-          todayRecords: formattedTodayRecords, // 항상 포함
-          isRegisteredUser: true,
-          registeredUserInfo: {
+          todayRecords: formattedTodayRecords,
+          isRegisteredUser: true, // 사용자 플래그 true
+          registeredUserInfo: { // 사용자 정보 채움
             userName: registeredUser.name || '',
             userRegion: registeredUser.region || '',
             userType: registeredUser.userType || '일반',
@@ -255,12 +261,12 @@ module.exports = {
         if (!phoneDoc) {
           // PhoneNumber 정보도 없으면
           return {
-            id: normalizedPhoneNumber,
+            id: normalizedPhoneNumber, // 임시 ID
             phoneNumber: normalizedPhoneNumber,
             type: 0,
             blockCount: 0,
             records: [],
-            todayRecords: formattedTodayRecords, // TodayRecord는 있을 수 있음
+            todayRecords: formattedTodayRecords,
             isRegisteredUser: false,
             registeredUserInfo: null,
           };
@@ -274,8 +280,8 @@ module.exports = {
             createdAt: r.createdAt?.toISOString()
           })),
           todayRecords: formattedTodayRecords,
-          isRegisteredUser: false,
-          registeredUserInfo: null,
+          isRegisteredUser: false, // 사용자 플래그 false
+          registeredUserInfo: null, // 사용자 정보 null
         };
       }
     },
