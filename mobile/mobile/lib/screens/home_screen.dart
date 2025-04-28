@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/repositories/notification_repository.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/widgets/notification_dialog.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +28,6 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
-  Box get _notificationsBox => Hive.box('notifications');
   int _notificationCount = 0;
   StreamSubscription? _notificationSub;
   bool _isDefaultDialer = false;
@@ -55,7 +55,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initializeHomeScreen();
     _checkDefaultDialer();
-    _loadNotificationCount();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadNotificationCount();
+      _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen(
+        (_) {
+          if (mounted) {
+            _loadNotificationCount();
+          }
+        },
+      );
+    });
   }
 
   @override
@@ -135,13 +144,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       '[HomeScreen] UI is ready (Core init & Contacts loading in background).',
     );
 
-    _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen((
-      _,
-    ) {
-      if (mounted) {
-        _loadNotificationCount();
-      }
-    });
     log('[HomeScreen] HomeScreen initialization finished.');
   }
 
@@ -153,11 +155,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   Future<void> _loadNotificationCount() async {
     if (!mounted) return;
-    final count = Hive.box('notifications').length;
-    setState(() {
-      _notificationCount = count;
-    });
-    log('[HomeScreen] Loaded notification count: $_notificationCount');
+    try {
+      final notifications =
+          await context.read<NotificationRepository>().getAllNotifications();
+      if (mounted) {
+        setState(() {
+          _notificationCount = notifications.length;
+        });
+      }
+      log('[HomeScreen] Loaded notification count: $_notificationCount');
+    } catch (e) {
+      log('[HomeScreen] Error loading notification count: $e');
+      if (mounted) {
+        setState(() {
+          _notificationCount = 0;
+        });
+      }
+    }
   }
 
   void _toggleSearch() {

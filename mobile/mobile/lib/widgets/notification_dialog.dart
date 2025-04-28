@@ -1,34 +1,59 @@
 import 'package:flutter/material.dart';
 // import 'package:get_storage/get_storage.dart'; // 제거
-import 'package:hive_ce/hive.dart'; // Hive 추가
+// import 'package:hive_ce/hive.dart'; // <<< 제거
 import 'dart:developer'; // 로그 추가
+import 'package:mobile/repositories/notification_repository.dart'; // <<< 추가
+import 'package:provider/provider.dart'; // <<< 추가
 
-class NotificationDialog extends StatelessWidget {
+// <<< StatefulWidget으로 변경 >>>
+class NotificationDialog extends StatefulWidget {
   const NotificationDialog({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // final box = GetStorage(); // 제거
-    // Hive Box 사용
-    final notificationBox = Hive.box('notifications');
-    // Box에서 데이터 로드 (Map<String, dynamic> 형태로 저장됨)
-    // Key는 알림 ID, Value는 알림 데이터 Map
-    final notifications = notificationBox.values.toList();
-    List<Map<String, dynamic>> notificationList;
+  State<NotificationDialog> createState() => _NotificationDialogState();
+}
+
+class _NotificationDialogState extends State<NotificationDialog> {
+  List<Map<String, dynamic>> _notificationList = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotifications();
+  }
+
+  Future<void> _loadNotifications() async {
     try {
-      // 최신 알림이 위로 오도록 정렬 (timestamp 기준, 내림차순)
+      final repository = context.read<NotificationRepository>();
+      final notifications = await repository.getAllNotifications();
+      // 최신 알림이 위로 오도록 정렬
       notifications.sort((a, b) {
-        final timeA = DateTime.tryParse(a?['timestamp'] ?? '');
-        final timeB = DateTime.tryParse(b?['timestamp'] ?? '');
+        final timeA = DateTime.tryParse(a['timestamp'] ?? '');
+        final timeB = DateTime.tryParse(b['timestamp'] ?? '');
         if (timeA == null || timeB == null) return 0;
         return timeB.compareTo(timeA);
       });
-      notificationList = notifications.cast<Map<String, dynamic>>().toList();
+      if (mounted) {
+        setState(() {
+          _notificationList = notifications;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      log('[NotificationDialog] Error casting notifications: $e');
-      notificationList = [];
+      log('[NotificationDialog] Error loading notifications: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          // 에러 처리 (예: 빈 리스트 표시)
+        });
+      }
     }
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    // <<< 로딩 상태 및 알림 목록 사용 >>>
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
@@ -68,11 +93,12 @@ class NotificationDialog extends StatelessWidget {
               ),
             ),
 
-            // 내용
+            // 내용 (로딩 상태 처리 추가)
             Flexible(
               child:
-                  notificationList
-                          .isEmpty // 수정된 변수 사용
+                  _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _notificationList.isEmpty
                       ? const Center(
                         child: Padding(
                           padding: EdgeInsets.all(16.0),
@@ -84,9 +110,9 @@ class NotificationDialog extends StatelessWidget {
                       )
                       : ListView.builder(
                         shrinkWrap: true,
-                        itemCount: notificationList.length, // 수정된 변수 사용
+                        itemCount: _notificationList.length,
                         itemBuilder: (context, index) {
-                          final noti = notificationList[index]; // 수정된 변수 사용
+                          final noti = _notificationList[index];
                           return ListTile(
                             title: Text(noti['title'] ?? ''),
                             subtitle: Column(
@@ -95,7 +121,6 @@ class NotificationDialog extends StatelessWidget {
                                 Text(noti['message'] ?? ''),
                                 if (noti['timestamp'] != null)
                                   Text(
-                                    // 타임스탬프 파싱 및 포맷팅
                                     tryFormatDateTime(noti['timestamp']),
                                     style: const TextStyle(
                                       fontSize: 12,
@@ -106,7 +131,7 @@ class NotificationDialog extends StatelessWidget {
                             ),
                             leading: const Icon(Icons.notifications),
                             onTap: () {
-                              // 알림 클릭 시 처리
+                              // 알림 클릭 시 처리 (필요 시 구현)
                             },
                           );
                         },

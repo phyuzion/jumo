@@ -10,6 +10,12 @@ import 'package:mobile/models/blocked_history.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/main.dart';
 import 'package:hive_ce/hive.dart';
+import 'package:mobile/repositories/notification_repository.dart';
+import 'package:mobile/repositories/call_log_repository.dart';
+import 'package:mobile/repositories/sms_log_repository.dart';
+import 'package:mobile/repositories/blocked_number_repository.dart';
+import 'package:mobile/repositories/blocked_history_repository.dart';
+import 'package:mobile/repositories/sync_state_repository.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -87,19 +93,73 @@ class GraphQLClientManager {
   static Future<void> logout() async {
     log('[GraphQL] Logging out and clearing user data...');
     try {
+      // <<< AuthRepository 클리어 >>>
       final authRepository = getIt<AuthRepository>();
       await authRepository.clearToken();
       await authRepository.clearSavedCredentials();
       await authRepository.setLoginStatus(false);
-      await Hive.box('notifications').clear();
-      await Hive.box('last_sync_state').clear();
-      await Hive.box<BlockedHistory>('blocked_history').clear();
-      await Hive.box('call_logs').clear();
-      await Hive.box('sms_logs').clear();
-      await Hive.box('display_noti_ids').clear();
-      await Hive.box('blocked_numbers').clear();
+
+      // <<< NotificationRepository 클리어 >>>
+      try {
+        final notificationRepository = getIt<NotificationRepository>();
+        await notificationRepository.clearAllNotifications();
+        log('[GraphQL] Cleared notification data via NotificationRepository.');
+      } catch (e) {
+        log('[GraphQL] Error clearing notification data: $e');
+      }
+
+      // <<< CallLogRepository 클리어 >>>
+      try {
+        final callLogRepository = getIt<CallLogRepository>();
+        await callLogRepository.clearCallLogs();
+        log('[GraphQL] Cleared call log data via CallLogRepository.');
+      } catch (e) {
+        log('[GraphQL] Error clearing call log data: $e');
+      }
+
+      // <<< SmsLogRepository 클리어 >>>
+      try {
+        final smsLogRepository = getIt<SmsLogRepository>();
+        await smsLogRepository.clearSmsLogs();
+        log('[GraphQL] Cleared SMS log data via SmsLogRepository.');
+      } catch (e) {
+        log('[GraphQL] Error clearing SMS log data: $e');
+      }
+
+      // <<< BlockedNumberRepository 클리어 >>>
+      try {
+        final blockedNumberRepository = getIt<BlockedNumberRepository>();
+        await blockedNumberRepository.clearAllBlockedNumberData();
+        log(
+          '[GraphQL] Cleared blocked number data via BlockedNumberRepository.',
+        );
+      } catch (e) {
+        log('[GraphQL] Error clearing blocked number data: $e');
+      }
+
+      // <<< BlockedHistoryRepository 클리어 >>>
+      try {
+        final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
+        await blockedHistoryRepository.clearBlockedHistory();
+        log(
+          '[GraphQL] Cleared blocked history data via BlockedHistoryRepository.',
+        );
+      } catch (e) {
+        log('[GraphQL] Error clearing blocked history data: $e');
+      }
+
+      // <<< SyncStateRepository 클리어 >>>
+      try {
+        final syncStateRepository = getIt<SyncStateRepository>();
+        await syncStateRepository.clearAllSyncStates();
+        log('[GraphQL] Cleared sync state data via SyncStateRepository.');
+      } catch (e) {
+        log('[GraphQL] Error clearing sync state data: $e');
+      }
+
+      // <<< 다른 Box들은 이제 없음 (모두 Repository로 관리됨) >>>
       log('[GraphQL] Cleared auth data via AuthRepository.');
-      log('[GraphQL] Cleared other user-specific Hive boxes directly.');
+      log('[GraphQL] All user-specific data cleared via repositories.');
     } catch (e) {
       log('[GraphQL] Error clearing data during logout: $e');
     }

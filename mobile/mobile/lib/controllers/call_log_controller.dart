@@ -3,14 +3,13 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'package:call_e_log/call_log.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mobile/repositories/call_log_repository.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/graphql/log_api.dart';
 
 class CallLogController with ChangeNotifier {
-  static const storageKey = 'call_logs';
-  Box get _callLogBox => Hive.box(storageKey);
+  final CallLogRepository _callLogRepository;
 
   List<Map<String, dynamic>> _callLogs = [];
   bool _isLoading = false;
@@ -18,24 +17,23 @@ class CallLogController with ChangeNotifier {
   List<Map<String, dynamic>> get callLogs => _callLogs;
   bool get isLoading => _isLoading;
 
-  CallLogController() {
+  CallLogController(this._callLogRepository) {
     loadSavedCallLogs();
   }
 
-  void loadSavedCallLogs() {
-    final logString = _callLogBox.get('logs', defaultValue: '[]') as String;
+  Future<void> loadSavedCallLogs() async {
     try {
-      final decodedList = jsonDecode(logString) as List;
-      _callLogs = decodedList.cast<Map<String, dynamic>>().toList();
+      _callLogs = await _callLogRepository.getAllCallLogs();
+      notifyListeners();
     } catch (e) {
-      log('[CallLogController] Error decoding call logs from Hive: $e');
+      log('[CallLogController] Error loading initial call logs: $e');
       _callLogs = [];
+      notifyListeners();
     }
   }
 
   /// 통화 목록 새로 읽기 -> 로컬 DB 저장 -> 변경사항 서버 업로드 -> 상태 업데이트
   Future<void> refreshCallLogs() async {
-    // 로딩 상태 시작 알림
     Future.microtask(() {
       if (!_isLoading) {
         _isLoading = true;
@@ -44,23 +42,11 @@ class CallLogController with ChangeNotifier {
     });
 
     try {
-      // 1. Get previous logs from Hive (for diff calculation)
-      List<Map<String, dynamic>> previousLogs = [];
-      final prevLogString =
-          _callLogBox.get('logs', defaultValue: '[]') as String;
-      try {
-        final decodedList = jsonDecode(prevLogString) as List;
-        previousLogs = decodedList.cast<Map<String, dynamic>>().toList();
-      } catch (e) {
-        log('[CallLogController] Error decoding previous logs for diff: $e');
-        // Continue with empty previousLogs
-      }
-      // Create a set of unique identifiers (timestamp + number) for fast lookup
+      // 1. Get previous logs from Repository
+      final previousLogs = await _callLogRepository.getAllCallLogs();
       final previousLogIds =
           previousLogs
-              .map(
-                (log) => "${log['timestamp']}_${log['number']}",
-              ) // 타임스탬프(int)와 번호(String) 조합
+              .map((log) => "${log['timestamp']}_${log['number']}")
               .toSet();
 
       // 2. Get latest logs from native platform
@@ -109,15 +95,14 @@ class CallLogController with ChangeNotifier {
         }
       }
 
-      // 6. Save the *entire* new list to Hive (overwriting)
-      await _callLogBox.put('logs', jsonEncode(newList));
+      // 6. Save the *entire* new list via Repository
+      await _callLogRepository.saveCallLogs(newList);
 
       // 7. Update internal state for UI
       _callLogs = newList;
     } catch (e, st) {
       log('[CallLogController] Error in refreshCallLogs: $e\n$st');
     } finally {
-      // 로딩 상태 종료 알림
       _isLoading = false;
       notifyListeners();
     }

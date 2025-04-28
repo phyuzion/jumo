@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
@@ -10,6 +9,7 @@ import 'package:mobile/controllers/permission_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
+import 'package:mobile/repositories/notification_repository.dart';
 import 'package:mobile/services/app_background_service.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
@@ -28,9 +28,7 @@ class AppController {
   final CallLogController callLogController;
   final SmsController smsController;
   final BlockedNumbersController blockedNumbersController;
-  Box get _settingsBox => Hive.box('settings');
-  Box get _notificationsBox => Hive.box('notifications');
-  Box get _displayNotiIdsBox => Hive.box('display_noti_ids');
+  final NotificationRepository _notificationRepository;
 
   // 로딩 상태 관리
   final _isInitializing = ValueNotifier<bool>(false);
@@ -54,6 +52,7 @@ class AppController {
     this.callLogController,
     this.smsController,
     this.blockedNumbersController,
+    this._notificationRepository,
   );
 
   Future<bool> checkEssentialPermissions() async {
@@ -183,67 +182,29 @@ class AppController {
     log('[AppController] Background service configuration complete.');
   }
 
-  List<Map<String, dynamic>> getNotifications() {
-    final notifications = _notificationsBox.values.toList();
-    try {
-      return notifications.cast<Map<String, dynamic>>().toList();
-    } catch (e) {
-      log('[AppController] Error casting notifications from Hive: $e');
-      return [];
-    }
+  Future<List<Map<String, dynamic>>> getNotifications() async {
+    return await _notificationRepository.getAllNotifications();
   }
 
-  // 만료된 알림 제거
   Future<void> removeExpiredNotifications() async {
-    final notifications = getNotifications();
-    final now = DateTime.now().toUtc();
-    final validNotifications =
-        notifications.where((notification) {
-          final validUntilStr = notification['validUntil'] as String?;
-          if (validUntilStr == null) return true;
-          try {
-            final validUntil = DateTime.parse(validUntilStr).toUtc();
-            return validUntil.isAfter(now);
-          } catch (e) {
-            log("Error parsing validUntil date: $validUntilStr");
-            return true;
-          }
-        }).toList();
-
-    if (validNotifications.length != notifications.length) {
-      log(
-        '[AppController] Removing ${notifications.length - validNotifications.length} expired notifications.',
-      );
-      await _notificationsBox.clear();
-      await _notificationsBox.addAll(validNotifications);
+    final removedCount =
+        await _notificationRepository.removeExpiredNotifications();
+    if (removedCount > 0) {
       appEventBus.fire(NotificationCountUpdatedEvent());
     }
   }
 
-  // 알림 저장 (내부 로직)
   Future<void> saveNotification({
     required String id,
     required String title,
     required String message,
     String? validUntil,
   }) async {
-    // 표시된 알림 ID 로드 (JSON 문자열 리스트 저장 방식으로 변경)
-    final displayedListRaw =
-        _displayNotiIdsBox.get('ids', defaultValue: '[]') as String;
-    List<Map<String, dynamic>> displayedNotiIds;
-    try {
-      displayedNotiIds =
-          (jsonDecode(displayedListRaw) as List).cast<Map<String, dynamic>>();
-    } catch (_) {
-      displayedNotiIds = [];
-    }
-
-    final isDisplayed = displayedNotiIds.any(
-      (noti) => noti['title'] == title && noti['message'] == message,
+    final isDisplayed = await _notificationRepository.isNotificationDisplayed(
+      title,
+      message,
     );
-
-    // 기존 알림 로드 (getNotifications 사용)
-    final notifications = getNotifications();
+    final notifications = await _notificationRepository.getAllNotifications();
     final isDuplicate = notifications.any(
       (noti) => noti['title'] == title && noti['message'] == message,
     );
@@ -256,8 +217,7 @@ class AppController {
         'timestamp': DateTime.now().toIso8601String(),
         'validUntil': validUntil,
       };
-      await _notificationsBox.put(id, newNotification);
-
+      await _notificationRepository.saveNotification(newNotification);
       appEventBus.fire(NotificationCountUpdatedEvent());
     }
 
@@ -267,8 +227,7 @@ class AppController {
         title: title,
         body: message,
       );
-      displayedNotiIds.add({'title': title, 'message': message});
-      await _displayNotiIdsBox.put('ids', jsonEncode(displayedNotiIds));
+      await _notificationRepository.markNotificationAsDisplayed(title, message);
     }
   }
 

@@ -22,7 +22,13 @@ import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
 import 'package:mobile/repositories/auth_repository.dart';
+import 'package:mobile/repositories/settings_repository.dart'; // <<< 추가
+import 'package:mobile/repositories/notification_repository.dart'; // <<< 추가
 import 'package:mobile/main.dart';
+import 'package:mobile/repositories/sms_log_repository.dart'; // <<< 추가
+import 'package:mobile/repositories/blocked_number_repository.dart'; // <<< 추가
+import 'package:mobile/repositories/blocked_history_repository.dart'; // <<< 추가
+import 'package:mobile/repositories/sync_state_repository.dart'; // <<< 추가
 //import 'package:system_alert_window/system_alert_window.dart';
 
 SmsController? _backgroundSmsController;
@@ -52,15 +58,22 @@ Future<void> onStart(ServiceInstance service) async {
   // <<< Hive 초기화 >>>
   bool hiveInitialized = false;
   late AuthRepository authRepository;
+  late SettingsRepository settingsRepository;
+  late NotificationRepository notificationRepository;
+  late SmsLogRepository smsLogRepository;
+  late BlockedNumberRepository blockedNumberRepository;
+  late BlockedHistoryRepository blockedHistoryRepository; // <<< 추가
+  late SyncStateRepository syncStateRepository; // <<< 추가
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
     Hive.init(appDocumentDir.path);
     if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
       Hive.registerAdapter(BlockedHistoryAdapter());
     }
+
+    // <<< AuthRepository 등록 >>>
     final authBox = await Hive.openBox('auth');
     authRepository = HiveAuthRepository(authBox);
-
     if (!getIt.isRegistered<AuthRepository>()) {
       getIt.registerSingleton<AuthRepository>(authRepository);
       log('[BackgroundService][onStart] AuthRepository registered in GetIt.');
@@ -70,22 +83,114 @@ Future<void> onStart(ServiceInstance service) async {
       );
     }
 
-    await Hive.openBox('settings');
-    await Hive.openBox<BlockedHistory>('blocked_history');
+    // <<< SettingsRepository 등록 >>>
+    final settingsBox = await Hive.openBox('settings');
+    settingsRepository = HiveSettingsRepository(settingsBox);
+    if (!getIt.isRegistered<SettingsRepository>()) {
+      getIt.registerSingleton<SettingsRepository>(settingsRepository);
+      log(
+        '[BackgroundService][onStart] SettingsRepository registered in GetIt.',
+      );
+    } else {
+      log(
+        '[BackgroundService][onStart] SettingsRepository already registered in GetIt.',
+      );
+    }
+
+    // <<< NotificationRepository 등록 >>>
+    final notificationsBox = await Hive.openBox('notifications'); // <<< 문자열 사용
+    final displayNotiIdsBox = await Hive.openBox(
+      'display_noti_ids',
+    ); // <<< 문자열 사용
+    notificationRepository = HiveNotificationRepository(
+      notificationsBox,
+      displayNotiIdsBox,
+    );
+    if (!getIt.isRegistered<NotificationRepository>()) {
+      getIt.registerSingleton<NotificationRepository>(notificationRepository);
+      log(
+        '[BackgroundService][onStart] NotificationRepository registered in GetIt.',
+      );
+    } else {
+      log(
+        '[BackgroundService][onStart] NotificationRepository already registered in GetIt.',
+      );
+    }
+
+    // <<< SmsLogRepository 등록 >>>
+    final smsLogsBox = await Hive.openBox('sms_logs');
+    smsLogRepository = HiveSmsLogRepository(smsLogsBox);
+    if (!getIt.isRegistered<SmsLogRepository>()) {
+      getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
+      log('[BackgroundService][onStart] SmsLogRepository registered in GetIt.');
+    } else {
+      log(
+        '[BackgroundService][onStart] SmsLogRepository already registered in GetIt.',
+      );
+    }
+
+    // <<< BlockedNumberRepository 등록 >>>
+    final blockedNumbersBox = await Hive.openBox('blocked_numbers');
+    final dangerNumbersBox = await Hive.openBox<List<String>>('danger_numbers');
+    final bombNumbersBox = await Hive.openBox<List<String>>('bomb_numbers');
+    blockedNumberRepository = HiveBlockedNumberRepository(
+      blockedNumbersBox,
+      dangerNumbersBox,
+      bombNumbersBox,
+    );
+    if (!getIt.isRegistered<BlockedNumberRepository>()) {
+      getIt.registerSingleton<BlockedNumberRepository>(blockedNumberRepository);
+      log(
+        '[BackgroundService][onStart] BlockedNumberRepository registered in GetIt.',
+      );
+    } else {
+      log(
+        '[BackgroundService][onStart] BlockedNumberRepository already registered in GetIt.',
+      );
+    }
+
+    // <<< BlockedHistoryRepository 등록 >>>
+    final blockedHistoryBox = await Hive.openBox<BlockedHistory>(
+      'blocked_history',
+    );
+    blockedHistoryRepository = HiveBlockedHistoryRepository(blockedHistoryBox);
+    if (!getIt.isRegistered<BlockedHistoryRepository>()) {
+      getIt.registerSingleton<BlockedHistoryRepository>(
+        blockedHistoryRepository,
+      );
+      log(
+        '[BackgroundService][onStart] BlockedHistoryRepository registered in GetIt.',
+      );
+    } else {
+      log(
+        '[BackgroundService][onStart] BlockedHistoryRepository already registered in GetIt.',
+      );
+    }
+
+    // <<< SyncStateRepository 등록 >>>
+    final syncStateBox = await Hive.openBox('last_sync_state');
+    syncStateRepository = HiveSyncStateRepository(syncStateBox);
+    if (!getIt.isRegistered<SyncStateRepository>()) {
+      getIt.registerSingleton<SyncStateRepository>(syncStateRepository);
+      log(
+        '[BackgroundService][onStart] SyncStateRepository registered in GetIt.',
+      );
+    } else {
+      log(
+        '[BackgroundService][onStart] SyncStateRepository already registered in GetIt.',
+      );
+    }
+
+    // <<< 나머지 Box 열기 >>>
+    // settingsBox는 이미 열었음
     await Hive.openBox('call_logs');
-    await Hive.openBox('sms_logs');
-    await Hive.openBox('last_sync_state');
-    await Hive.openBox('notifications');
-    await Hive.openBox('display_noti_ids');
-    await Hive.openBox('blocked_numbers');
-    await Hive.openBox<List<String>>('danger_numbers');
-    await Hive.openBox<List<String>>('bomb_numbers');
+
     hiveInitialized = true;
     log('[BackgroundService][onStart] Hive initialized successfully.');
   } catch (e) {
     log(
-      '[BackgroundService][onStart] Error initializing Hive or AuthRepository: $e',
-    );
+      '[BackgroundService][onStart] Error initializing Hive or Repositories: $e',
+    ); // 로그 메시지 수정
     service.stopSelf();
     return;
   }
@@ -97,8 +202,11 @@ Future<void> onStart(ServiceInstance service) async {
     return;
   }
 
-  // <<< SmsController 인스턴스 생성 (Hive 초기화 이후) >>>
-  _backgroundSmsController = SmsController();
+  // <<< SmsController 인스턴스 생성 (SmsLogRepository 주입) >>>
+  _backgroundSmsController = SmsController(
+    settingsRepository,
+    smsLogRepository,
+  );
 
   // <<< 3. 초기 알림 설정 (Hive 초기화 이후 + 추가 딜레이) >>>
   try {
@@ -570,44 +678,44 @@ Future<void> performInitialBackgroundTasks() async {
 // 차단 목록 관련 동기화 함수 (로직 강화)
 Future<void> syncBlockedLists() async {
   log('[BackgroundService] Executing syncBlockedLists (User, Danger, Bomb)...');
-  const settingsBoxName = 'settings';
-  const blockedNumbersBoxName = 'blocked_numbers';
-  const dangerNumbersBoxName = 'danger_numbers';
-  const bombNumbersBoxName = 'bomb_numbers';
+  // <<< Box 이름 상수 제거 또는 유지 (Repository 내부에서만 사용) >>>
 
-  // 필요한 Box 열려있는지 확인
-  if (!Hive.isBoxOpen(settingsBoxName) ||
-      !Hive.isBoxOpen(blockedNumbersBoxName) ||
-      !Hive.isBoxOpen(dangerNumbersBoxName) ||
-      !Hive.isBoxOpen(bombNumbersBoxName)) {
-    log('[BackgroundService] Required boxes not open for syncBlockedLists.');
+  // <<< Repository 인스턴스 가져오기 >>>
+  late SettingsRepository settingsRepository;
+  late BlockedNumberRepository blockedNumberRepository;
+  try {
+    settingsRepository = getIt<SettingsRepository>();
+    blockedNumberRepository = getIt<BlockedNumberRepository>();
+  } catch (e) {
+    log(
+      '[BackgroundService][syncBlockedLists] Failed to get Repositories from GetIt: $e',
+    );
     return;
   }
-  final settingsBox = Hive.box(settingsBoxName);
-  final blockedNumbersBox = Hive.box(blockedNumbersBoxName);
-  final dangerNumbersBox = Hive.box<List<String>>(dangerNumbersBoxName);
-  final bombNumbersBox = Hive.box<List<String>>(bombNumbersBoxName);
+
+  // <<< Box 직접 접근 제거 >>>
+  // final blockedNumbersBox = Hive.box(blockedNumbersBoxName);
+  // final dangerNumbersBox = Hive.box<List<String>>(dangerNumbersBoxName);
+  // final bombNumbersBox = Hive.box<List<String>>(bombNumbersBoxName);
 
   try {
-    // 1. 서버에서 사용자 차단 목록 가져와 Hive 업데이트
+    // 1. 서버에서 사용자 차단 목록 가져와 Repository 통해 저장
     log('[BackgroundService] Syncing user blocked numbers...');
     try {
       final serverNumbers = await BlockApi.getBlockedNumbers();
       final numbersToSave =
           (serverNumbers ?? []).map((n) => normalizePhone(n)).toList();
-      await blockedNumbersBox.clear(); // 기존 목록 삭제
-      await blockedNumbersBox.addAll(numbersToSave); // 새 목록 추가
+      // <<< Repository 사용 >>>
+      await blockedNumberRepository.saveAllUserBlockedNumbers(numbersToSave);
       log(
         '[BackgroundService] Synced user blocked numbers: ${numbersToSave.length}',
       );
     } catch (e) {
       log('[BackgroundService] Error syncing user blocked numbers: $e');
-      // 사용자 목록 동기화 실패 시 어떻게 처리할지? (예: 로컬 유지 또는 에러 로깅)
     }
 
-    // 2. 위험 번호 업데이트
-    final isAutoBlockDanger =
-        settingsBox.get('isAutoBlockDanger', defaultValue: false) as bool;
+    // 2. 위험 번호 업데이트 (SettingsRepository 및 BlockedNumberRepository 사용)
+    final isAutoBlockDanger = await settingsRepository.isAutoBlockDanger();
     if (isAutoBlockDanger) {
       log('[BackgroundService] Syncing danger numbers...');
       try {
@@ -616,7 +724,8 @@ Future<void> syncBlockedLists() async {
             dangerNumbersResult
                 .map((n) => normalizePhone(n.phoneNumber))
                 .toList();
-        await dangerNumbersBox.put('list', dangerNumbersList); // 'list' 키에 저장
+        // <<< Repository 사용 >>>
+        await blockedNumberRepository.saveDangerNumbers(dangerNumbersList);
         log(
           '[BackgroundService] Synced danger numbers: ${dangerNumbersList.length}',
         );
@@ -624,18 +733,16 @@ Future<void> syncBlockedLists() async {
         log('[BackgroundService] Error syncing danger numbers: $e');
       }
     } else {
-      // 설정 꺼져있으면 로컬 데이터 삭제 (선택적)
-      await dangerNumbersBox.delete('list');
+      // <<< Repository 사용 >>>
+      await blockedNumberRepository.clearDangerNumbers();
       log(
         '[BackgroundService] Cleared local danger numbers as setting is off.',
       );
     }
 
-    // 3. 콜폭 번호 업데이트
-    final isBombCallsBlocked =
-        settingsBox.get('isBombCallsBlocked', defaultValue: false) as bool;
-    final bombCallsCount =
-        settingsBox.get('bombCallsCount', defaultValue: 0) as int;
+    // 3. 콜폭 번호 업데이트 (SettingsRepository 및 BlockedNumberRepository 사용)
+    final isBombCallsBlocked = await settingsRepository.isBombCallsBlocked();
+    final bombCallsCount = await settingsRepository.getBombCallsCount();
     if (isBombCallsBlocked && bombCallsCount > 0) {
       log(
         '[BackgroundService] Syncing bomb call numbers (count: $bombCallsCount)...',
@@ -648,7 +755,8 @@ Future<void> syncBlockedLists() async {
             (bombNumbersResult ?? [])
                 .map((n) => normalizePhone(n['phoneNumber'] as String? ?? ''))
                 .toList();
-        await bombNumbersBox.put('list', bombNumbersList); // 'list' 키에 저장
+        // <<< Repository 사용 >>>
+        await blockedNumberRepository.saveBombNumbers(bombNumbersList);
         log(
           '[BackgroundService] Synced bomb call numbers: ${bombNumbersList.length}',
         );
@@ -656,8 +764,8 @@ Future<void> syncBlockedLists() async {
         log('[BackgroundService] Error syncing bomb call numbers: $e');
       }
     } else {
-      // 설정 꺼져있으면 로컬 데이터 삭제 (선택적)
-      await bombNumbersBox.delete('list');
+      // <<< Repository 사용 >>>
+      await blockedNumberRepository.clearBombNumbers();
       log(
         '[BackgroundService] Cleared local bomb call numbers as setting is off.',
       );

@@ -4,6 +4,7 @@ import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/models/blocked_history.dart';
+import 'package:mobile/models/blocked_number.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart';
@@ -628,11 +629,21 @@ class _SettingsScreenState extends State<SettingsScreen>
                 padding: const EdgeInsets.only(left: 16.0),
                 child: const Text('개별 차단번호 관리'),
               ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(left: 24.0),
-                child: Text(
-                  '${_blockedNumbersController.blockedNumbers.length}개의 번호가 차단되어 있습니다',
-                ),
+              subtitle: FutureBuilder<List<BlockedNumber>>(
+                future: _blockedNumbersController.blockedNumbers,
+                builder: (context, snapshot) {
+                  String text = '...'; // 로딩 또는 에러 시 표시할 텍스트
+                  if (snapshot.connectionState == ConnectionState.done &&
+                      snapshot.hasData) {
+                    text = '${snapshot.data!.length}개의 번호가 차단되어 있습니다';
+                  } else if (snapshot.hasError) {
+                    text = '개수 로딩 오류';
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 24.0),
+                    child: Text(text),
+                  );
+                },
               ),
               trailing: const Icon(Icons.settings),
               onTap: () => _showBlockedNumbersDialog(context),
@@ -642,18 +653,36 @@ class _SettingsScreenState extends State<SettingsScreen>
                 padding: const EdgeInsets.only(left: 16.0),
                 child: const Text('차단 이력'),
               ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(left: 24.0),
-                child: Text(
-                  '${_blockedNumbersController.blockedHistory.length}개의 차단 이력이 있습니다',
-                ),
+              subtitle: FutureBuilder<List<BlockedHistory>>(
+                future: _blockedNumbersController.blockedHistory,
+                builder: (context, snapshot) {
+                  String text = '...'; // 로딩 또는 에러 시 표시할 텍스트
+                  if (snapshot.connectionState == ConnectionState.done &&
+                      snapshot.hasData) {
+                    text = '${snapshot.data!.length}개의 차단 이력이 있습니다';
+                  } else if (snapshot.hasError) {
+                    text = '개수 로딩 오류';
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(left: 24.0),
+                    child: Text(text),
+                  );
+                },
               ),
               trailing: const Icon(Icons.chevron_right),
-              onTap:
-                  () => _showBlockedHistoryDialog(
-                    context,
-                    _blockedNumbersController.blockedHistory,
-                  ),
+              onTap: () async {
+                // <<< async 추가: blockedHistory를 기다려야 함 >>>
+                // FutureBuilder는 데이터를 표시만 하므로 실제 데이터를 가져와 전달
+                try {
+                  final history =
+                      await _blockedNumbersController.blockedHistory;
+                  if (mounted) {
+                    _showBlockedHistoryDialog(context, history);
+                  }
+                } catch (e) {
+                  log('Error fetching history for dialog: $e');
+                }
+              },
             ),
           ],
 

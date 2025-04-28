@@ -35,6 +35,13 @@ import 'package:hive_ce/hive.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:get_it/get_it.dart';
+import 'package:mobile/repositories/settings_repository.dart';
+import 'package:mobile/repositories/notification_repository.dart';
+import 'package:mobile/repositories/call_log_repository.dart';
+import 'package:mobile/repositories/sms_log_repository.dart';
+import 'package:mobile/repositories/blocked_number_repository.dart';
+import 'package:mobile/repositories/blocked_history_repository.dart';
+import 'package:mobile/repositories/sync_state_repository.dart';
 
 final getIt = GetIt.instance;
 
@@ -52,7 +59,9 @@ Future<void> initializeDependencies() async {
   try {
     final authBox = await Hive.openBox('auth');
     final authRepository = HiveAuthRepository(authBox);
-    getIt.registerSingleton<AuthRepository>(authRepository);
+    if (!getIt.isRegistered<AuthRepository>()) {
+      getIt.registerSingleton<AuthRepository>(authRepository);
+    }
     log('[initializeDependencies] AuthRepository registered in GetIt.');
   } catch (e) {
     log(
@@ -62,17 +71,126 @@ Future<void> initializeDependencies() async {
   }
 
   try {
+    final settingsBox = await Hive.openBox('settings');
+    final settingsRepository = HiveSettingsRepository(settingsBox);
+    if (!getIt.isRegistered<SettingsRepository>()) {
+      getIt.registerSingleton<SettingsRepository>(settingsRepository);
+    }
+    log('[initializeDependencies] SettingsRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing SettingsRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    final notificationsBox = await Hive.openBox('notifications');
+    final displayNotiIdsBox = await Hive.openBox('display_noti_ids');
+    final notificationRepository = HiveNotificationRepository(
+      notificationsBox,
+      displayNotiIdsBox,
+    );
+    if (!getIt.isRegistered<NotificationRepository>()) {
+      getIt.registerSingleton<NotificationRepository>(notificationRepository);
+    }
+    log('[initializeDependencies] NotificationRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing NotificationRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    final callLogsBox = await Hive.openBox('call_logs');
+    final callLogRepository = HiveCallLogRepository(callLogsBox);
+    if (!getIt.isRegistered<CallLogRepository>()) {
+      getIt.registerSingleton<CallLogRepository>(callLogRepository);
+    }
+    log('[initializeDependencies] CallLogRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing CallLogRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    final smsLogsBox = await Hive.openBox('sms_logs');
+    final smsLogRepository = HiveSmsLogRepository(smsLogsBox);
+    if (!getIt.isRegistered<SmsLogRepository>()) {
+      getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
+    }
+    log('[initializeDependencies] SmsLogRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing SmsLogRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    final blockedNumbersBox = await Hive.openBox('blocked_numbers');
+    final dangerNumbersBox = await Hive.openBox<List<String>>('danger_numbers');
+    final bombNumbersBox = await Hive.openBox<List<String>>('bomb_numbers');
+    final blockedNumberRepository = HiveBlockedNumberRepository(
+      blockedNumbersBox,
+      dangerNumbersBox,
+      bombNumbersBox,
+    );
+    if (!getIt.isRegistered<BlockedNumberRepository>()) {
+      getIt.registerSingleton<BlockedNumberRepository>(blockedNumberRepository);
+    }
+    log(
+      '[initializeDependencies] BlockedNumberRepository registered in GetIt.',
+    );
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing BlockedNumberRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    final blockedHistoryBox = await Hive.openBox<BlockedHistory>(
+      'blocked_history',
+    );
+    final blockedHistoryRepository = HiveBlockedHistoryRepository(
+      blockedHistoryBox,
+    );
+    if (!getIt.isRegistered<BlockedHistoryRepository>()) {
+      getIt.registerSingleton<BlockedHistoryRepository>(
+        blockedHistoryRepository,
+      );
+    }
+    log(
+      '[initializeDependencies] BlockedHistoryRepository registered in GetIt.',
+    );
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing BlockedHistoryRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
+    final syncStateBox = await Hive.openBox('last_sync_state');
+    final syncStateRepository = HiveSyncStateRepository(syncStateBox);
+    if (!getIt.isRegistered<SyncStateRepository>()) {
+      getIt.registerSingleton<SyncStateRepository>(syncStateRepository);
+    }
+    log('[initializeDependencies] SyncStateRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing SyncStateRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
     await Future.wait([
-      Hive.openBox('settings'),
-      Hive.openBox<BlockedHistory>('blocked_history'),
-      Hive.openBox('call_logs'),
-      Hive.openBox('sms_logs'),
-      Hive.openBox('last_sync_state'),
-      Hive.openBox('notifications'),
-      Hive.openBox('display_noti_ids'),
-      Hive.openBox('blocked_numbers'),
-      Hive.openBox<List<String>>('danger_numbers'),
-      Hive.openBox<List<String>>('bomb_numbers'),
+      // Hive.openBox('last_sync_state'),
     ]);
     log('[initializeDependencies] Other Hive boxes opened.');
   } catch (e) {
@@ -104,10 +222,23 @@ Future<void> main() async {
       notificationAppLaunchDetails?.notificationResponse?.payload;
   log('[main] App launched with payload: $initialRoutePayload');
 
+  final authRepository = getIt<AuthRepository>();
+  final settingsRepository = getIt<SettingsRepository>();
+  final notificationRepository = getIt<NotificationRepository>();
+  final callLogRepository = getIt<CallLogRepository>();
+  final smsLogRepository = getIt<SmsLogRepository>();
+  final blockedNumberRepository = getIt<BlockedNumberRepository>();
+  final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
+  final syncStateRepository = getIt<SyncStateRepository>();
+  final callLogContoller = CallLogController(callLogRepository);
   final contactsController = ContactsController();
-  final callLogContoller = CallLogController();
-  final smsController = SmsController();
-  final blockedNumbersController = BlockedNumbersController(contactsController);
+  final smsController = SmsController(settingsRepository, smsLogRepository);
+  final blockedNumbersController = BlockedNumbersController(
+    contactsController,
+    settingsRepository,
+    blockedNumberRepository,
+    blockedHistoryRepository,
+  );
   final phoneStateController = PhoneStateController(
     NavigationController.navKey,
     callLogContoller,
@@ -124,19 +255,24 @@ Future<void> main() async {
     callLogContoller,
     smsController,
     blockedNumbersController,
+    notificationRepository,
   );
 
   runApp(
     MultiProvider(
       providers: [
-        Provider<AuthRepository>.value(value: getIt<AuthRepository>()),
+        Provider<AuthRepository>.value(value: authRepository),
+        Provider<SettingsRepository>.value(value: settingsRepository),
+        Provider<NotificationRepository>.value(value: notificationRepository),
         Provider<PhoneStateController>.value(value: phoneStateController),
         Provider<AppController>.value(value: appController),
         Provider<SmsController>.value(value: smsController),
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
         ),
-        ChangeNotifierProvider.value(value: callLogContoller),
+        ChangeNotifierProvider<CallLogController>.value(
+          value: callLogContoller,
+        ),
         ChangeNotifierProvider.value(value: contactsController),
         ChangeNotifierProvider(
           create:
@@ -146,6 +282,13 @@ Future<void> main() async {
                 context.read<ContactsController>(),
               ),
         ),
+        Provider<CallLogRepository>.value(value: callLogRepository),
+        Provider<SmsLogRepository>.value(value: smsLogRepository),
+        Provider<BlockedNumberRepository>.value(value: blockedNumberRepository),
+        Provider<BlockedHistoryRepository>.value(
+          value: blockedHistoryRepository,
+        ),
+        Provider<SyncStateRepository>.value(value: syncStateRepository),
       ],
       child: MyAppStateful(initialRoutePayload: initialRoutePayload),
     ),
@@ -286,12 +429,12 @@ class _MyAppStatefulState extends State<MyAppStateful>
         '[_MyAppStatefulState] Saving screen size: Width=$screenWidth, Height=$screenHeight',
       );
 
-      final settingsBox = await Hive.openBox('settings');
-      await settingsBox.put('screenWidth', screenWidth);
-      await settingsBox.put('screenHeight', screenHeight);
-      log('[_MyAppStatefulState] Screen size saved to Hive.');
+      final settingsRepository = context.read<SettingsRepository>();
+      await settingsRepository.setScreenWidth(screenWidth);
+      await settingsRepository.setScreenHeight(screenHeight);
+      log('[_MyAppStatefulState] Screen size saved via SettingsRepository.');
     } catch (e) {
-      log('[_MyAppStatefulState] Error saving screen size to Hive: $e');
+      log('[_MyAppStatefulState] Error saving screen size via Repository: $e');
     }
   }
 

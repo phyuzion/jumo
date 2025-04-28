@@ -13,6 +13,7 @@ class BlockedNumbersDialog extends StatefulWidget {
 class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
   final _numberController = TextEditingController();
   List<BlockedNumber> _blockedNumbers = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -20,11 +21,23 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
     _loadBlockedNumbers();
   }
 
-  void _loadBlockedNumbers() {
+  Future<void> _loadBlockedNumbers() async {
     if (!mounted) return;
-    setState(() {
-      _blockedNumbers = context.read<BlockedNumbersController>().blockedNumbers;
-    });
+    setState(() => _isLoading = true);
+    try {
+      final numbers =
+          await context.read<BlockedNumbersController>().blockedNumbers;
+      if (mounted) {
+        setState(() {
+          _blockedNumbers = numbers;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
   }
 
   Future<void> _addNumber() async {
@@ -34,12 +47,12 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
       _numberController.text,
     );
     _numberController.clear();
-    _loadBlockedNumbers();
+    await _loadBlockedNumbers();
   }
 
   Future<void> _removeNumber(String number) async {
     await context.read<BlockedNumbersController>().removeBlockedNumber(number);
-    _loadBlockedNumbers();
+    await _loadBlockedNumbers();
   }
 
   @override
@@ -92,7 +105,9 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
           SizedBox(
             height: 300,
             child:
-                _blockedNumbers.isEmpty
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _blockedNumbers.isEmpty
                     ? const Center(
                       child: Text(
                         '차단된 번호가 없습니다.',
