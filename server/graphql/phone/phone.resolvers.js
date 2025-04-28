@@ -8,6 +8,7 @@ const {
 const PhoneNumber = require('../../models/PhoneNumber');
 const User = require('../../models/User');
 const Grade = require('../../models/Grade');
+const TodayRecord = require('../../models/TodayRecord');
 const { withTransaction } = require('../../utils/transaction');
 
 const { checkUserOrAdmin } = require('../auth/utils');
@@ -219,7 +220,34 @@ module.exports = {
         await user.save();
       }
 
-      return PhoneNumber.findOne({ phoneNumber });
+      // <<< PhoneNumber 정보와 TodayRecord 정보를 병렬로 조회 >>>
+      const [phoneDoc, todayDocs] = await Promise.all([
+        PhoneNumber.findOne({ phoneNumber }).lean(), // lean() 사용 권장
+        TodayRecord.find({ phoneNumber }).sort({ createdAt: -1 }).lean(),
+      ]);
+
+      if (!phoneDoc) return null; // PhoneNumber 정보가 없으면 null 반환
+
+      // <<< TodayRecord 결과 포맷팅 (기존 TodayRecord Resolver와 유사하게) >>>
+      const formattedTodayRecords = todayDocs.map(record => ({
+        id: record._id,
+        phoneNumber: record.phoneNumber,
+        userName: record.userName,
+        userType: record.userType,
+        interactionType: record.interactionType,
+        createdAt: record.createdAt.toISOString(), // Date -> ISO String
+      }));
+
+      // <<< 결과 객체에 todayRecords 추가하여 반환 >>>
+      return {
+        ...phoneDoc, // 기존 phoneDoc 필드들
+        id: phoneDoc._id, // _id -> id 매핑 (스키마에 id!로 정의됨)
+        records: phoneDoc.records.map(r => ({
+          ...r,
+          createdAt: r.createdAt?.toISOString() // Record 내부 createdAt도 ISO String으로
+        })),
+        todayRecords: formattedTodayRecords,
+      };
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {

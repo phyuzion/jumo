@@ -19,6 +19,7 @@ module.exports = gql`
     type: Int
     blockCount: Int!
     records: [Record!]!
+    todayRecords: [TodayRecord]
   }
 
   type BlockNumber {
