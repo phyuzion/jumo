@@ -236,28 +236,28 @@ module.exports = {
       // <<< 최종 결과 조합 (복원 및 수정) >>>
       if (registeredUser) {
         // 사용자를 찾은 경우
-        console.log('[getPhoneNumber] Found registered user:', registeredUser.loginId);
+        console.log('[getPhoneNumber] Constructing response for REGISTERED USER:', registeredUser.loginId);
+        // <<< phoneDoc이 null일 경우에도 기본값 제공 및 필드 이름 확인 >>>
         return {
-          ...(phoneDoc || {}), // phoneDoc 정보도 같이 반환
-          id: phoneDoc?._id?.toString() ?? normalizedPhoneNumber, // ID는 phoneDoc 우선, 없으면 번호
+          id: phoneDoc?._id?.toString() ?? registeredUser._id.toString(), // phoneDoc 없으면 User ID 사용
           phoneNumber: normalizedPhoneNumber,
-          type: phoneDoc?.type ?? 0,
-          blockCount: phoneDoc?.blockCount ?? 0,
+          type: phoneDoc?.type ?? 0, // phoneDoc 없으면 기본값
+          blockCount: phoneDoc?.blockCount ?? 0, // phoneDoc 없으면 기본값
           records: (phoneDoc?.records || []).map(r => ({
             ...r,
             createdAt: r.createdAt?.toISOString()
           })),
           todayRecords: formattedTodayRecords,
-          isRegisteredUser: true, // 사용자 플래그 true
-          registeredUserInfo: { // 사용자 정보 채움
+          isRegisteredUser: true, // <<< 확실히 true 설정
+          registeredUserInfo: { // <<< 확실히 객체 생성 및 값 할당
             userName: registeredUser.name || '',
-            userRegion: registeredUser.region || '',
+            userRegion: registeredUser.region, // 스키마에서 Nullable이므로 그대로 전달
             userType: registeredUser.userType || '일반',
           },
         };
       } else {
         // 사용자를 찾지 못한 경우
-        console.log('[getPhoneNumber] User not found for number.');
+        console.log('[getPhoneNumber] Constructing response for NON-registered number.');
         if (!phoneDoc) {
           // PhoneNumber 정보도 없으면
           return {
@@ -280,8 +280,8 @@ module.exports = {
             createdAt: r.createdAt?.toISOString()
           })),
           todayRecords: formattedTodayRecords,
-          isRegisteredUser: false, // 사용자 플래그 false
-          registeredUserInfo: null, // 사용자 정보 null
+          isRegisteredUser: false,
+          registeredUserInfo: null,
         };
       }
     },
