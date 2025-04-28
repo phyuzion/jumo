@@ -84,6 +84,9 @@ class BoardListViewState extends State<BoardListView> {
           final createdAt = row['createdAt'] ?? '';
           final dateStr = formatDateString(createdAt);
 
+          // 익명 처리: widget.type 확인
+          final displayName = (widget.type == '익명') ? '익명' : userName;
+
           // 제목 길이에 따라 폰트 크기 동적 적용
           const int titleLengthThreshold = 40;
           final double titleFontSize =
@@ -106,7 +109,7 @@ class BoardListViewState extends State<BoardListView> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // 오른쪽: 작성자(2줄), 날짜(2줄) 오른쪽 정렬
+                  // 오른쪽: 작성자(displayName 사용), 날짜(2줄) 오른쪽 정렬
                   Expanded(
                     flex: 2,
                     child: Column(
@@ -114,7 +117,7 @@ class BoardListViewState extends State<BoardListView> {
                       children: [
                         // 작성자
                         Text(
-                          userName,
+                          displayName,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.right,

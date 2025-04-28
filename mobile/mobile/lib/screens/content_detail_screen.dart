@@ -143,6 +143,10 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     final title = _item!['title'] ?? '(제목없음)';
     final userName = _item!['userName'] ?? '(unknown)';
     final createdAtStr = formatKoreanDateTime(_item!['createdAt']);
+    final type = _item!['type'] as String?;
+
+    final isAnonymous = (type == '익명');
+    final displayName = isAnonymous ? '익명' : userName;
 
     return Container(
       color: Colors.white,
@@ -165,7 +169,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  userName,
+                  displayName,
                   style: const TextStyle(fontSize: 14, color: Colors.black),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -253,9 +257,16 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
     final userRegion = c['userRegion'] ?? '';
     final comment = c['comment'] ?? '';
     final createdAtStr = formatDateString(c['createdAt'] ?? '');
+    final postType = _item!['type'] as String?;
 
-    String authorText = userName;
-    if (userRegion.isNotEmpty) authorText = '$userName ($userRegion)';
+    final commentUserId = c['userId'] ?? '';
+    final canDelete = (commentUserId == currentUserId);
+
+    final isAnonymousPost = (postType == '익명');
+    String displayAuthorText = isAnonymousPost ? '익명' : userName;
+    if (!isAnonymousPost && userRegion.isNotEmpty) {
+      displayAuthorText = '$userName ($userRegion)';
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -273,7 +284,7 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    authorText,
+                    displayAuthorText,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 4),
@@ -286,10 +297,11 @@ class _ContentDetailScreenState extends State<ContentDetailScreen> {
                 ],
               ),
             ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _onDeleteReply(index),
-            ),
+            if (canDelete)
+              IconButton(
+                icon: const Icon(Icons.delete, color: Colors.red),
+                onPressed: () => _onDeleteReply(index),
+              ),
           ],
         ),
       ),

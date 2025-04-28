@@ -137,7 +137,7 @@ class HiveAuthRepository implements AuthRepository {
   Future<Map<String, String?>> getSavedCredentials() async {
     final id = _authBox.get(_savedLoginIdKey) as String?;
     final password = _authBox.get(_savedPasswordKey) as String?;
-    return Future.value({'id': id, 'password': password});
+    return Future.value({'savedLoginId': id, 'password': password});
   }
 
   @override

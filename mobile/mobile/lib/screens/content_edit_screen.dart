@@ -147,7 +147,10 @@ class _ContentEditScreenState extends State<ContentEditScreen> {
               alignment: Alignment.centerLeft,
               child: Text(
                 '현재 게시판: $_type',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black54,
+                ),
               ),
             ),
 

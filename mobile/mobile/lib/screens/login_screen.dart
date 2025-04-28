@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _loading = false;
 
   // "아이디/비번 기억하기" 체크 여부
-  bool _rememberMe = true;
+  // bool _rememberMe = true; // <<< 제거
 
   // 비밀번호 보이기/숨기기
   bool _showPassword = false;
@@ -101,15 +101,15 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     }
 
-    // 저장된 ID/PW 로드 (AuthRepository 사용)
-    final credentials = await _authRepository.getSavedCredentials(); // <<< 수정
+    // 저장된 ID/PW 로드
+    final credentials = await _authRepository.getSavedCredentials();
     if (!mounted) return;
     final savedId = credentials['id'];
     final savedPw = credentials['password'];
 
     if (savedId != null) _loginIdCtrl.text = savedId;
     if (savedPw != null) _passwordCtrl.text = savedPw;
-    _rememberMe = (savedId != null && savedPw != null);
+    // _rememberMe = (savedId != null && savedPw != null); // <<< 제거
     if (mounted) {
       setState(() {}); // 비동기 작업 후 상태 업데이트
     }
@@ -139,7 +139,6 @@ class _LoginScreenState extends State<LoginScreen> {
         phoneNumber: _myNumber,
       );
 
-      // <<< 로그인 성공 후 사용자 정보 저장 (AuthRepository 사용) >>>
       if (loginResult != null && loginResult['user'] is Map) {
         final userData = loginResult['user'] as Map<String, dynamic>; // 타입 캐스팅
         final token = loginResult['accessToken'] as String?; // 토큰도 가져옴
@@ -155,19 +154,14 @@ class _LoginScreenState extends State<LoginScreen> {
         await _authRepository.setUserGrade(userData['grade'] ?? '');
 
         log('[LoginScreen] User info saved via AuthRepository after login.');
+
+        // <<< 항상 로그인 정보 저장 >>>
+        await _authRepository.saveCredentials(loginId, password);
+        log('[LoginScreen] Credentials saved via AuthRepository after login.');
       } else {
-        // 로그인 결과가 예상과 다를 경우 예외 처리 또는 로깅
         log(
           '[LoginScreen] Login successful but user data format is unexpected.',
         );
-        // 필요하다면 여기서 throw Exception(...) 가능
-      }
-
-      // 아이디/비번 기억하기 (기존 로직 유지)
-      if (_rememberMe) {
-        await _authRepository.saveCredentials(loginId, password);
-      } else {
-        await _authRepository.clearSavedCredentials();
       }
 
       if (!mounted) return;
@@ -222,19 +216,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         onSubmitted: (_) => _onLoginPressed(),
                       ),
                       const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Checkbox(
-                            value: _rememberMe,
-                            onChanged: (val) {
-                              if (val != null) {
-                                setState(() => _rememberMe = val);
-                              }
-                            },
-                          ),
-                          const Text('아이디/비번 기억하기'),
-                        ],
-                      ),
                       ElevatedButton(
                         onPressed: _onLoginPressed,
                         child: const Text('로그인'),

@@ -170,10 +170,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _loadUserInfo() async {
     final authRepository = context.read<AuthRepository>();
 
-    // 여러 정보를 병렬로 가져올 수 있음
     final results = await Future.wait([
       authRepository.getMyNumber(),
-      authRepository.getSavedCredentials(), // loginId 가져오기 위함
+      authRepository.getSavedCredentials(),
       authRepository.getUserName(),
       authRepository.getUserRegion(),
       authRepository.getUserGrade(),
@@ -182,18 +181,14 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (!mounted) return;
 
-    // 결과 할당
     _phoneNumber = (results[0] as String?) ?? '(정보 없음)';
     final credentials = results[1] as Map<String, String?>;
-    _loginId = credentials['id'] ?? '(정보 없음)'; // 저장된 ID 사용
+    _loginId = credentials['savedLoginId'] ?? '(정보 없음)';
     _userName = (results[2] as String?) ?? '(정보 없음)';
     _userRegion = (results[3] as String?) ?? '(정보 없음)';
     _userGrade = (results[4] as String?) ?? '일반';
     final rawValidUntil = (results[5] as String?) ?? '';
     _validUntil = formatDateString(rawValidUntil);
-
-    // 상태 업데이트는 _initializeSettings 마지막에 한 번만 호출
-    // setState(() {});
   }
 
   Future<void> _checkStatus() async {
@@ -259,37 +254,83 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _onChangePassword() async {
     final oldPwCtrl = TextEditingController();
     final newPwCtrl = TextEditingController();
+    // <<< 상태 관리를 위해 변수 추가 >>>
+    bool showOldPassword = false;
+    bool showNewPassword = false;
 
     final result = await showDialog<bool>(
       context: context,
+      // <<< StatefulBuilder 사용 >>>
       builder:
-          (_) => AlertDialog(
-            title: const Text('비밀번호 변경'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: oldPwCtrl,
-                  decoration: const InputDecoration(labelText: '기존 비번'),
-                  obscureText: true,
+          (dialogContext) => StatefulBuilder(
+            builder: (context, setStateDialog) {
+              return AlertDialog(
+                title: const Text('비밀번호 변경'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: oldPwCtrl,
+                      decoration: InputDecoration(
+                        labelText: '기존 비번',
+                        // <<< 미리보기 아이콘 추가 >>>
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            showOldPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setStateDialog(() {
+                              showOldPassword = !showOldPassword;
+                            });
+                          },
+                        ),
+                      ),
+                      obscureText: !showOldPassword, // <<< 상태 반영
+                    ),
+                    TextField(
+                      controller: newPwCtrl,
+                      decoration: InputDecoration(
+                        labelText: '새 비번',
+                        // <<< 미리보기 아이콘 추가 >>>
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            showNewPassword
+                                ? Icons.visibility
+                                : Icons.visibility_off,
+                          ),
+                          onPressed: () {
+                            setStateDialog(() {
+                              showNewPassword = !showNewPassword;
+                            });
+                          },
+                        ),
+                      ),
+                      obscureText: !showNewPassword, // <<< 상태 반영
+                    ),
+                  ],
                 ),
-                TextField(
-                  controller: newPwCtrl,
-                  decoration: const InputDecoration(labelText: '새 비번'),
-                  obscureText: true,
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('취소'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('확인'),
-              ),
-            ],
+                actions: [
+                  TextButton(
+                    onPressed:
+                        () => Navigator.pop(
+                          dialogContext,
+                          false,
+                        ), // <<< context 변경
+                    child: const Text('취소'),
+                  ),
+                  TextButton(
+                    onPressed:
+                        () => Navigator.pop(
+                          dialogContext,
+                          true,
+                        ), // <<< context 변경
+                    child: const Text('확인'),
+                  ),
+                ],
+              );
+            },
           ),
     );
     if (result != true) return;

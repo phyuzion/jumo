@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile/screens/board_list_view.dart';
 import 'package:mobile/widgets/dropdown_menus_widet.dart';
-import 'package:mobile/graphql/common_api.dart';
 
 class BoardScreen extends StatefulWidget {
   const BoardScreen({super.key});
@@ -15,48 +14,11 @@ class _BoardScreenState extends State<BoardScreen> {
   final GlobalKey<BoardListViewState> _boardListKey = GlobalKey();
 
   // 드롭다운 아이템 리스트
-  List<DropdownMenuItem<String>> _dropdownItems = [];
+  final List<DropdownMenuItem<String>> _dropdownItems = [
+    const DropdownMenuItem(value: '공지사항', child: Text('공지사항')),
+    const DropdownMenuItem(value: '익명', child: Text('익명')),
+  ];
   String _selectedType = '공지사항'; // 기본값을 '공지사항'으로 설정
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeDropdownItems();
-  }
-
-  // 드롭다운 아이템 초기화
-  Future<void> _initializeDropdownItems() async {
-    try {
-      final regions = await CommonApi.getRegions();
-
-      if (!mounted) return; // mounted 체크 추가
-
-      setState(() {
-        // 공지사항을 첫 번째 아이템으로 추가
-        _dropdownItems = [
-          const DropdownMenuItem(value: '공지사항', child: Text('공지사항')),
-          // 가져온 지역 리스트 추가
-          ...regions.map(
-            (region) => DropdownMenuItem(
-              value: region['name'],
-              child: Text(region['name']),
-            ),
-          ),
-          // 익명을 마지막 아이템으로 추가
-          const DropdownMenuItem(value: '익명', child: Text('익명')),
-        ];
-      });
-    } catch (e) {
-      // 에러 발생시 기본 아이템으로 설정
-      if (!mounted) return;
-      setState(() {
-        _dropdownItems = [
-          const DropdownMenuItem(value: '공지사항', child: Text('공지사항')),
-          const DropdownMenuItem(value: '익명', child: Text('익명')),
-        ];
-      });
-    }
-  }
 
   // 글쓰기 FAB 클릭
   void _onTapCreate() {
@@ -101,6 +63,7 @@ class _BoardScreenState extends State<BoardScreen> {
             ),
             dropdownColor: Colors.white,
           ),
+          actions: const [DropdownMenusWidget()],
         ),
       ),
       // (1) BoardListView에 GlobalKey 전달
