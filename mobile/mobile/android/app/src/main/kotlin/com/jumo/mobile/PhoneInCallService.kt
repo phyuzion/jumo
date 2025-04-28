@@ -24,6 +24,29 @@ class PhoneInCallService : InCallService() {
         fun toggleMute(mute: Boolean) { instance?.toggleMuteCall(mute) }
         fun toggleHold(hold: Boolean) { instance?.toggleHoldTopCall(hold) }
         fun toggleSpeaker(speaker: Boolean) { instance?.toggleSpeakerCall(speaker) }
+
+        // <<< 추가: 현재 통화 정보 반환 메서드 >>>
+        fun getCurrentCallDetails(): Map<String, Any?> {
+            val lastCall = activeCalls.lastOrNull()
+            return if (lastCall == null) {
+                mapOf("state" to "IDLE", "number" to null)
+            } else {
+                val number = lastCall.details.handle?.schemeSpecificPart
+                val stateString = when (lastCall.state) {
+                    Call.STATE_RINGING -> "RINGING"
+                    Call.STATE_DIALING -> "DIALING"
+                    Call.STATE_ACTIVE -> "ACTIVE"
+                    Call.STATE_HOLDING -> "HOLDING"
+                    Call.STATE_DISCONNECTED -> "DISCONNECTED"
+                    Call.STATE_CONNECTING -> "CONNECTING"
+                    Call.STATE_DISCONNECTING -> "DISCONNECTING"
+                    Call.STATE_NEW -> "NEW" // 일반적으로 볼 일 없음
+                    Call.STATE_SELECT_PHONE_ACCOUNT -> "SELECT_PHONE_ACCOUNT" // 일반적으로 볼 일 없음
+                    else -> "UNKNOWN"
+                }
+                mapOf("state" to stateString, "number" to number)
+            }
+        }
     }
 
     // 스피커가 아닌 라우트를 저장하기 위한 변수 (초기값은 earpiece)

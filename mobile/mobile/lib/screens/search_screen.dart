@@ -78,15 +78,12 @@ class _SearchScreenState extends State<SearchScreen> {
         normalizedNum,
         isRequested: widget.isRequested,
       );
-      final todayRecords = await SearchRecordsController.searchTodayRecord(
-        normalizedNum,
-      );
 
       if (!mounted) return;
       setState(() {
         _result = SearchResultModel(
           phoneNumberModel: phoneData,
-          todayRecords: todayRecords,
+          todayRecords: phoneData?.todayRecords ?? [],
         );
       });
     } catch (e) {

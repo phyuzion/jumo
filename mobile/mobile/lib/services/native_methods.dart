@@ -1,5 +1,6 @@
 // lib/services/native_methods.dart
 import 'package:flutter/services.dart';
+import 'dart:developer';
 
 class NativeMethods {
   static const _channel = MethodChannel('com.jumo.mobile/native');
@@ -49,5 +50,17 @@ class NativeMethods {
 
   static Future<void> toggleSpeaker(bool speakerOn) async {
     await _channel.invokeMethod('toggleSpeaker', {'speakerOn': speakerOn});
+  }
+
+  static Future<Map<String, dynamic>> getCurrentCallState() async {
+    try {
+      final result = await _channel.invokeMapMethod<String, dynamic>(
+        'getCurrentCallState',
+      );
+      return result ?? {'state': 'IDLE', 'number': null};
+    } catch (e) {
+      log('Error calling getCurrentCallState: $e');
+      return {'state': 'IDLE', 'number': null};
+    }
   }
 }

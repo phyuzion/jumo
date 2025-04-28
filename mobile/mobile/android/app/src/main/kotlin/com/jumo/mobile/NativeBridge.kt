@@ -84,6 +84,15 @@ object NativeBridge {
                         result.error("SMS_ERROR", "Failed to open SMS app", "$e")
                     }
                 }
+                "getCurrentCallState" -> {
+                    try {
+                        val callDetails = PhoneInCallService.getCurrentCallDetails()
+                        result.success(callDetails)
+                    } catch (e: Exception) {
+                        Log.e("NativeBridge", "getCurrentCallState error: $e")
+                        result.error("STATE_ERROR", "Failed to get current call state", "$e")
+                    }
+                }
                 else -> {
                     result.notImplemented()
                 }

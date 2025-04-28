@@ -41,13 +41,10 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       final phoneData = await SearchRecordsController.searchPhone(
         normalizedNumber,
       );
-      final todayRecords = await SearchRecordsController.searchTodayRecord(
-        normalizedNumber,
-      );
 
       final searchResult = SearchResultModel(
         phoneNumberModel: phoneData,
-        todayRecords: todayRecords,
+        todayRecords: phoneData?.todayRecords ?? [],
       );
 
       if (!mounted) return;

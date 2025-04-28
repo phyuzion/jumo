@@ -1,15 +1,22 @@
+import 'package:mobile/models/today_record.dart';
+
 class PhoneNumberModel {
+  final String id;
   final String phoneNumber;
   final int type;
+  final int blockCount;
   final List<PhoneRecordModel> records;
+  final List<TodayRecord> todayRecords;
 
   PhoneNumberModel({
+    required this.id,
     required this.phoneNumber,
     required this.type,
+    required this.blockCount,
     required this.records,
+    required this.todayRecords,
   });
 
-  // fromJson, toJson
   factory PhoneNumberModel.fromJson(Map<String, dynamic> json) {
     final recs =
         (json['records'] as List<dynamic>?)
@@ -17,18 +24,29 @@ class PhoneNumberModel {
             .toList()
           ?..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
+    final todayRecs =
+        (json['todayRecords'] as List<dynamic>?)
+            ?.map((e) => TodayRecord.fromJson(e))
+            .toList();
+
     return PhoneNumberModel(
+      id: json['id'] as String,
       phoneNumber: json['phoneNumber'] as String,
-      type: json['type'] as int,
+      type: json['type'] as int? ?? 0,
+      blockCount: json['blockCount'] as int? ?? 0,
       records: recs ?? [],
+      todayRecords: todayRecs ?? [],
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'phoneNumber': phoneNumber,
       'type': type,
+      'blockCount': blockCount,
       'records': records.map((r) => r.toJson()).toList(),
+      'todayRecords': todayRecords.map((r) => r.toJson()).toList(),
     };
   }
 }

@@ -97,16 +97,12 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         normalizedNumber,
       );
       if (!mounted) return;
-      final todayRecords = await SearchRecordsController.searchTodayRecord(
-        normalizedNumber,
-      );
-      if (!mounted) return;
       setState(() {
         _searchResult = SearchResultModel(
           phoneNumberModel: phoneData,
-          todayRecords: todayRecords,
+          todayRecords: phoneData?.todayRecords ?? [],
         );
-        _isLoading = false; // 로딩 완료
+        _isLoading = false;
       });
     } catch (e, st) {
       log('[FloatingCallWidget] Error loading search data: $e\n$st');

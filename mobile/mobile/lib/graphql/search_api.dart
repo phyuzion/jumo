@@ -7,14 +7,25 @@ class SearchApi {
   static const _getPhoneNumberQuery = r'''
     query getPhoneNumber($phoneNumber: String!, $isRequested: Boolean) {
       getPhoneNumber(phoneNumber: $phoneNumber, isRequested: $isRequested) {
+        id
         phoneNumber
         type
+        blockCount
         records {
           userName
           userType
           name
           memo
           type
+          createdAt
+          phoneNumber
+        }
+        todayRecords {
+          id
+          phoneNumber
+          userName
+          userType
+          interactionType
           createdAt
         }
       }

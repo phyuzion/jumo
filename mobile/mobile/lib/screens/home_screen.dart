@@ -18,6 +18,7 @@ import 'package:mobile/widgets/floating_call_widget.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/controllers/phone_state_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -47,6 +48,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   late AppController _appController;
   late ContactsController _contactsController;
+  late PhoneStateController _phoneStateController;
 
   @override
   void initState() {
@@ -96,6 +98,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
     _appController = context.read<AppController>();
     _contactsController = context.read<ContactsController>();
+    _phoneStateController = context.read<PhoneStateController>();
+
+    await _phoneStateController.syncInitialCallState();
+    log('[HomeScreen] Initial call state sync attempted.');
 
     try {
       NativeDefaultDialerMethods.notifyNativeAppInitialized();
