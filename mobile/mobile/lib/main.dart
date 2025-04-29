@@ -42,6 +42,8 @@ import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
 import 'package:mobile/repositories/sync_state_repository.dart';
+import 'package:flutter_windowmanager_plus/flutter_windowmanager_plus.dart';
+import 'dart:io';
 
 final getIt = GetIt.instance;
 
@@ -311,6 +313,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
       _handleInitialPayload();
       _listenToBackgroundService();
       _saveScreenSizeToHive();
+      _applySecureFlag();
     });
   }
 
@@ -433,10 +436,28 @@ class _MyAppStatefulState extends State<MyAppStateful>
     }
   }
 
+  Future<void> _applySecureFlag() async {
+    if (Platform.isAndroid) {
+      try {
+        await FlutterWindowManagerPlus.addFlags(
+          FlutterWindowManagerPlus.FLAG_SECURE,
+        );
+        log('[_MyAppStatefulState] FLAG_SECURE applied (plus package).');
+      } catch (e) {
+        log(
+          '[_MyAppStatefulState] Failed to apply FLAG_SECURE (plus package): $e',
+        );
+      }
+    }
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _updateUiCallStateSub?.cancel();
+    if (Platform.isAndroid) {
+      FlutterWindowManagerPlus.clearFlags(FlutterWindowManagerPlus.FLAG_SECURE);
+    }
     super.dispose();
   }
 

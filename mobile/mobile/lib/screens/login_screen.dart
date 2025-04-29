@@ -1,5 +1,7 @@
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:graphql_flutter/graphql_flutter.dart'; // <<< 추가
+import 'package:fluttertoast/fluttertoast.dart'; // <<< fluttertoast 임포트 추가
 // import 'package:get_storage/get_storage.dart'; // 제거
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
@@ -167,7 +169,35 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+      String errorMessage = '로그인 중 오류가 발생했습니다.';
+      if (e is OperationException) {
+        if (e.graphqlErrors.isNotEmpty) {
+          errorMessage = e.graphqlErrors.first.message;
+          log('[LoginScreen] GraphQL Error: $errorMessage');
+        } else {
+          errorMessage = '서버 연결 중 오류가 발생했습니다.';
+          log(
+            '[LoginScreen] Network or other OperationException: ${e.linkException}',
+          );
+        }
+      } else {
+        errorMessage = e.toString().replaceAll('Exception: ', '');
+        log('[LoginScreen] Other Exception: $errorMessage');
+      }
+
+      // <<< Fluttertoast 사용으로 변경 >>>
+      // if (mounted) {
+      //    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(errorMessage)));
+      // }
+      Fluttertoast.showToast(
+        msg: errorMessage,
+        toastLength: Toast.LENGTH_SHORT, // LENGTH_LONG도 가능
+        gravity: ToastGravity.BOTTOM, // 위치 (CENTER, TOP 등)
+        timeInSecForIosWeb: 1, // iOS/Web 표시 시간
+        backgroundColor: Colors.redAccent, // 배경색
+        textColor: Colors.white, // 글자색
+        fontSize: 16.0, // 폰트 크기
+      );
     } finally {
       if (mounted && _loading) {
         setState(() => _loading = false);

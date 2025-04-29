@@ -17,11 +17,6 @@ class PhoneStateController with WidgetsBindingObserver {
   final ContactsController contactsController;
   final BlockedNumbersController _blockedNumbersController;
 
-  CallState _currentCallState = CallState.idle;
-  String _currentNumber = '';
-  String _currentCallerName = '';
-  bool _isConnected = false;
-
   PhoneStateController(
     this.navigatorKey,
     this.callLogController,
@@ -159,7 +154,7 @@ class PhoneStateController with WidgetsBindingObserver {
         return;
       }
       if (status == PhoneStateStatus.NOTHING) {
-        _onNothing();
+        return;
       }
       return;
     }
@@ -207,9 +202,7 @@ class PhoneStateController with WidgetsBindingObserver {
       log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
     }
 
-    final callerName = await contactsController.getContactName(
-      normalizedNumber,
-    );
+    final String callerName = '';
 
     CallState newState = CallState.idle;
     String stateMethod = '';
@@ -233,14 +226,6 @@ class PhoneStateController with WidgetsBindingObserver {
         break;
     }
 
-    _updateInternalState(
-      newState,
-      normalizedNumber,
-      callerName,
-      isConnected,
-      reason ?? (newState == CallState.ended ? 'missed' : ''),
-    );
-
     if (stateMethod.isNotEmpty) {
       notifyServiceCallState(
         stateMethod,
@@ -249,36 +234,6 @@ class PhoneStateController with WidgetsBindingObserver {
         connected: isConnected,
         reason: reason ?? (newState == CallState.ended ? 'missed' : ''),
       );
-    }
-  }
-
-  void _onNothing() {
-    log('[PhoneState] NOTHING');
-  }
-
-  void _updateInternalState(
-    CallState state,
-    String number,
-    String name,
-    bool connected,
-    String reason,
-  ) {
-    _currentCallState = state;
-    _currentNumber = number;
-    _currentCallerName = name;
-    _isConnected = connected;
-  }
-
-  String _mapCallStateToMethod(CallState state) {
-    switch (state) {
-      case CallState.incoming:
-        return 'onIncomingNumber';
-      case CallState.active:
-        return 'onCall';
-      case CallState.ended:
-        return 'onCallEnded';
-      case CallState.idle:
-        return '';
     }
   }
 

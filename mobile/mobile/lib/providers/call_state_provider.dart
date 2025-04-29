@@ -105,17 +105,26 @@ class CallStateProvider with ChangeNotifier {
       _number = number;
       _isConnected = isConnected;
       _callEndReason = reason;
-      // Provider의 _callerName은 _fetchAndUpdateCallerName에서만 업데이트되도록 초기 업데이트에서 제외하거나,
-      // 들어온 callerName 값이 유효할 때만 업데이트 (예: '알 수 없음'이 아닐 때)
-      if (callerName.isNotEmpty && callerName != '알 수 없음') {
-        _callerName = callerName;
-      } else if (_number != number) {
-        // 번호가 바뀌면 이전 이름 정보는 유효하지 않으므로 초기화
-        _callerName = '';
-      }
+
+      // <<< callerName 업데이트 로직 수정: 빈 문자열 허용 >>>
+      _callerName = callerName; // 전달된 값 그대로 사용
+
+      log(
+        '[CallStateProvider] State updated: state=$_callState, number=$_number, name=$_callerName',
+      );
     }
     if (state == CallState.active) {
       _duration = duration;
+    }
+
+    // <<< IDLE 상태 진입 시 정보 초기화 추가 >>>
+    if (state == CallState.idle) {
+      _number = '';
+      _callerName = '';
+      _isConnected = false;
+      _duration = 0;
+      _callEndReason = '';
+      log('[CallStateProvider] State changed to IDLE, resetting info.');
     }
 
     // --- 센서 제어 (stateTransitioned와 별개로 실행) ---

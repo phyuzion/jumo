@@ -4,6 +4,7 @@ import 'package:mobile/models/phone_number_model.dart';
 import 'package:mobile/models/today_record.dart';
 import 'package:mobile/utils/constants.dart';
 import 'dart:developer'; // <<< 로그 사용 위해 추가
+import 'package:marquee/marquee.dart'; // <<< Marquee 패키지 임포트 다시 추가
 
 class SearchResultWidget extends StatefulWidget {
   final SearchResultModel? searchResult;
@@ -406,93 +407,169 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
     return count;
   }
 
+  // <<< Marquee 또는 Text를 조건부로 반환하는 헬퍼 함수 >>>
+  Widget _buildMarqueeOrText(
+    String text,
+    TextStyle style,
+    double availableWidth,
+  ) {
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      maxLines: 1,
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: double.infinity);
+
+    final double textWidth = textPainter.width;
+    // 약간의 여유 공간 고려 (선택적)
+    final bool overflows = textWidth > availableWidth - 1.0;
+
+    if (overflows) {
+      // Text가 넘치면 Marquee 사용
+      return SizedBox(
+        // Marquee 높이 제한
+        height: style.fontSize! * 1.4, // 폰트 크기에 기반한 대략적인 높이
+        child: Marquee(
+          text: text,
+          style: style,
+          scrollAxis: Axis.horizontal,
+          blankSpace: 20.0, // 글자 시작/끝 사이 간격 늘리기
+          velocity: 30.0, // <<< 속도 줄이기 (기존 30.0)
+          pauseAfterRound: const Duration(seconds: 3), // <<< 멈춤 시간 늘리기 (기존 2초)
+          showFadingOnlyWhenScrolling: false, // 항상 Fading 효과 표시 (선택적)
+          fadingEdgeStartFraction: 0.1,
+          fadingEdgeEndFraction: 0.1,
+          startPadding: 10.0, // 시작 전 약간의 여백 (선택적)
+          accelerationDuration: const Duration(milliseconds: 500), // 가속 시간 조정
+          accelerationCurve: Curves.linear,
+          decelerationDuration: const Duration(milliseconds: 500), // 감속 시간 조정
+          decelerationCurve: Curves.easeOut,
+        ),
+      );
+    } else {
+      // Text가 공간에 맞으면 Text 위젯 사용
+      return Text(
+        text,
+        style: style,
+        overflow: TextOverflow.ellipsis, // 혹시 모르니 ellipsis 유지
+        softWrap: false,
+      );
+    }
+  }
+
   Widget _buildPhoneRecordItem(PhoneRecordModel r) {
     final userTypeColor = _pickColorForUserType(r.userType);
-    final recordTypeColor = (r.type == 99) ? Colors.red : Colors.blueGrey;
-    final epoch = int.tryParse(r.createdAt);
-    DateTime? dt;
-    if (epoch != null) {
-      dt = DateTime.fromMillisecondsSinceEpoch(epoch);
-    }
+    // final recordTypeColor = (r.type == 99) ? Colors.red : Colors.blueGrey; // 조건부 표시로 변경
+
+    final DateTime? dt = parseServerTime(r.createdAt);
     final yearStr = (dt != null) ? '${dt.year}' : '';
     final dateStr = formatDateOnly(r.createdAt);
     final timeStr = formatTimeOnly(r.createdAt);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // <<< 좌측 User Type 서클 (크기 증가) >>>
           CircleAvatar(
             backgroundColor: userTypeColor,
-            radius: 12,
+            radius: 18, // <<< 크기 증가 (12 * 1.5)
             child: Text(
               r.userType.length > 2 ? r.userType.substring(0, 2) : r.userType,
-              style: const TextStyle(color: Colors.white, fontSize: 10),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+              ), // 폰트 크기 약간 조정
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 12),
+          // <<< Expanded와 LayoutBuilder 사용 >>>
           Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  r.name.isNotEmpty ? r.name : '(이름 없음)',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                if (r.userName.isNotEmpty) ...[
-                  SizedBox(height: 0),
-                  Text(
-                    r.userName,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey),
-                  ),
-                ],
-                if (r.memo.isNotEmpty) ...[
-                  SizedBox(height: 1),
-                  Text(
-                    r.memo,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
-                  ),
-                ],
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final availableWidth = constraints.maxWidth;
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // <<< 이름: _buildMarqueeOrText 호출 >>>
+                    _buildMarqueeOrText(
+                      r.name.isNotEmpty ? r.name : '(이름 없음)',
+                      const TextStyle(
+                        fontSize: 16.8,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      availableWidth,
+                    ),
+                    if (r.userName.isNotEmpty) ...[
+                      const SizedBox(height: 1),
+                      // <<< 상호: _buildMarqueeOrText 호출 >>>
+                      _buildMarqueeOrText(
+                        r.userName,
+                        const TextStyle(fontSize: 14.4, color: Colors.grey),
+                        availableWidth,
+                      ),
+                    ],
+                    if (r.memo.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        r.memo,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 15.6),
+                      ),
+                    ],
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(width: 8),
+          // <<< 우측 Record Type (조건부 표시) 및 날짜 >>>
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                backgroundColor: recordTypeColor,
-                radius: 12,
-                child: Text(
-                  '${r.type}',
-                  style: const TextStyle(color: Colors.white, fontSize: 10),
+              // <<< Type 99일 때만 표시 >>>
+              if (r.type == 99)
+                CircleAvatar(
+                  backgroundColor: Colors.red, // 빨간색 고정
+                  radius: 18, // <<< 크기 증가 (12 * 1.5)
+                  child: const Text(
+                    '위험',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 4),
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    yearStr,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                  Text(
-                    dateStr,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                  Text(
-                    timeStr,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                  ),
-                ],
+              // <<< Type 99일 때만 간격 추가 >>>
+              if (r.type == 99) const SizedBox(width: 6),
+
+              // 날짜/시간 컬럼 (크기 고정)
+              SizedBox(
+                width: 50, // 너비 고정 시도 (조정 필요)
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      yearStr,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ), // 폰트 크기 약간 증가
+                    ),
+                    Text(
+                      dateStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    Text(
+                      timeStr,
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),

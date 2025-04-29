@@ -49,38 +49,40 @@ class UserApi {
       },
     );
 
-    final result = await client.mutate(options);
-    GraphQLClientManager.handleExceptions(result);
+    final QueryResult result = await client.mutate(options);
 
+    // <<< 예외 발생 여부 먼저 확인 >>>
+    if (result.hasException) {
+      log(
+        '[UserApi.userLogin] Mutation failed with exception: ${result.exception.toString()}',
+      );
+      // GraphQL 에러 로깅 및 처리는 handleExceptions에 맡길 수도 있지만,
+      // 여기서는 예외를 바로 던져서 호출부(login_screen)에서 처리하도록 함
+      throw result.exception!; // OperationException을 그대로 던짐
+    }
+
+    // <<< 예외가 없을 때만 데이터 확인 >>>
     final data = result.data?['userLogin'];
     if (data == null) {
-      throw Exception('로그인 응답이 null');
+      // 서버가 오류 없이 null 데이터를 반환한 경우 (비정상 케이스)
+      throw Exception('로그인 응답 형식이 올바르지 않습니다.'); // 메시지 명확화
     }
 
+    // --- 성공 로직 (토큰 설정 및 데이터 반환) ---
     final token = data['accessToken'] as String?;
     if (token == null) {
-      throw Exception('accessToken이 null');
+      throw Exception('토큰 정보가 없습니다.');
     }
+    // <<< setAccessToken 호출로 수정된 것 유지 >>>
     await GraphQLClientManager.setAccessToken(token);
 
     final userData = data['user'] as Map<String, dynamic>?;
     if (userData == null) {
-      throw Exception('user 필드가 null임');
+      throw Exception('사용자 정보가 없습니다.');
     }
     log('[[userLogin]] user=$userData');
 
-    // <<< Hive 저장 로직 모두 제거 >>>
-    // await _authRepository.setToken(token); // 제거
-    // await _authRepository.setUserId(userData['id'] ?? ''); // 제거
-    // await _authRepository.setUserName(userData['name'] ?? ''); // 제거
-    // await _authRepository.setUserType(userData['userType'] ?? ''); // 제거
-    // await _authRepository.setLoginStatus(true); // 제거
-    // await _authRepository.setUserValidUntil(userData['validUntil'] ?? ''); // 제거
-    // await _authRepository.setUserRegion(userData['region'] ?? ''); // 제거
-    // await _authRepository.setUserGrade(userData['grade'] ?? ''); // 제거
-    // if (userData.containsKey('loginId')) { ... } // 제거
-
-    // <<< GraphQLClientManager.saveLoginCredentials 호출 제거 >>>
+    // <<< Hive 저장 로직은 여기서 제거됨 (login_screen에서 처리) >>>
 
     // API 결과 데이터만 반환
     return data;

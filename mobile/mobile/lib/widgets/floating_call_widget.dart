@@ -119,9 +119,11 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   Widget build(BuildContext context) {
     double panelBorderRadius = 20.0;
 
-    // <<< Provider에서 직접 이름 가져오기 >>>
     final callStateProvider = context.watch<CallStateProvider>();
+    // <<< currentCallerName이 비어있으면 widget.number 사용 >>>
     final currentCallerName = callStateProvider.callerName;
+    final displayName =
+        currentCallerName.isNotEmpty ? currentCallerName : widget.number;
 
     // --- 확장 팝업 컨텐츠 결정 ---
     Widget popupContent;
@@ -131,7 +133,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         break;
       case CallState.incoming:
         popupContent = IncomingCallContent(
-          callerName: currentCallerName,
+          callerName: displayName, // <<< 수정된 displayName 전달
           number: widget.number,
           searchResult: _searchResult,
           isLoading: _isLoading,
@@ -140,7 +142,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         break;
       case CallState.active:
         popupContent = OnCallContents(
-          callerName: currentCallerName,
+          callerName: displayName, // <<< 수정된 displayName 전달
           number: widget.number,
           connected: widget.connected,
           onHangUp: widget.onHangUp,
@@ -149,7 +151,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
         break;
       case CallState.ended:
         popupContent = CallEndedContent(
-          callerName: currentCallerName,
+          callerName: displayName, // <<< 수정된 displayName 전달
           number: widget.number,
           reason: callStateProvider.callEndReason,
         );

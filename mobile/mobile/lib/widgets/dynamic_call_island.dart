@@ -243,7 +243,7 @@ class _DynamicCallIslandState extends State<DynamicCallIsland> {
     Widget? leadingWidget,
     Widget? trailingWidget,
   }) {
-    String displayName = name.isNotEmpty ? name : "알 수 없음";
+    String displayName = name.isNotEmpty ? name : number;
     Color iconColor = Colors.white;
 
     return Row(

@@ -43,6 +43,8 @@ class _SettingsScreenState extends State<SettingsScreen>
   String _userName = '(정보 로딩중)';
   String _userRegion = '(정보 로딩중)';
   String _validUntil = '';
+  String _rawValidUntil = ''; // <<< 만료일 원본 문자열 저장
+  int? _daysUntilExpiry; // <<< 남은 일수 (null 가능)
   String _userGrade = '일반';
 
   // 업데이트 관련
@@ -157,6 +159,9 @@ class _SettingsScreenState extends State<SettingsScreen>
     // 모든 작업이 완료될 때까지 기다림
     await Future.wait(futures);
 
+    // <<< 남은 일수 계산 로직 호출 >>>
+    _calculateDaysUntilExpiry();
+
     // 모든 데이터 로드 후 콜폭 차단 횟수 컨트롤러 텍스트 설정
     if (mounted) {
       _bombCallsCountController.text =
@@ -187,8 +192,50 @@ class _SettingsScreenState extends State<SettingsScreen>
     _userName = (results[2] as String?) ?? '(정보 없음)';
     _userRegion = (results[3] as String?) ?? '(정보 없음)';
     _userGrade = (results[4] as String?) ?? '일반';
-    final rawValidUntil = (results[5] as String?) ?? '';
-    _validUntil = formatDateString(rawValidUntil);
+    _rawValidUntil = (results[5] as String?) ?? ''; // <<< 원본 문자열 저장
+    _validUntil = formatDateString(_rawValidUntil); // 포맷된 문자열 저장
+  }
+
+  // <<< 남은 일수 계산 함수 수정 >>>
+  void _calculateDaysUntilExpiry() {
+    if (_rawValidUntil.isEmpty) {
+      _daysUntilExpiry = null;
+      log('[_SettingsScreenState][Expiry] Raw validUntil is empty.');
+      return;
+    }
+    try {
+      log(
+        '[_SettingsScreenState][Expiry] Raw validUntil (epoch ms): $_rawValidUntil',
+      );
+      // <<< 수정: int.tryParse 및 fromMillisecondsSinceEpoch 사용 >>>
+      final epochMs = int.tryParse(_rawValidUntil);
+      if (epochMs == null) {
+        throw FormatException('Cannot parse epoch milliseconds from string');
+      }
+      // UTC로 저장되어 있다고 가정하고 로컬 시간대로 변환
+      final expiryDate =
+          DateTime.fromMillisecondsSinceEpoch(epochMs, isUtc: true).toLocal();
+
+      final today = DateTime.now();
+      final expiryDay = DateTime(
+        expiryDate.year,
+        expiryDate.month,
+        expiryDate.day,
+      );
+      final todayDay = DateTime(today.year, today.month, today.day);
+      log(
+        '[_SettingsScreenState][Expiry] Expiry Day: $expiryDay, Today Day: $todayDay',
+      );
+
+      final difference = expiryDay.difference(todayDay).inDays;
+      _daysUntilExpiry = difference;
+      log(
+        '[_SettingsScreenState][Expiry] Calculated days until expiry: $_daysUntilExpiry',
+      );
+    } catch (e) {
+      log('[_SettingsScreenState][Expiry] Error processing expiry date: $e');
+      _daysUntilExpiry = null;
+    }
   }
 
   Future<void> _checkStatus() async {
@@ -387,13 +434,42 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // 초기 로딩 표시는 다른 방식으로 처리하거나, _initializeSettings 시작 시
-    // 특정 위젯(예: 전체 화면 로딩 인디케이터)을 표시하도록 할 수 있음.
-    // 여기서는 build 메서드 초반 로딩 체크는 제거하고 각 ListTile에서
-    // 초기값('(정보 로딩중)')이 표시되도록 함.
-    // if (_checking) {
-    //   return const Center(child: CircularProgressIndicator());
-    // }
+    // <<< 로그 추가: build 시점의 _daysUntilExpiry 값 >>>
+    log(
+      '[_SettingsScreenState][Build] _daysUntilExpiry value: $_daysUntilExpiry',
+    );
+
+    // <<< 만료 알림 위젯 생성 로직 >>>
+    Widget? expiryWarningWidget;
+    if (_daysUntilExpiry != null) {
+      String warningMessage = '';
+      if (_daysUntilExpiry! < 0) {
+        warningMessage = '계정이 만료되었습니다.';
+      } else if (_daysUntilExpiry == 0) {
+        warningMessage = '계정 만료일이 오늘입니다.';
+      } else if (_daysUntilExpiry! <= 3) {
+        warningMessage = '계정 만료일이 ${_daysUntilExpiry}일 남았습니다.';
+      }
+      log(
+        '[_SettingsScreenState][Build] Calculated warning message: "$warningMessage"',
+      );
+
+      if (warningMessage.isNotEmpty) {
+        expiryWarningWidget = Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          color: Colors.red,
+          child: Text(
+            warningMessage,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        );
+      }
+    }
 
     return Scaffold(
       appBar: PreferredSize(
@@ -408,6 +484,9 @@ class _SettingsScreenState extends State<SettingsScreen>
       ),
       body: ListView(
         children: [
+          // <<< 만료 알림 위젯 추가 (null 아닐 경우) >>>
+          if (expiryWarningWidget != null) expiryWarningWidget,
+
           // (1) 업데이트 알림 ListTile 수정
           if (_updateAvailable)
             ListTile(
