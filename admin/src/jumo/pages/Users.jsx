@@ -25,7 +25,8 @@ import {
 import {
   CREATE_USER,
   UPDATE_USER,
-  RESET_USER_PASSWORD
+  RESET_USER_PASSWORD,
+  RESET_REQUESTED_PASSWORD
 } from "../graphql/mutations";
 
 import { Header } from "../components";
@@ -57,6 +58,7 @@ const Users = () => {
   const [createUserMutation]         = useMutation(CREATE_USER);
   const [updateUserMutation]         = useMutation(UPDATE_USER);
   const [resetUserPasswordMutation]  = useMutation(RESET_USER_PASSWORD);
+  const [resetRequestedPasswordMutation] = useMutation(RESET_REQUESTED_PASSWORD);
 
   // (4) 전화번호부 기록 (lazy)
   const [getUserRecordsLazy, { data: recordsData }] = useLazyQuery(GET_USER_RECORDS, {
@@ -114,6 +116,11 @@ const Users = () => {
   const [editValidUntil,   setEditValidUntil]   = useState('');
   const [editRegion,       setEditRegion]       = useState('');
   const [editGrade,        setEditGrade]        = useState('');
+
+  // <<< 비밀번호 변경 요청 모달 관련 State 추가 >>>
+  const [showResetRequestedModal, setShowResetRequestedModal] = useState(false);
+  const [resetRequestedUser, setResetRequestedUser] = useState(null);
+  const [newPasswordInput, setNewPasswordInput] = useState('');
 
   // ================= useEffect =================
 
@@ -322,6 +329,38 @@ const Users = () => {
     }
   };
 
+  // ============= RESET REQUESTED PASSWORD (비번 변경) =============
+  const handleResetRequestedClick = (u) => {
+    setResetRequestedUser(u);
+    setNewPasswordInput(''); // 입력 필드 초기화
+    setShowResetRequestedModal(true);
+  };
+
+  const handleResetRequestedSubmit = async () => {
+    if (!resetRequestedUser || !newPasswordInput) {
+      alert('새 비밀번호를 입력해주세요.');
+      return;
+    }
+    if (newPasswordInput.length < 4) {
+      alert('새 비밀번호는 4자 이상이어야 합니다.');
+      return;
+    }
+
+    try {
+      await resetRequestedPasswordMutation({
+        variables: {
+          userId: resetRequestedUser.id,
+          newPassword: newPasswordInput,
+        },
+      });
+      alert('비밀번호 변경 완료');
+      setShowResetRequestedModal(false);
+      setResetRequestedUser(null); // 상태 초기화
+    } catch (err) {
+      alert(`비밀번호 변경 실패: ${err.message}`);
+    }
+  };
+
   // ============= RECORDS, CALL LOG, SMS LOG ============
   // 1) 전화번호부 기록 버튼
   const handleRecordsClick = async (u) => {
@@ -437,6 +476,21 @@ const Users = () => {
                 </button>
               )}
             />
+            {/* <<< 비번 변경 버튼 추가 시작 >>> */}
+            <ColumnDirective
+              headerText="비번변경"
+              width="70"
+              textAlign="Center"
+              template={(u) => (
+                <button
+                  className="bg-teal-500 text-white px-2 py-1 rounded" // 색상 변경 (예: teal)
+                  onClick={() => handleResetRequestedClick(u)}
+                >
+                  비번변경
+                </button>
+              )}
+            />
+            {/* <<< 비번 변경 버튼 추가 끝 >>> */}
             {/* Records */}
             <ColumnDirective
               headerText="기록"
@@ -613,6 +667,43 @@ const Users = () => {
           </div>
         </div>
       )}
+
+      {/* <<< 비밀번호 변경 요청 모달 추가 시작 >>> */}
+      {showResetRequestedModal && resetRequestedUser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+          <div className="bg-white p-4 w-80 rounded shadow">
+            <h2 className="text-xl font-bold mb-2">비밀번호 변경</h2>
+            <p className="mb-2">UserID: {resetRequestedUser.loginId}</p>
+            <div className="flex flex-col gap-2">
+              <input
+                type="text" // 비밀번호지만 확인 위해 text로 둘 수도 있음
+                placeholder="새 비밀번호 (4자 이상)"
+                value={newPasswordInput}
+                onChange={(e) => setNewPasswordInput(e.target.value)}
+                className="border p-1"
+              />
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                className="bg-teal-500 text-white px-3 py-1 rounded"
+                onClick={handleResetRequestedSubmit}
+              >
+                비번변경
+              </button>
+              <button
+                className="bg-gray-300 px-3 py-1 rounded"
+                onClick={() => {
+                  setShowResetRequestedModal(false);
+                  setResetRequestedUser(null);
+                }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* <<< 비밀번호 변경 요청 모달 추가 끝 >>> */}
 
       {/* RECORDS MODAL (전화번호부 + 통화로그 + 문자로그 탭) */}
       {showRecordsModal && recordUser && (

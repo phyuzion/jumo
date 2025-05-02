@@ -95,6 +95,15 @@ export const RESET_USER_PASSWORD = gql`
 `;
 
 /**
+ * 4.1) (Admin 전용) 특정 유저 비밀번호를 입력값으로 초기화
+ */
+export const RESET_REQUESTED_PASSWORD = gql`
+  mutation resetRequestedPassword($userId: ID!, $newPassword: String!) {
+    resetRequestedPassword(userId: $userId, newPassword: $newPassword)
+  }
+`;
+
+/**
  * (A) 여러 Phone Record 업서트
  */
 export const UPSERT_PHONE_RECORDS = gql`
