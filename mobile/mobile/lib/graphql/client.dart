@@ -41,7 +41,7 @@ class GraphQLClientManager {
   static Future<void> tryAutoLogin() async {
     final authRepository = getIt<AuthRepository>();
     final credentials = await authRepository.getSavedCredentials();
-    final savedId = credentials['id'];
+    final savedId = credentials['savedLoginId'];
     final savedPw = credentials['password'];
     final myNumber = await authRepository.getMyNumber();
 
@@ -52,7 +52,6 @@ class GraphQLClientManager {
         myNumber == null ||
         myNumber.isEmpty) {
       log('[GraphQL] No saved credentials found for auto-login.');
-      await logout();
     } else {
       try {
         final loginResult = await UserApi.userLogin(
@@ -80,11 +79,9 @@ class GraphQLClientManager {
           log(
             '[GraphQL] Auto-login successful but user data format is unexpected.',
           );
-          await logout();
         }
       } catch (e) {
         log('[GraphQL] tryAutoLogin failed during API call or saving: $e');
-        await logout();
       }
     }
   }
@@ -95,9 +92,8 @@ class GraphQLClientManager {
     try {
       // <<< AuthRepository 클리어 >>>
       final authRepository = getIt<AuthRepository>();
-      await authRepository.clearToken();
-      await authRepository.clearSavedCredentials();
       await authRepository.setLoginStatus(false);
+      log('[GraphQL] Skipping AuthRepository clearing on logout.');
 
       // <<< NotificationRepository 클리어 >>>
       try {

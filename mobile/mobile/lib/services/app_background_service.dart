@@ -428,12 +428,11 @@ Future<void> onStart(ServiceInstance service) async {
       '[BackgroundService][on:callStateChanged] Updated timer info: Number=$_currentNumberForTimer, Name=$_currentCallerNameForTimer',
     );
 
-    final state = event['state'] as String?;
-    final number = event['number'] as String? ?? ''; // null 대신 빈 문자열
-    final callerName =
-        event['callerName'] as String? ?? '알 수 없음'; // null 대신 기본값
-    final isConnected = event['connected'] as bool? ?? false;
-    final reason = event['reason'] as String? ?? '';
+    final state = event?['state'] as String?;
+    final number = event?['number'] as String? ?? '';
+    final callerName = event?['callerName'] as String? ?? '';
+    final isConnected = event?['connected'] as bool? ?? false;
+    final reason = event?['reason'] as String? ?? '';
 
     log(
       '[BackgroundService] Received callStateChanged: state=$state, num=$number, name=$callerName, connected=$isConnected, reason=$reason',

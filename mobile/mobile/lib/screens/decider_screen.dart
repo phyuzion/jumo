@@ -42,8 +42,7 @@ class _DeciderScreenState extends State<DeciderScreen> {
 
     if (ok) {
       // 권한 OK -> 로그인 상태 확인
-      final isLoggedIn =
-          await authRepository.isLoggedIn(); // <<< AuthRepository 사용
+      final isLoggedIn = await authRepository.getLoginStatus(); // <<< 함수 이름 변경
       if (isLoggedIn) {
         log('[DeciderScreen] Logged in, navigating to home.');
         if (!mounted) return; // 추가: 네비게이션 전 마운트 확인

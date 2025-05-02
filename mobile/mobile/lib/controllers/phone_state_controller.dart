@@ -277,7 +277,7 @@ class PhoneStateController with WidgetsBindingObserver {
     final payload = {
       'state': state,
       'number': number,
-      'callerName': callerName.isNotEmpty ? callerName : '알 수 없음',
+      'callerName': callerName,
       'connected': isConnectedValue,
       'reason': reasonValue,
     };

@@ -106,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // 저장된 ID/PW 로드
     final credentials = await _authRepository.getSavedCredentials();
     if (!mounted) return;
-    final savedId = credentials['id'];
+    final savedId = credentials['savedLoginId'];
     final savedPw = credentials['password'];
 
     if (savedId != null) _loginIdCtrl.text = savedId;

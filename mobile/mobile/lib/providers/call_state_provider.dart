@@ -63,10 +63,11 @@ class CallStateProvider with ChangeNotifier {
 
   // <<< 연락처 업데이트 리스너 메소드 >>>
   void _onContactsUpdated() {
-    // 연락처 로딩이 완료되었고, 현재 번호가 있으며, 이름이 아직 없거나 '알 수 없음'일 때
+    // <<< 조건 변경: null 또는 isEmpty 확인 >>>
     if (!contactsController.isLoading &&
         _number.isNotEmpty &&
-        (_callerName.isEmpty || _callerName == '알 수 없음')) {
+        (_callerName == null || _callerName.isEmpty)) {
+      // <<< 수정
       _fetchAndUpdateCallerName(_number); // 이름 조회 재시도
     }
   }
@@ -96,7 +97,7 @@ class CallStateProvider with ChangeNotifier {
     bool shouldFetchName =
         (state == CallState.incoming || state == CallState.active) &&
         number.isNotEmpty &&
-        (callerName.isEmpty || callerName == '알 수 없음'); // 실제 로직 사용
+        callerName.isEmpty; // <<< 수정
     bool needsNotify = needsCoreUpdate || durationChanged || shouldFetchName;
 
     // <<< 상태 업데이트 적용 >>>

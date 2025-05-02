@@ -24,8 +24,8 @@ abstract class AuthRepository {
   /// 저장된 인증 토큰을 삭제합니다.
   Future<void> clearToken();
 
-  /// 로그인 상태인지 확인합니다. (토큰 존재 여부 기반)
-  Future<bool> isLoggedIn();
+  /// 로그인 상태인지 확인합니다. (로그인 상태 값 기반)
+  Future<bool> getLoginStatus();
 
   /// 내 전화번호를 저장합니다.
   Future<void> setMyNumber(String number);
@@ -104,6 +104,7 @@ class HiveAuthRepository implements AuthRepository {
   @override
   Future<void> setToken(String token) async {
     await _authBox.put(_authTokenKey, token);
+    await _authBox.flush();
   }
 
   @override
@@ -112,9 +113,11 @@ class HiveAuthRepository implements AuthRepository {
   }
 
   @override
-  Future<bool> isLoggedIn() async {
-    // 토큰 키가 존재하는지 확인하여 로그인 상태를 판단합니다.
-    return Future.value(_authBox.containsKey(_authTokenKey));
+  Future<bool> getLoginStatus() async {
+    // 저장된 로그인 상태 값을 확인합니다.
+    return Future.value(
+      _authBox.get(_loginStatusKey, defaultValue: false) as bool,
+    );
   }
 
   @override
@@ -131,6 +134,7 @@ class HiveAuthRepository implements AuthRepository {
   Future<void> saveCredentials(String id, String password) async {
     await _authBox.put(_savedLoginIdKey, id);
     await _authBox.put(_savedPasswordKey, password);
+    await _authBox.flush();
   }
 
   @override
@@ -174,6 +178,7 @@ class HiveAuthRepository implements AuthRepository {
   @override
   Future<void> setLoginStatus(bool status) async {
     await _authBox.put(_loginStatusKey, status);
+    await _authBox.flush();
   }
 
   @override

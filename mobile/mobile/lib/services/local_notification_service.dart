@@ -93,6 +93,7 @@ class LocalNotificationService {
           importance: Importance.low, // 방해 최소화
           playSound: false,
           enableVibration: false,
+          showBadge: false, // <<< 추가: 이 채널의 알림은 앱 아이콘 배지에 표시되지 않도록 설정
         );
     await flutterLocalNotificationsPlugin.createNotificationChannel(
       foregroundChannel,
