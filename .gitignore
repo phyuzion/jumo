@@ -55,3 +55,4 @@ record_parcer/완료/update_data_json.py
 record_parcer/db 4.csv
 record_parcer/db (2).7z
 record_parcer/db 3.csv
+*.txt
