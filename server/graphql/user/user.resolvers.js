@@ -155,9 +155,9 @@ module.exports = {
         throw new UserInputError('ID는 영문과 숫자만 사용 가능합니다.');
       }
 
-      // 4) 임시 비밀번호 생성 (8자리)
-      const tempPassword = Math.random().toString(36).slice(-6);
-      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      // 4) 비밀번호를 phoneNumber로 설정 (기존 랜덤 생성 제거)
+      // const tempPassword = Math.random().toString(36).slice(-6);
+      const hashedPassword = await bcrypt.hash(phoneNumber, 10);
 
       const newUser = new User({
         loginId,
@@ -173,7 +173,7 @@ module.exports = {
       await newUser.save();
       return {
         user: newUser,
-        tempPassword
+        tempPassword: phoneNumber // <<< 초기 비밀번호로 사용된 phoneNumber를 반환
       };
     },
 
@@ -265,6 +265,27 @@ module.exports = {
       return newPass;
     },
 
+    // (Admin 전용) 특정 유저 비번을 입력값으로 초기화
+    resetRequestedPassword: async (_, { userId, newPassword }, { tokenData }) => {
+      await checkAdminValid(tokenData);
+      const user = await User.findById(userId);
+      if (!user) {
+        throw new UserInputError('유저를 찾을 수 없습니다.');
+      }
+
+      // 입력된 비밀번호 유효성 검사 (예: 길이 제한 등)
+      if (!newPassword || newPassword.length < 4) { // 최소 길이 예시
+        throw new UserInputError('새 비밀번호는 4자 이상이어야 합니다.');
+      }
+
+      user.password = await bcrypt.hash(newPassword, 10);
+      await withTransaction(async (session) => {
+        await user.save({ session });
+      });
+      log(`[Admin] User ${userId} password reset to requested value by admin ${tokenData.id}`); // 로그 추가
+      return true; // 성공 시 true 반환
+    },
+
     // 통화내역 upsert
     updateCallLog: async (_, { logs }, { tokenData }) => {
       const user = await checkUserValid(tokenData);
@@ -332,31 +353,45 @@ module.exports = {
 
         if (recentLogs.length > 0) {
           await withTransaction(async (session) => {
-            // 각 로그에 대해 upsert 수행
             for (const log of recentLogs) {
               const dt = parseDateTime(log.time);
-              
+              let retries = 3; // 최대 재시도 횟수
+              while (retries > 0) {
+                try {
                   await TodayRecord.findOneAndUpdate(
-                {
-                  phoneNumber: log.phoneNumber,
-                  userName: user.name,
-                  interactionType: 'CALL'
-                },
-                {
-                  $set: {
-                  userType: user.userType,
-                    interactionType: 'CALL',
-                  createdAt: dt
-              }
-                },
-                { upsert: true, new: true, session }
-              );
+                    {
+                      phoneNumber: log.phoneNumber,
+                      userName: user.name,
+                      interactionType: 'CALL'
+                    },
+                    {
+                      $set: {
+                        userType: user.userType,
+                        interactionType: 'CALL',
+                        createdAt: dt
+                      }
+                    },
+                    { upsert: true, new: true, session }
+                  );
+                  break; // 성공 시 루프 탈출
+                } catch (error) {
+                  retries--;
+                  if ((error.code === 112 || error.errorLabels?.includes('TransientTransactionError')) && retries > 0) {
+                    console.warn(`[updateCallLog] Write conflict on TodayRecord for ${log.phoneNumber}, retrying... (${retries} left)`);
+                    await new Promise(resolve => setTimeout(resolve, Math.pow(2, 3 - retries) * 100)); // 지연
+                  } else {
+                     console.error(`[updateCallLog] Failed to update TodayRecord for ${log.phoneNumber} after retries:`, error);
+                     throw error; // 재시도 실패 시 에러 다시 던짐
+                  }
+                }
+              } // 재시도 루프 끝
             }
           });
         }
-      } catch (error) {
-        console.error('TodayRecord 업데이트 실패 (CallLog):', error);
-        throw new Error('통화 기록 업데이트 중 오류가 발생했습니다.');
+      } catch (error) { // for 루프 내에서 throw된 에러 또는 withTransaction 에러 처리
+        console.error('TodayRecord 업데이트 실패 (CallLog): ', error); // 로그에 스택 트레이스 포함될 수 있도록 수정
+        // 클라이언트에 좀 더 일반적인 메시지 전달
+        throw new Error('통화 기록 업데이트 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
       }
 
       return true;

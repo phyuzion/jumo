@@ -145,6 +145,11 @@ module.exports = gql`
     resetUserPassword(userId: ID!): String
 
     """
+    (Admin 전용) 특정 유저 비밀번호를 입력값으로 초기화
+    """
+    resetRequestedPassword(userId: ID!, newPassword: String!): Boolean!
+
+    """
     통화내역 upsert
     """
     updateCallLog(logs: [CallLogInput!]!): Boolean
