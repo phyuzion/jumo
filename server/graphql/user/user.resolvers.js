@@ -282,7 +282,6 @@ module.exports = {
       await withTransaction(async (session) => {
         await user.save({ session });
       });
-      log(`[Admin] User ${userId} password reset to requested value by admin ${tokenData.id}`); // 로그 추가
       return true; // 성공 시 true 반환
     },
 
