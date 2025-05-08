@@ -603,7 +603,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             SwitchListTile(
               title: Padding(
                 padding: const EdgeInsets.only(left: 16.0),
-                child: const Text('오늘 상담 차단'),
+                child: const Text('오늘 전화문의 차단'),
               ),
               value: _blockedNumbersController.isTodayBlocked,
               onChanged: (value) async {
@@ -615,7 +615,7 @@ class _SettingsScreenState extends State<SettingsScreen>
             SwitchListTile(
               title: Padding(
                 padding: const EdgeInsets.only(left: 16.0),
-                child: const Text('모르는번호 차단'),
+                child: const Text('저장 안된 번호 차단'),
               ),
               value: _blockedNumbersController.isUnknownBlocked,
               onChanged: (value) async {
@@ -628,6 +628,10 @@ class _SettingsScreenState extends State<SettingsScreen>
               title: Padding(
                 padding: const EdgeInsets.only(left: 16.0),
                 child: const Text('위험번호 자동 차단'),
+              ),
+              subtitle: Padding(
+                padding: const EdgeInsets.only(left: 24.0),
+                child: Text('회원 3명 이상 "위험" 등록시 자동 차단'),
               ),
               value: _blockedNumbersController.isAutoBlockDanger,
               onChanged: (value) async {
@@ -747,21 +751,31 @@ class _SettingsScreenState extends State<SettingsScreen>
             ListTile(
               title: Padding(
                 padding: const EdgeInsets.only(left: 16.0),
-                child: const Text('개별 차단번호 관리'),
+                child: const Text('시작번호/지정번호 차단'),
               ),
               subtitle: FutureBuilder<List<BlockedNumber>>(
                 future: _blockedNumbersController.blockedNumbers,
                 builder: (context, snapshot) {
-                  String text = '...'; // 로딩 또는 에러 시 표시할 텍스트
+                  String countText = '...'; // 로딩 또는 에러 시 표시할 텍스트
                   if (snapshot.connectionState == ConnectionState.done &&
                       snapshot.hasData) {
-                    text = '${snapshot.data!.length}개의 번호가 차단되어 있습니다';
+                    countText = '${snapshot.data!.length}개의 번호가 차단되어 있습니다';
                   } else if (snapshot.hasError) {
-                    text = '개수 로딩 오류';
+                    countText = '개수 로딩 오류';
                   }
                   return Padding(
                     padding: const EdgeInsets.only(left: 24.0),
-                    child: Text(text),
+                    // <<< Column 위젯으로 변경 >>>
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'ex) 010-12**-****, 070-***-****',
+                          style: TextStyle(fontSize: 12, color: Colors.grey),
+                        ),
+                        Text(countText),
+                      ],
+                    ),
                   );
                 },
               ),

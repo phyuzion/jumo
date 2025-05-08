@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'dart:developer';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
 class SearchScreen extends StatefulWidget {
   final bool isRequested;
@@ -87,7 +88,8 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       });
     } catch (e) {
-      final errorMessage = e.toString().replaceAll('Exception: ', '');
+      String errorMessage = e.toString().replaceAll('Exception: ', '');
+      log('[SearchScreen] Caught Exception: $errorMessage');
       if (mounted) setState(() => _error = errorMessage);
     } finally {
       if (mounted) setState(() => _loading = false);

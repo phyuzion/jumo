@@ -218,8 +218,8 @@ Future<void> onStart(ServiceInstance service) async {
         );
         flutterLocalNotificationsPlugin.show(
           FOREGROUND_SERVICE_NOTIFICATION_ID,
-          'KOLPON 감지 중',
-          '실시간 통화 감지 중',
+          'KOLPON',
+          '',
           const NotificationDetails(
             android: AndroidNotificationDetails(
               FOREGROUND_SERVICE_CHANNEL_ID,

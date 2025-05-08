@@ -121,6 +121,55 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _onLoginPressed() async {
     if (!mounted) return;
     setState(() => _loading = true);
+
+    // <<< 최소한의 변경 시작: 로그인 시도 직전 네이티브에서 전화번호 다시 가져오기 >>>
+    if (mounted) {
+      // 번호 재확인 시도 전, UI에 로딩 상태를 잠시 반영할 수 있도록 설정
+      // (매우 짧은 순간일 수 있음)
+      setState(() {
+        _isNumberLoading = true;
+      });
+    }
+    try {
+      log(
+        '[LoginScreen][OnLoginPressed] Attempting to refresh phone number from native.',
+      );
+      final String rawNewNumber = await NativeMethods.getMyPhoneNumber();
+      if (mounted) {
+        // 비동기 작업 후 mounted 상태 재확인
+        if (rawNewNumber.isNotEmpty) {
+          final String normalizedNewNumber = normalizePhone(rawNewNumber);
+          log(
+            '[LoginScreen][OnLoginPressed] Refreshed phone number: $normalizedNewNumber',
+          );
+          await _authRepository.setMyNumber(normalizedNewNumber); // 저장소에도 업데이트
+          setState(() {
+            _myNumber = normalizedNewNumber; // 내부 상태 업데이트
+            _isNumberLoading = false; // 로딩 완료
+          });
+        } else {
+          log(
+            '[LoginScreen][OnLoginPressed] Failed to refresh from native (got empty). Using current number: $_myNumber',
+          );
+          // 네이티브에서 못가져왔거나 비어있다면, 기존 _myNumber 유지.
+          // 이 경우 _isNumberLoading은 false로 설정하여 확인 시도가 끝났음을 알림.
+          setState(() {
+            _isNumberLoading = false;
+          });
+        }
+      }
+    } catch (e) {
+      log(
+        '[LoginScreen][OnLoginPressed] Error refreshing phone number: $e. Using current number: $_myNumber',
+      );
+      if (mounted) {
+        setState(() {
+          _isNumberLoading = false; // 에러 시에도 로딩 상태는 해제
+        });
+      }
+    }
+    // <<< 최소한의 변경 끝 >>>
+
     try {
       final loginId = _loginIdCtrl.text.trim();
       final password = _passwordCtrl.text.trim();
@@ -128,13 +177,28 @@ class _LoginScreenState extends State<LoginScreen> {
       if (loginId.isEmpty || password.isEmpty) {
         throw Exception('아이디와 비번을 모두 입력해주세요.');
       }
+
+      // 전화번호 유효성 검사 (위에서 _myNumber가 업데이트되었을 수 있음)
       if (_myNumber.isEmpty ||
-          _myNumber.contains('확인') ||
-          _myNumber.contains('오류')) {
-        throw Exception('전화번호를 인식할 수 없습니다. 앱 권한을 확인하거나 재시작해주세요.');
+          _myNumber.contains('확인') || // "번호 확인중..." 또는 초기 "번호 확인 실패/오류"
+          _myNumber.contains('오류') ||
+          _myNumber.contains('실패')) {
+        Fluttertoast.showToast(
+          msg: '전화번호를 인식할 수 없습니다. 앱 권한을 확인하거나 재시작해주세요.',
+          toastLength: Toast.LENGTH_LONG,
+          gravity: ToastGravity.BOTTOM,
+          backgroundColor: Colors.redAccent,
+          textColor: Colors.white,
+          fontSize: 16.0,
+        );
+        if (mounted) {
+          // return 전에 로딩 상태 해제
+          setState(() => _loading = false);
+        }
+        return;
       }
 
-      // 로그인 API 호출
+      // 로그인 API 호출 (최신 _myNumber 사용)
       final loginResult = await UserApi.userLogin(
         loginId: loginId,
         password: password,
