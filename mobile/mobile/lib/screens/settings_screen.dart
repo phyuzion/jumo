@@ -682,7 +682,7 @@ class _SettingsScreenState extends State<SettingsScreen>
                                       keyboardType: TextInputType.number,
                                       decoration: const InputDecoration(
                                         labelText: '횟수',
-                                        hintText: '예: 5',
+                                        hintText: '예: 3',
                                         border: OutlineInputBorder(),
                                         contentPadding: EdgeInsets.symmetric(
                                           horizontal: 8,
@@ -738,6 +738,18 @@ class _SettingsScreenState extends State<SettingsScreen>
                   Switch(
                     value: _blockedNumbersController.isBombCallsBlocked,
                     onChanged: (value) async {
+                      if (value == true) {
+                        // 스위치를 켤 때
+                        // 현재 설정된 콜폭 횟수가 0 (기본값으로 간주)이라면 3으로 설정
+                        // 만약 bombCallsCount의 "미설정" 기본값이 0이 아니라면 해당 값으로 조건을 변경해야 합니다.
+                        if (_blockedNumbersController.bombCallsCount == 0) {
+                          await _blockedNumbersController.setBombCallsCount(3);
+                          // 화면에 즉시 반영을 위해 bombCallsCountController의 text도 업데이트 (선택적)
+                          // 이 값은 다음 setState 호출 시 어차피 컨트롤러 값으로 업데이트됨
+                          // _bombCallsCountController.text = '3';
+                        }
+                      }
+                      // 스위치 상태 자체는 항상 업데이트
                       await _blockedNumbersController.setBombCallsBlocked(
                         value,
                       );

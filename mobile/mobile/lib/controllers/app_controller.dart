@@ -18,6 +18,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/services/native_methods.dart';
 
 // <<< 포그라운드 서비스 알림 ID 상수 추가 >>>
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
@@ -166,6 +167,37 @@ class AppController {
       }
     });
     // <<< 리스너 추가 끝 >>>
+
+    // <<< 현재 통화 상태 요청 처리 리스너 추가 (타이머용) >>>
+    service.on('requestCurrentCallStateFromAppControllerForTimer').listen((
+      event,
+    ) async {
+      log(
+        '[AppController] Received requestCurrentCallStateFromAppControllerForTimer from background service.',
+      );
+      try {
+        final Map<String, dynamic> nativeCallDetails =
+            await NativeMethods.getCurrentCallState();
+        service.invoke(
+          'responseCurrentCallStateToBackgroundForTimer',
+          nativeCallDetails,
+        );
+        log(
+          '[AppController] Sent responseCurrentCallStateToBackgroundForTimer with: $nativeCallDetails',
+        );
+      } catch (e) {
+        log(
+          '[AppController] Error handling requestCurrentCallStateFromAppControllerForTimer: $e',
+        );
+        // 오류 발생 시에도 응답은 보내주는 것이 좋음 (예: 기본값 또는 에러 상태)
+        service.invoke('responseCurrentCallStateToBackgroundForTimer', {
+          'state': 'ERROR_FETCHING_NATIVE_TIMER', // 구체적인 에러 상태
+          'number': null,
+          'error': e.toString(),
+        });
+      }
+    });
+    // <<< 타이머용 리스너 추가 끝 >>>
 
     // 안드로이드/iOS 설정
     await service.configure(

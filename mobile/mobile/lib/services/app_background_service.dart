@@ -35,6 +35,17 @@ SmsController? _backgroundSmsController;
 
 const int CALL_STATUS_NOTIFICATION_ID = 1111;
 const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
+const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
+
+// <<< 백그라운드 서비스 상태 저장을 위한 변수 추가 >>>
+String _lastStateSentToUi = '';
+String _lastNumberSentToUi = '';
+String _lastCallerNameSentToUi = '';
+bool _lastConnectedSentToUi = false;
+int ongoingSeconds = 0; // 통화 시간 추적
+Timer? callTimer; // 통화 타이머
+String _currentNumberForTimer = ''; // 타이머용 현재 번호
+String _currentCallerNameForTimer = ''; // 타이머용 현재 발신자 이름
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
@@ -49,11 +60,6 @@ Future<void> onStart(ServiceInstance service) async {
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
-
-  Timer? callTimer;
-  int ongoingSeconds = 0;
-  String _currentNumberForTimer = "";
-  String _currentCallerNameForTimer = "";
 
   // <<< Hive 초기화 >>>
   bool hiveInitialized = false;
@@ -283,6 +289,45 @@ Future<void> onStart(ServiceInstance service) async {
     return completer.future;
   }
 
+  // <<< 새로운 함수: 메인 Isolate로부터 현재 통화 상태 가져오기 >>>
+  Future<Map<String, dynamic>> _fetchCurrentCallStateFromMain() async {
+    final completer = Completer<Map<String, dynamic>>();
+    StreamSubscription? subscription;
+
+    subscription = service.on('respondCurrentCallStateToService').listen((
+      event,
+    ) {
+      final Map<String, dynamic> callDetails = Map<String, dynamic>.from(
+        event ?? {},
+      );
+      log(
+        '[BackgroundService] Received respondCurrentCallStateToService: $callDetails',
+      );
+      if (!completer.isCompleted) {
+        completer.complete(callDetails);
+      }
+      subscription?.cancel();
+    });
+
+    Future.delayed(const Duration(seconds: 3), () {
+      // 타임아웃 (3초)
+      if (!completer.isCompleted) {
+        log(
+          '[BackgroundService] Timeout waiting for respondCurrentCallStateToService.',
+        );
+        completer.complete({'state': 'TIMEOUT_FETCHING_MAIN', 'number': null});
+        subscription?.cancel();
+      }
+    });
+
+    log(
+      '[BackgroundService] Sending requestCurrentCallStateFromBackground to main.',
+    );
+    service.invoke('requestCurrentCallStateFromBackground');
+
+    return completer.future;
+  }
+
   // <<< 시간 포맷 함수 정의 먼저 >>>
   String _formatDurationBackground(int seconds) {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -300,55 +345,131 @@ Future<void> onStart(ServiceInstance service) async {
     ongoingSeconds = 0;
   }
 
-  // <<< 타이머 시작 함수 정의 >>>
+  // <<< 타이머 시작 함수 정의 (간소화된 버전) >>>
   void _startCallTimerBackground() {
     _stopCallTimerBackground();
     ongoingSeconds = 0;
     callTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       ongoingSeconds++;
-      if (service is AndroidServiceInstance) {
-        if (await service.isForegroundService()) {
-          // <<< 저장된 최신 정보 사용 >>>
-          String title =
-              '통화중... (${_formatDurationBackground(ongoingSeconds)})';
-          String content =
-              '$_currentCallerNameForTimer ($_currentNumberForTimer)';
-          String payload = 'active:$_currentNumberForTimer';
 
-          // <<< 알림 업데이트 show() 호출 수정 >>>
-          flutterLocalNotificationsPlugin.show(
-            FOREGROUND_SERVICE_NOTIFICATION_ID,
-            title,
-            content,
-            const NotificationDetails(
-              android: AndroidNotificationDetails(
-                FOREGROUND_SERVICE_CHANNEL_ID,
-                'KOLPON 서비스 상태',
-                icon: 'ic_bg_service_small',
-                ongoing: true,
-                autoCancel: false,
-                importance: Importance.low,
-                priority: Priority.low,
-                playSound: false,
-                enableVibration: false,
-                onlyAlertOnce: true,
-              ),
-            ),
-            payload: payload,
-          );
-
-          service.invoke('updateUiCallState', {
-            'state': 'active',
-            'number': _currentNumberForTimer,
-            'callerName': _currentCallerNameForTimer,
-            'connected': true,
-            'duration': ongoingSeconds,
-            'reason': '',
+      // 네이티브 통화 상태 확인 요청
+      service.invoke('requestCurrentCallStateFromAppControllerForTimer');
+      final Completer<Map<String, dynamic>?> nativeStateCompleter = Completer();
+      StreamSubscription? nativeStateSubscription;
+      nativeStateSubscription = service
+          .on('responseCurrentCallStateToBackgroundForTimer')
+          .listen((event) {
+            if (!nativeStateCompleter.isCompleted) {
+              nativeStateCompleter.complete(event);
+              nativeStateSubscription?.cancel();
+            }
           });
+
+      Map<String, dynamic>? nativeCallDetails;
+      try {
+        nativeCallDetails = await nativeStateCompleter.future.timeout(
+          const Duration(milliseconds: 700),
+        );
+      } catch (e) {
+        log(
+          '[BackgroundService][TimerTick] Timeout or error waiting for native state: $e',
+        );
+        nativeStateSubscription?.cancel();
+        // 네이티브 상태를 못 가져오면, 다음 틱에서 다시 시도. (또는 여기서 'ended' 강제 전송도 고려 가능)
+        return;
+      }
+
+      final String nativeState =
+          nativeCallDetails?['state'] as String? ?? 'UNKNOWN';
+      final String currentNumberInTimer = _currentNumberForTimer;
+      final String currentCallerNameInTimer = _currentCallerNameForTimer;
+
+      // FlutterLocalNotificationsPlugin 인스턴스 가져오기 (onStart에서 초기화된 것을 사용)
+      // 실제로는 onStart에서 생성된 인스턴스를 계속 사용해야 하므로, 이 부분은 onStart의 것을 참조하도록 수정 필요.
+      // 여기서는 임시로 로컬 변수를 선언하지만, 실제 사용 시에는 onStart의 flutterLocalNotificationsPlugin를 사용해야 합니다.
+      final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+          FlutterLocalNotificationsPlugin();
+
+      if (nativeState.toUpperCase() != 'ACTIVE' &&
+          nativeState.toUpperCase() != 'DIALING') {
+        log(
+          '[BackgroundService][TimerTickDebug] Native state is $nativeState. Call seems ended. Stopping timer.',
+        );
+        _stopCallTimerBackground(); // 타이머 중지
+
+        // UI에 통화 종료 상태 알림 -> 이 이벤트는 main.dart의 _listenToBackgroundService에서 처리되어
+        // CallStateProvider를 업데이트하고, CallStateProvider는 알림 변경 등 후속 조치를 할 수 있음.
+        service.invoke('updateUiCallState', {
+          'state': 'ended',
+          'number': currentNumberInTimer,
+          'callerName': currentCallerNameInTimer,
+          'connected': false,
+          'duration': ongoingSeconds,
+          'reason': 'sync_ended_native_not_active ($nativeState)',
+        });
+
+        // 백그라운드 서비스의 'callStateChanged' 리스너에게도 'ended' 상태를 알려서
+        // 포그라운드 알림을 기본 상태로 되돌리도록 할 수 있음.
+        // 이렇게 하면 알림 관리가 'callStateChanged' 리스너로 일원화됨.
+        service.invoke('callStateChanged', {
+          'state': 'ended',
+          'number': currentNumberInTimer,
+          'callerName': currentCallerNameInTimer,
+          'connected': false,
+          'reason': 'sync_ended_native_not_active ($nativeState)',
+        });
+      } else {
+        // 네이티브 상태가 ACTIVE 또는 DIALING임. UI에 'active' 상태 및 시간 업데이트
+        log(
+          '[BackgroundService][TimerTickDebug] Native state is $nativeState. Timer continues for $currentNumberInTimer. Duration: $ongoingSeconds',
+        );
+
+        if (service is AndroidServiceInstance) {
+          if (await service.isForegroundService()) {
+            String title =
+                '통화중... (${_formatDurationBackground(ongoingSeconds)})';
+            String content =
+                '$currentCallerNameInTimer ($currentNumberInTimer)';
+            String payload = 'active:$currentNumberInTimer';
+
+            // 포그라운드 알림 업데이트
+            flutterLocalNotificationsPlugin.show(
+              FOREGROUND_SERVICE_NOTIFICATION_ID,
+              title,
+              content,
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  FOREGROUND_SERVICE_CHANNEL_ID,
+                  'KOLPON 서비스 상태',
+                  icon: 'ic_bg_service_small',
+                  ongoing: true,
+                  autoCancel: false,
+                  importance: Importance.low,
+                  priority: Priority.low,
+                  playSound: false,
+                  enableVibration: false,
+                  onlyAlertOnce: true,
+                ),
+              ),
+              payload: payload,
+            );
+          }
         }
+
+        // UI에 'active' 상태 업데이트
+        service.invoke('updateUiCallState', {
+          'state': 'active',
+          'number': currentNumberInTimer,
+          'callerName': currentCallerNameInTimer,
+          'connected': true,
+          'duration': ongoingSeconds,
+          'reason': '',
+        });
       }
     });
-    log('[BackgroundService] Call timer started.');
+    log(
+      '[BackgroundService] Call timer started with native state check (simplified).',
+    );
   }
 
   log('[BackgroundService] Setting up periodic timers and event listeners...');
@@ -446,8 +567,8 @@ Future<void> onStart(ServiceInstance service) async {
     }
 
     if (state != null) {
-      String title = 'KOLPON 감지 중';
-      String content = '실시간 통화 감지 중';
+      String title = 'KOLPON';
+      String content = '';
       String payload = 'idle';
 
       switch (state) {
@@ -464,8 +585,8 @@ Future<void> onStart(ServiceInstance service) async {
           payload = 'active:$number';
           break;
         case 'ended':
-          title = 'KOLPON 감지 중'; // 종료 시 기본으로 복원
-          content = '실시간 통화 감지 중';
+          title = 'KOLPON'; // 종료 시 기본으로 복원
+          content = '';
           payload = 'idle';
           break;
         default:
