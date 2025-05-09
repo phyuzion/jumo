@@ -70,15 +70,30 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   @override
   Widget build(BuildContext context) {
     log('[RecentCallsScreen] build called.');
-    final callLogProvider = context.watch<CallLogController>();
-    final contactsProvider = context.watch<ContactsController>();
-    final callLogs = callLogProvider.callLogs;
-    final contacts = contactsProvider.contacts;
+
+    // CallLogController 구독 최적화
+    final callLogs = context.select((CallLogController clc) => clc.callLogs);
+    final isCallLogLoading = context.select(
+      (CallLogController clc) => clc.isLoading,
+    );
+
+    // ContactsController 구독 최적화
+    final contacts = context.select((ContactsController cc) => cc.contacts);
+    final areContactsLoading = context.select(
+      (ContactsController cc) => cc.isLoading,
+    );
+
+    // contactCache는 contacts가 변경될 때만 재계산되도록 할 수 있지만,
+    // 현재 구조에서는 contacts를 select 했으므로 contacts가 바뀔 때 이 build 메소드가 실행됨.
+    // 따라서 여기서 contactCache를 만드는 것은 문제가 없음.
     final contactCache = {for (var c in contacts) c.phoneNumber: c};
-    final isLoading = callLogProvider.isLoading || contactsProvider.isLoading;
+
+    // 최종 로딩 상태 결정
+    // final isLoading = isCallLogLoading || areContactsLoading || _isRefreshing;
+    final isLoading = isCallLogLoading || areContactsLoading;
 
     log(
-      '[RecentCallsScreen] build: isLoading=$isLoading, callLogs count: ${callLogs.length}',
+      '[RecentCallsScreen] build: isLoading=$isLoading (callLog: $isCallLogLoading, contacts: $areContactsLoading), callLogs count: ${callLogs.length}',
     );
 
     return Scaffold(

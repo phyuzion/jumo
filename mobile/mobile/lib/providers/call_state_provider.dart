@@ -36,6 +36,10 @@ class CallStateProvider with ChangeNotifier {
   // <<< 근접 센서 스트림 구독 관리를 위한 변수 추가 >>>
   StreamSubscription<dynamic>? _proximitySensorSubscription;
 
+  // 추가된 멤버 변수들
+  String? _currentlyFetchingNameForNumber;
+  final Set<String> _nameFetchedAttemptedForNumbers = {};
+
   // Getters
   CallState get callState => _callState;
   String get number => _number;
@@ -83,6 +87,15 @@ class CallStateProvider with ChangeNotifier {
   }) async {
     final bool wasActive = _callState == CallState.active; // <<< 이전 상태 저장
     final CallState previousCallState = _callState; // 로깅을 위해 이전 상태 저장
+    final String previousNumber = _number; // 이전 번호 저장
+
+    // 번호가 변경되었는지 확인
+    if (previousNumber.isNotEmpty && previousNumber != number) {
+      _nameFetchedAttemptedForNumbers.remove(previousNumber);
+      log(
+        '[CallStateProvider] Phone number changed, cleared name fetch attempt for $previousNumber',
+      );
+    }
 
     // <<< 상태 변경 확인 로직 (stateTransitioned, needsCoreUpdate 등 계산) >>>
     bool stateTransitioned = previousCallState != state;
@@ -94,11 +107,26 @@ class CallStateProvider with ChangeNotifier {
     bool durationChanged =
         (state == CallState.active && _duration != duration); // 실제 로직 사용
     bool needsCoreUpdate = stateTransitioned || infoChanged;
+
+    // 이름 조회 조건 수정
+    bool canAttemptNameFetch =
+        _callerName.isEmpty && // 현재 _callerName이 비어있고
+        (callerName.isEmpty) && // 외부에서도 이름이 주어지지 않았으며
+        number.isNotEmpty && // 번호가 있고
+        !_nameFetchedAttemptedForNumbers.contains(
+          number,
+        ) && // 해당 번호로 조회 시도한 적이 없고
+        _currentlyFetchingNameForNumber != number; // 현재 해당 번호로 조회 중이 아닐 때
+
     bool shouldFetchName =
         (state == CallState.incoming || state == CallState.active) &&
-        number.isNotEmpty &&
-        callerName.isEmpty; // <<< 수정
-    bool needsNotify = needsCoreUpdate || durationChanged || shouldFetchName;
+        canAttemptNameFetch;
+
+    bool needsNotify =
+        needsCoreUpdate ||
+        durationChanged ||
+        (shouldFetchName &&
+            _callerName.isEmpty); // 이름 조회를 시작하더라도, 실제 _callerName이 변경되어야 UI가 반응
 
     // <<< 상태 업데이트 적용 >>>
     if (needsCoreUpdate) {
@@ -108,10 +136,12 @@ class CallStateProvider with ChangeNotifier {
       _callEndReason = reason;
 
       // <<< callerName 업데이트 로직 수정: 빈 문자열 허용 >>>
-      _callerName = callerName; // 전달된 값 그대로 사용
+      if (callerName.isNotEmpty) {
+        _callerName = callerName;
+      }
 
       log(
-        '[CallStateProvider] State updated: state=$_callState, number=$_number, name=$_callerName',
+        '[CallStateProvider] State updated: state=$_callState, number=$_number, name=$_callerName, reason=$_callEndReason',
       );
     }
     if (state == CallState.active) {
@@ -125,6 +155,14 @@ class CallStateProvider with ChangeNotifier {
       _isConnected = false;
       _duration = 0;
       _callEndReason = '';
+      // IDLE 상태가 되면, 이전 번호에 대한 "이름 조회 시도했음" 상태를 해제합니다.
+      // 이렇게 하면 다음 통화 시 (번호가 같다면) 다시 이름을 조회할 수 있습니다.
+      if (previousNumber.isNotEmpty) {
+        _nameFetchedAttemptedForNumbers.remove(previousNumber);
+        log(
+          '[CallStateProvider] CallState is IDLE, cleared name fetch attempt for $previousNumber',
+        );
+      }
       log('[CallStateProvider] State changed to IDLE, resetting info.');
     }
 
@@ -193,24 +231,41 @@ class CallStateProvider with ChangeNotifier {
     }
     // 초기 이름 조회 시도
     if (shouldFetchName) {
-      _fetchAndUpdateCallerName(number);
+      await _fetchAndUpdateCallerName(_number);
     }
   }
 
   // 이름 비동기 조회 및 업데이트 함수 (재시도 로직 제거)
   Future<void> _fetchAndUpdateCallerName(String number) async {
-    try {
-      String fetchedName = await contactsController.getContactName(number);
+    if (number.isEmpty) return;
+    if (_currentlyFetchingNameForNumber == number) return;
+    _currentlyFetchingNameForNumber = number;
+    log('[CallStateProvider] Attempting to fetch name for $number');
 
-      // 이름이 실제로 변경되었을 때만 업데이트 및 알림
-      if (fetchedName.isNotEmpty && _callerName != fetchedName) {
-        _callerName = fetchedName;
-        notifyListeners();
+    try {
+      // 이름 조회 시도 자체를 기록
+      _nameFetchedAttemptedForNumbers.add(number);
+      log('[CallStateProvider] Marked $number as name fetch attempted.');
+
+      String fetchedName = await contactsController.getContactName(number);
+      if (fetchedName.isNotEmpty) {
+        if (_callerName != fetchedName) {
+          _callerName = fetchedName;
+          log(
+            '[CallStateProvider] Fetched and updated callerName to: $fetchedName for $number',
+          );
+          notifyListeners(); // 이름이 실제로 변경되었으므로 알림
+        }
       } else {
-        log('[Provider] Fetched name is same as current: "$_callerName"');
+        log(
+          '[CallStateProvider] Fetched name is empty for $number. _callerName remains: "$_callerName"',
+        );
       }
     } catch (e) {
-      log('[Provider] Error fetching caller name: $e');
+      log('[CallStateProvider] Error fetching caller name for $number: $e');
+      // 에러 발생 시에도 해당 번호에 대한 조회 시도는 한 것으로 간주 (반복 방지)
+    } finally {
+      _currentlyFetchingNameForNumber = null;
     }
   }
 
