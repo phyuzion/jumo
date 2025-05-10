@@ -531,14 +531,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "11.0.0"
-  flutter_sms_intellect:
-    dependency: "direct main"
-    description:
-      name: flutter_sms_intellect
-      sha256: "7b103e7466ddbef97bd62e9b43b47ade710dc5428bf09925e77eb051b1061eb8"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.0.2"
   flutter_test:
     dependency: "direct dev"
     description: flutter

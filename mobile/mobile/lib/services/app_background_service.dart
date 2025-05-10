@@ -14,34 +14,23 @@ import 'package:mobile/graphql/log_api.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mobile/models/blocked_history.dart';
-import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
 import 'package:mobile/graphql/search_api.dart';
 import 'package:mobile/graphql/block_api.dart';
 import 'package:mobile/utils/constants.dart';
-import 'package:mobile/controllers/sms_controller.dart';
-import 'package:mobile/controllers/app_controller.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/repositories/settings_repository.dart'; // <<< 추가
 import 'package:mobile/repositories/notification_repository.dart'; // <<< 추가
 import 'package:mobile/main.dart';
-import 'package:mobile/repositories/sms_log_repository.dart'; // <<< 추가
 import 'package:mobile/repositories/blocked_number_repository.dart'; // <<< 추가
 import 'package:mobile/repositories/blocked_history_repository.dart'; // <<< 추가
 import 'package:mobile/repositories/sync_state_repository.dart'; // <<< 추가
 //import 'package:system_alert_window/system_alert_window.dart';
 
-SmsController? _backgroundSmsController;
-
 const int CALL_STATUS_NOTIFICATION_ID = 1111;
 const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
 
-// <<< 백그라운드 서비스 상태 저장을 위한 변수 추가 >>>
-String _lastStateSentToUi = '';
-String _lastNumberSentToUi = '';
-String _lastCallerNameSentToUi = '';
-bool _lastConnectedSentToUi = false;
 int ongoingSeconds = 0; // 통화 시간 추적
 Timer? callTimer; // 통화 타이머
 String _currentNumberForTimer = ''; // 타이머용 현재 번호
@@ -66,7 +55,6 @@ Future<void> onStart(ServiceInstance service) async {
   late AuthRepository authRepository;
   late SettingsRepository settingsRepository;
   late NotificationRepository notificationRepository;
-  late SmsLogRepository smsLogRepository;
   late BlockedNumberRepository blockedNumberRepository;
   late BlockedHistoryRepository blockedHistoryRepository; // <<< 추가
   late SyncStateRepository syncStateRepository; // <<< 추가
@@ -120,18 +108,6 @@ Future<void> onStart(ServiceInstance service) async {
     } else {
       log(
         '[BackgroundService][onStart] NotificationRepository already registered in GetIt.',
-      );
-    }
-
-    // <<< SmsLogRepository 등록 >>>
-    final smsLogsBox = await Hive.openBox('sms_logs');
-    smsLogRepository = HiveSmsLogRepository(smsLogsBox);
-    if (!getIt.isRegistered<SmsLogRepository>()) {
-      getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
-      log('[BackgroundService][onStart] SmsLogRepository registered in GetIt.');
-    } else {
-      log(
-        '[BackgroundService][onStart] SmsLogRepository already registered in GetIt.',
       );
     }
 
@@ -207,12 +183,6 @@ Future<void> onStart(ServiceInstance service) async {
     service.stopSelf();
     return;
   }
-
-  // <<< SmsController 인스턴스 생성 (SmsLogRepository 주입) >>>
-  _backgroundSmsController = SmsController(
-    settingsRepository,
-    smsLogRepository,
-  );
 
   // <<< 3. 초기 알림 설정 (Hive 초기화 이후 + 추가 딜레이) >>>
   try {
@@ -478,7 +448,6 @@ Future<void> onStart(ServiceInstance service) async {
   Timer? notificationTimer;
   Timer? contactSyncTimer;
   Timer? blockSyncTimer;
-  Timer? smsSyncTimer;
 
   // 알림 확인 타이머 (10분으로 변경)
   notificationTimer = Timer.periodic(const Duration(minutes: 10), (
@@ -519,12 +488,6 @@ Future<void> onStart(ServiceInstance service) async {
       '[BackgroundService] Starting periodic blocked/danger/bomb numbers sync...',
     );
     await syncBlockedLists(); // <<< 주기적으로 헬퍼 호출 확인
-  });
-
-  // SMS 동기화 타이머 (15분 유지)
-  smsSyncTimer = Timer.periodic(const Duration(minutes: 10), (timer) async {
-    log('[BackgroundService] Starting periodic SMS sync...');
-    _backgroundSmsController?.refreshSms(); // 읽기+저장+업로드 헬퍼 호출
   });
 
   // --- 이벤트 기반 작업들 ---
@@ -662,7 +625,6 @@ Future<void> onStart(ServiceInstance service) async {
     notificationTimer?.cancel();
     contactSyncTimer?.cancel();
     blockSyncTimer?.cancel();
-    smsSyncTimer?.cancel();
     service.stopSelf();
   });
 

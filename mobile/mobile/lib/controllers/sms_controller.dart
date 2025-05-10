@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer';
-
-import 'package:flutter_sms_intellect/flutter_sms_intellect.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile/graphql/log_api.dart';
 import 'package:mobile/repositories/settings_repository.dart';
 import 'package:mobile/repositories/sms_log_repository.dart';
@@ -12,74 +10,228 @@ class SmsController {
   final SettingsRepository _settingsRepository;
   final SmsLogRepository _smsLogRepository;
 
+  static const MethodChannel _methodChannel = MethodChannel(
+    'com.jumo.mobile/sms_query',
+  );
+  static const EventChannel _eventChannel = EventChannel(
+    'com.jumo.mobile/sms_events',
+  );
+  StreamSubscription? _smsEventSubscription;
+
   SmsController(this._settingsRepository, this._smsLogRepository);
 
-  /// 최신 SMS 가져와 변경된 내역만 서버 업로드
+  Future<void> initializeSmsFeatures() async {
+    log('[SmsController] Initializing SMS features...');
+    await startSmsObservation();
+    listenToSmsEvents();
+    await refreshSms();
+  }
+
+  Future<void> startSmsObservation() async {
+    try {
+      await _methodChannel.invokeMethod('startSmsObservation');
+      log(
+        '[SmsController] Requested to start SMS observation via MethodChannel.',
+      );
+    } on PlatformException catch (e) {
+      log("[SmsController] Failed to start SMS observation: '${e.message}'.");
+    }
+  }
+
+  void listenToSmsEvents() {
+    _smsEventSubscription?.cancel();
+    _smsEventSubscription = _eventChannel.receiveBroadcastStream().listen(
+      (event) {
+        log('[SmsController] Received SMS event from native: $event');
+        if (event == "sms_changed_event") {
+          log(
+            '[SmsController] Triggering refreshSms due to sms_changed_event.',
+          );
+          refreshSms();
+        }
+      },
+      onError: (error) {
+        log('[SmsController] Error in SMS event channel: $error');
+      },
+      onDone: () {
+        log('[SmsController] SMS event channel closed.');
+      },
+      cancelOnError: true,
+    );
+    log('[SmsController] Listening to SMS events from native.');
+  }
+
+  Future<void> stopSmsObservationAndDispose() async {
+    log('[SmsController] Stopping SMS observation and disposing listener...');
+    _smsEventSubscription?.cancel();
+    _smsEventSubscription = null;
+    try {
+      await _methodChannel.invokeMethod('stopSmsObservation');
+      log(
+        '[SmsController] Requested to stop SMS observation via MethodChannel.',
+      );
+    } on PlatformException catch (e) {
+      log("[SmsController] Failed to stop SMS observation: '${e.message}'.");
+    }
+  }
+
   Future<void> refreshSms() async {
+    log('[SmsController] refreshSms called.');
     try {
       final int lastUploadTimestamp =
           await _settingsRepository.getLastSmsSyncTimestamp();
+      log('[SmsController] Last SMS sync timestamp: $lastUploadTimestamp');
 
-      final messages = await SmsInbox.getAllSms(count: 30); // Inbox만 읽는 한계 인지
+      List<dynamic>? nativeSmsListDyn;
+      try {
+        nativeSmsListDyn = await _methodChannel
+            .invokeListMethod<Map<dynamic, dynamic>>('getSmsSince', {
+              'timestamp': lastUploadTimestamp,
+            });
+      } on PlatformException catch (e) {
+        log("[SmsController] Failed to get SMS from native: '${e.message}'.");
+        return;
+      }
 
-      final List<Map<String, dynamic>> processedSmsList = []; // 로컬 저장용 전체 목록
-      int latestTimestampInFetched = lastUploadTimestamp; // 읽어온 것 중 최신 시간
+      if (nativeSmsListDyn == null || nativeSmsListDyn.isEmpty) {
+        log(
+          '[SmsController] No new SMS found from native since $lastUploadTimestamp.',
+        );
+        return;
+      }
 
-      for (final msg in messages) {
-        final address = normalizePhone(msg.address ?? '');
-        final body = msg.body ?? '';
-        final dateMillis = localEpochToUtcEpoch(msg.date ?? 0);
-        final type = msg.type?.toString() ?? 'UNKNOWN';
+      final List<Map<String, dynamic>> nativeSmsList =
+          nativeSmsListDyn
+              .map((item) => Map<String, dynamic>.from(item as Map))
+              .toList();
+      log(
+        '[SmsController] Fetched ${nativeSmsList.length} SMS from native (all types since last sync).',
+      );
+
+      final List<Map<String, dynamic>> allProcessedSmsForLocalLog = [];
+      int latestTimestampInFetchedData = lastUploadTimestamp;
+
+      for (final nativeSms in nativeSmsList) {
+        final address = normalizePhone(nativeSms['address'] as String? ?? '');
+        final body = nativeSms['body'] as String? ?? '';
+        final dateMillis = nativeSms['date'] as int? ?? 0;
+        final typeInt = nativeSms['type'] as int? ?? 0;
+
+        String typeStrForLog = mapSmsTypeIntToStringWithAllTypes(typeInt);
 
         if (address.isNotEmpty && dateMillis > 0) {
-          // 날짜 유효성 체크 추가
           final smsMap = {
             'address': address,
             'body': body,
             'date': dateMillis,
-            'type': type,
+            'type': typeStrForLog,
           };
-          processedSmsList.add(smsMap);
-          if (dateMillis > latestTimestampInFetched) {
-            latestTimestampInFetched = dateMillis;
+          allProcessedSmsForLocalLog.add(smsMap);
+          if (dateMillis > latestTimestampInFetchedData) {
+            latestTimestampInFetchedData = dateMillis;
           }
         }
       }
-      // 로컬 캐시는 항상 최신 30개로 업데이트 (기존 방식)
-      await _smsLogRepository.saveSmsLogs(processedSmsList);
 
-      // 4. 새로 업로드할 메시지 필터링
-      final List<Map<String, dynamic>> newSmsToUpload =
-          processedSmsList.where((sms) {
-            return (sms['date'] as int) > lastUploadTimestamp;
-          }).toList();
+      if (allProcessedSmsForLocalLog.isNotEmpty) {
+        await _smsLogRepository.saveSmsLogs(allProcessedSmsForLocalLog);
+        log(
+          '[SmsController] Saved ${allProcessedSmsForLocalLog.length} processed SMS to local SmsLogRepository.',
+        );
+      }
 
-      // 5. 새 메시지 업로드 및 마지막 타임스탬프 업데이트
-      if (newSmsToUpload.isNotEmpty) {
-        // 업로드 전 시간순 정렬 (오래된 것부터)
-        newSmsToUpload.sort(
+      final List<Map<String, dynamic>> smsToUpload = [];
+      int latestTimestampInUploadBatch = lastUploadTimestamp;
+
+      for (final nativeSms in nativeSmsList) {
+        final address = normalizePhone(nativeSms['address'] as String? ?? '');
+        final body = nativeSms['body'] as String? ?? '';
+        final dateMillis = nativeSms['date'] as int? ?? 0;
+        final typeInt = nativeSms['type'] as int? ?? 0;
+
+        String? typeStrForUpload = mapSmsTypeIntToStringForUpload(typeInt);
+
+        if (typeStrForUpload != null && address.isNotEmpty && dateMillis > 0) {
+          final smsMap = {
+            'address': address,
+            'body': body,
+            'date': dateMillis,
+            'type': typeStrForUpload,
+          };
+          smsToUpload.add(smsMap);
+          if (dateMillis > latestTimestampInUploadBatch) {
+            latestTimestampInUploadBatch = dateMillis;
+          }
+        }
+      }
+
+      if (smsToUpload.isNotEmpty) {
+        smsToUpload.sort(
           (a, b) => (a['date'] as int).compareTo(b['date'] as int),
         );
-        // 업로드할 배치 중 가장 최신 타임스탬프 찾기
-        final int latestTimestampInNewBatch =
-            newSmsToUpload.last['date'] as int;
 
-        final smsForServer = prepareSmsForServer(newSmsToUpload);
+        final smsForServer = prepareSmsForServer(smsToUpload);
         if (smsForServer.isNotEmpty) {
           try {
+            log(
+              '[SmsController] Uploading ${smsForServer.length} INBOX/SENT SMS to server.',
+            );
             bool uploadSuccess = await LogApi.updateSMSLog(smsForServer);
             if (uploadSuccess) {
-              await _settingsRepository.setLastSmsSyncTimestamp(
-                latestTimestampInNewBatch,
+              log(
+                '[SmsController] SMS upload successful. Updating last sync timestamp to $latestTimestampInUploadBatch',
               );
+              await _settingsRepository.setLastSmsSyncTimestamp(
+                latestTimestampInUploadBatch,
+              );
+            } else {
+              log('[SmsController] SMS upload failed (API returned false).');
             }
           } catch (uploadError) {
             log('[SmsController] LogApi.updateSMSLog FAILED: $uploadError');
           }
         }
+      } else {
+        log('[SmsController] No INBOX/SENT SMS to upload.');
+        if (latestTimestampInFetchedData > lastUploadTimestamp) {
+          // 선택적: INBOX/SENT가 아닌 다른 타입의 새 SMS가 있었던 경우,
+          // 다음번 쿼리 범위를 줄이기 위해 타임스탬프 업데이트.
+          // log('[SmsController] Updating last sync timestamp to $latestTimestampInFetchedData as new non-uploadable SMS were processed.');
+          // await _settingsRepository.setLastSmsSyncTimestamp(latestTimestampInFetchedData);
+        }
       }
     } catch (e, st) {
       log('[SmsController] refreshSms error: $e\n$st');
+    }
+  }
+
+  String? mapSmsTypeIntToStringForUpload(int typeInt) {
+    switch (typeInt) {
+      case 1:
+        return 'INBOX';
+      case 2:
+        return 'SENT';
+      default:
+        return null;
+    }
+  }
+
+  String mapSmsTypeIntToStringWithAllTypes(int typeInt) {
+    switch (typeInt) {
+      case 1:
+        return 'INBOX';
+      case 2:
+        return 'SENT';
+      case 3:
+        return 'DRAFT';
+      case 4:
+        return 'OUTBOX';
+      case 5:
+        return 'FAILED';
+      case 6:
+        return 'QUEUED';
+      default:
+        return 'UNKNOWN_$typeInt';
     }
   }
 
@@ -89,8 +241,8 @@ class SmsController {
     return localSms.map((m) {
       final phone = m['address'] as String? ?? '';
       final content = m['body'] as String? ?? '';
-      final timeStr = (m['date'] ?? 0).toString(); // epoch(int) -> string
-      final smsType = (m['type'] ?? '').toString();
+      final timeStr = (m['date'] ?? 0).toString();
+      final smsType = m['type'] as String;
 
       return {
         'phoneNumber': phone,

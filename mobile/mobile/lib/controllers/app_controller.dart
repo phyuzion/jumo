@@ -19,6 +19,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 // <<< 포그라운드 서비스 알림 ID 상수 추가 >>>
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
@@ -115,6 +116,8 @@ class AppController {
     await stopBackgroundService();
     phoneStateController.stopListening();
     await LocalNotificationService.cancelAllNotifications();
+    await smsController.stopSmsObservationAndDispose();
+    log('[AppController] SMS observation stopped and listener disposed.');
     log('[AppController] Cleanup on logout finished.');
   }
 
@@ -352,7 +355,24 @@ class AppController {
         );
       }
 
-      // 4. 앱 업데이트 확인 등 추가 작업 (필요 시)
+      // SMS 기능 초기화 (READ_SMS 권한 확인 후)
+      _coreInitMessage = 'SMS 기능 초기화 중...';
+      log(
+        '[AppController] Checking SMS permission for SMS feature initialization...',
+      );
+      final smsPermissionStatus = await Permission.sms.status;
+      if (smsPermissionStatus.isGranted) {
+        log(
+          '[AppController] SMS permission granted. Initializing SMS features.',
+        );
+        await smsController.initializeSmsFeatures();
+      } else {
+        log(
+          '[AppController] SMS permission not granted. SMS features will not be initialized at this time.',
+        );
+        // 권한이 없다면 DeciderScreen에서 요청하거나, 설정에서 사용자가 직접 켜야 함.
+        // 여기서는 일단 로그만 남기고 넘어감.
+      }
 
       _coreInitMessage = '초기화 완료';
       log('[AppController] Core data and service initialization complete.');

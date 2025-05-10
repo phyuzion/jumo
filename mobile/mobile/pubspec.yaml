@@ -16,7 +16,6 @@ dependencies:
   phone_state: ^2.1.1
   flutter_background_service: ^5.1.0
   call_e_log: ^0.0.4
-  flutter_sms_intellect: ^0.0.2
   event_bus: ^2.0.1
   provider: ^6.1.2
   graphql_flutter: ^5.1.2
