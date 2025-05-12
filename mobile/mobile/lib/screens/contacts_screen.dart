@@ -225,21 +225,23 @@ class _ContactsScreenState extends State<ContactsScreen> {
     log(
       '[ContactsScreen] EditContactScreen 진입: contactId=${model.contactId}, rawContactId=${model.rawContactId}, name=${model.name}, phone=${model.phoneNumber}',
     );
-    final result = await Navigator.push(
+    Navigator.push(
       context,
       MaterialPageRoute(
         builder:
-            (_) => EditContactScreen(
+            (context) => EditContactScreen(
               initialContactId: model.contactId,
               initialRawContactId: model.rawContactId,
               initialName: model.name,
               initialPhone: model.phoneNumber,
+              initialContactModel: model,
             ),
       ),
-    );
-    if (result == true) {
-      await _refreshContacts();
-    }
+    ).then((shouldRefresh) {
+      if (shouldRefresh == true) {
+        _refreshContacts();
+      }
+    });
   }
 
   Future<void> _onTapAddContact() async {

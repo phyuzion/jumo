@@ -25,6 +25,13 @@ List<PhoneBookModel> _parseNativeContacts(List<Map<String, dynamic>> contacts) {
         rawContactId: c['rawId']?.toString(),
         name: finalName,
         phoneNumber: normPhone,
+        createdAt:
+            c['lastUpdated'] != null
+                ? DateTime.fromMillisecondsSinceEpoch(
+                  c['lastUpdated'],
+                  isUtc: true,
+                )
+                : null,
       ),
     );
   }
@@ -139,9 +146,18 @@ Future<void> performContactBackgroundSync() async {
     stepWatch.start();
     final List<String> changedContactIds = [];
     for (final currentId in currentHashes.keys) {
-      if (!previousHashes.containsKey(currentId) ||
-          previousHashes[currentId] != currentHashes[currentId]) {
+      final prevHash = previousHashes[currentId];
+      final currHash = currentHashes[currentId];
+      if (!previousHashes.containsKey(currentId)) {
+        log('[BackgroundSync][DIFF] 신규 연락처: $currentId, hash=$currHash');
         changedContactIds.add(currentId);
+      } else if (prevHash != currHash) {
+        log(
+          '[BackgroundSync][DIFF] 변경 감지: $currentId, prevHash=$prevHash, currHash=$currHash',
+        );
+        changedContactIds.add(currentId);
+      } else {
+        log('[BackgroundSync][DIFF] 변경 없음: $currentId, hash=$currHash');
       }
     }
     log(
@@ -164,10 +180,30 @@ Future<void> performContactBackgroundSync() async {
                 ? (contact['displayName'] ?? '').toString().trim()
                 : '(No Name)';
         if (normPhone.isNotEmpty) {
+          final lastUpdated = contact['lastUpdated'];
+          final now = DateTime.now();
+          final createdAt =
+              lastUpdated != null
+                  ? DateTime.fromMillisecondsSinceEpoch(
+                    lastUpdated,
+                    isUtc: true,
+                  ).toIso8601String()
+                  : now.toUtc().toIso8601String();
+
+          log(
+            '[BackgroundSync] Contact $name ($normPhone):\n'
+            '  lastUpdated (millis): $lastUpdated\n'
+            '  lastUpdated (KST): ${lastUpdated != null ? DateTime.fromMillisecondsSinceEpoch(lastUpdated).toLocal().toString() : "null"}\n'
+            '  lastUpdated (UTC): ${lastUpdated != null ? DateTime.fromMillisecondsSinceEpoch(lastUpdated, isUtc: true).toString() : "null"}\n'
+            '  현재시간 (KST): ${now.toLocal().toString()}\n'
+            '  현재시간 (UTC): ${now.toUtc().toString()}\n'
+            '  서버전송 (UTC ISO): $createdAt',
+          );
+
           recordsToUpsert.add({
             'phoneNumber': normPhone,
             'name': name,
-            'createdAt': DateTime.now().toUtc().toIso8601String(),
+            'createdAt': createdAt,
           });
         }
       }
@@ -336,6 +372,8 @@ class ContactsController with ChangeNotifier {
       final phoneBookModels = _parseNativeContacts(contacts);
       _contacts = phoneBookModels;
       notifyListeners();
+      // 연락처 새로고침 후, 동기화(업로드)도 비동기로 트리거
+      Future.microtask(() => performContactBackgroundSync());
     } catch (e) {
       log('Error refreshing contacts: $e');
     }

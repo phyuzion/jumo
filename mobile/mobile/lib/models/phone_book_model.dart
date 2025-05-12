@@ -27,6 +27,9 @@ class PhoneBookModel {
   /// 최종 업데이트 시각 (ISO 형식 등)
   final String? updatedAt;
 
+  /// 생성 시각
+  final DateTime? createdAt;
+
   PhoneBookModel({
     required this.contactId,
     required this.name,
@@ -35,6 +38,7 @@ class PhoneBookModel {
     this.type,
     this.updatedAt,
     this.rawContactId,
+    this.createdAt,
   });
 
   factory PhoneBookModel.fromJson(Map<String, dynamic> json) {
@@ -46,6 +50,16 @@ class PhoneBookModel {
       type: json['type'] as int?,
       updatedAt: json['updatedAt'] as String?,
       rawContactId: json['rawContactId'] as String?,
+      createdAt:
+          (() {
+            final v = json['createdAt'];
+            if (v == null) return null;
+            if (v is DateTime) return v;
+            if (v is int)
+              return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
+            if (v is String) return DateTime.tryParse(v);
+            return null;
+          })(),
     );
   }
 
@@ -58,6 +72,7 @@ class PhoneBookModel {
       'type': type,
       'updatedAt': updatedAt,
       'rawContactId': rawContactId,
+      'createdAt': createdAt?.millisecondsSinceEpoch,
     };
   }
 
@@ -69,6 +84,7 @@ class PhoneBookModel {
     int? type,
     String? updatedAt,
     String? rawContactId,
+    DateTime? createdAt,
   }) {
     return PhoneBookModel(
       contactId: contactId ?? this.contactId,
@@ -78,6 +94,27 @@ class PhoneBookModel {
       type: type ?? this.type,
       updatedAt: updatedAt ?? this.updatedAt,
       rawContactId: rawContactId ?? this.rawContactId,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  factory PhoneBookModel.fromMap(Map<String, dynamic> map) {
+    return PhoneBookModel(
+      contactId: map['id']?.toString() ?? '',
+      rawContactId: map['rawId']?.toString(),
+      name: map['displayName']?.toString() ?? '',
+      phoneNumber: map['phoneNumber']?.toString() ?? '',
+      createdAt:
+          (() {
+            final v = map['lastUpdated'];
+            if (v == null) return null;
+            if (v is DateTime) return v;
+            if (v is int) {
+              return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
+            }
+            if (v is String) return DateTime.tryParse(v);
+            return null;
+          })(),
     );
   }
 }

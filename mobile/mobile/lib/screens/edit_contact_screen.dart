@@ -8,6 +8,7 @@ import 'dart:developer';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
+import 'package:mobile/models/phone_book_model.dart';
 
 /// 신규: initialPhone==null => 전화번호 입력 가능
 /// 기존: 전화번호 수정불가, contactId, memo, type 편집
@@ -16,6 +17,7 @@ class EditContactScreen extends StatefulWidget {
   final String? initialRawContactId;
   final String? initialName;
   final String? initialPhone;
+  final PhoneBookModel? initialContactModel;
 
   const EditContactScreen({
     super.key,
@@ -23,6 +25,7 @@ class EditContactScreen extends StatefulWidget {
     this.initialRawContactId,
     this.initialName,
     this.initialPhone,
+    this.initialContactModel,
   });
 
   @override
@@ -155,7 +158,12 @@ class _EditContactScreenState extends State<EditContactScreen> {
         'name': name,
         'memo': memo.isNotEmpty ? memo : '',
         'type': _type,
-        'createdAt': DateTime.now().toUtc().toIso8601String(),
+        'createdAt':
+            (widget.initialContactModel?.createdAt != null)
+                ? widget.initialContactModel!.createdAt!
+                    .toUtc()
+                    .toIso8601String()
+                : DateTime.now().toUtc().toIso8601String(),
       };
       await PhoneRecordsApi.upsertPhoneRecords([recordToUpsert]);
 

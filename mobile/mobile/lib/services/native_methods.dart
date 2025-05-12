@@ -71,12 +71,6 @@ class NativeMethods {
         final Map<String, dynamic> typedContact = Map<String, dynamic>.from(
           contact,
         );
-        // lastUpdated를 DateTime으로 변환 (밀리초 타임스탬프)
-        if (typedContact['lastUpdated'] != null) {
-          typedContact['lastUpdated'] = DateTime.fromMillisecondsSinceEpoch(
-            (typedContact['lastUpdated'] as int),
-          );
-        }
         return typedContact;
       }).toList();
     } on PlatformException catch (e) {
