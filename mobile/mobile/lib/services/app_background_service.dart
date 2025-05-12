@@ -446,7 +446,6 @@ Future<void> onStart(ServiceInstance service) async {
 
   // --- 주기적 작업들 ---
   Timer? notificationTimer;
-  Timer? contactSyncTimer;
   Timer? blockSyncTimer;
 
   // 알림 확인 타이머 (10분으로 변경)
@@ -474,12 +473,6 @@ Future<void> onStart(ServiceInstance service) async {
     } catch (e) {
       log('[BackgroundService] Error fetching notifications: $e');
     }
-  });
-
-  // 연락처 동기화 타이머 (1일)
-  contactSyncTimer = Timer.periodic(const Duration(days: 1), (timer) async {
-    log('[BackgroundService] Starting periodic contact sync...');
-    await performContactBackgroundSync();
   });
 
   // 차단 목록 동기화 타이머 (1시간 주기 - 호출 확인)
@@ -603,14 +596,6 @@ Future<void> onStart(ServiceInstance service) async {
     }
   });
 
-  // 즉시 연락처 동기화 요청
-  service.on('startContactSyncNow').listen((event) async {
-    log(
-      '[BackgroundService][on:startContactSyncNow] Received immediate contact sync request.',
-    );
-    await performContactBackgroundSync();
-  });
-
   // 즉시 차단 목록 동기화 요청
   service.on('syncBlockedListsNow').listen((event) async {
     log(
@@ -623,7 +608,6 @@ Future<void> onStart(ServiceInstance service) async {
     log('[BackgroundService][on:stopService] Received stopService event.');
     _stopCallTimerBackground();
     notificationTimer?.cancel();
-    contactSyncTimer?.cancel();
     blockSyncTimer?.cancel();
     service.stopSelf();
   });

@@ -340,10 +340,10 @@ class AppController {
       await Future.delayed(const Duration(seconds: 2)); // 서비스 시작 대기
       if (await service.isRunning()) {
         log(
-          '[AppController] Service is running. Invoking tasks: startContactSyncNow, syncBlockedListsNow...',
+          '[AppController] Service is running. Invoking tasks: syncBlockedListsNow...',
         );
         try {
-          service.invoke('startContactSyncNow');
+          // service.invoke('startContactSyncNow'); // 연락처 동기화는 main isolate에서만
           service.invoke('syncBlockedListsNow');
           log('[AppController] Successfully invoked background tasks.');
         } catch (e) {

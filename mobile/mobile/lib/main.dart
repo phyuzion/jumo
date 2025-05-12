@@ -45,6 +45,7 @@ import 'package:mobile/repositories/sync_state_repository.dart';
 import 'package:flutter_windowmanager_plus/flutter_windowmanager_plus.dart';
 import 'dart:io';
 import 'package:mobile/providers/recent_history_provider.dart';
+import 'package:mobile/repositories/contact_repository.dart';
 
 final getIt = GetIt.instance;
 
@@ -218,6 +219,20 @@ Future<void> initializeDependencies() async {
   }
 
   try {
+    final contactsBox = await Hive.openBox<Map<String, dynamic>>('contacts');
+    final contactRepository = HiveContactRepository(contactsBox);
+    if (!getIt.isRegistered<ContactRepository>()) {
+      getIt.registerSingleton<ContactRepository>(contactRepository);
+    }
+    log('[initializeDependencies] ContactRepository registered in GetIt.');
+  } catch (e) {
+    log(
+      '[initializeDependencies] FATAL: Error initializing ContactRepository: $e',
+    );
+    rethrow;
+  }
+
+  try {
     await Future.wait([
       // Hive.openBox('last_sync_state'),
     ]);
@@ -258,8 +273,9 @@ Future<void> main() async {
   final smsLogRepository = getIt<SmsLogRepository>();
   final blockedNumberRepository = getIt<BlockedNumberRepository>();
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
+  final contactRepository = getIt<ContactRepository>();
+  final contactsController = ContactsController(contactRepository);
   final callLogContoller = CallLogController(callLogRepository);
-  final contactsController = ContactsController();
   final smsController = SmsController(smsLogRepository);
   final blockedNumbersController = BlockedNumbersController(
     contactsController,

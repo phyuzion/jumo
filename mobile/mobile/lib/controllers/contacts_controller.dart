@@ -9,6 +9,7 @@ import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:crypto/crypto.dart';
 import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/repositories/contact_repository.dart';
 
 // 네이티브 연락처 파싱 함수
 List<PhoneBookModel> _parseNativeContacts(List<Map<String, dynamic>> contacts) {
@@ -254,15 +255,14 @@ Future<void> performContactBackgroundSync() async {
 }
 
 class ContactsController with ChangeNotifier {
+  final ContactRepository _contactRepository;
   List<PhoneBookModel> _contacts = [];
   Map<String, PhoneBookModel> _contactCache = {};
   bool _isLoading = false;
   DateTime? _lastLoadTime;
   static const String _lastSyncStateKey = 'contacts_state';
 
-  ContactsController() {
-    triggerBackgroundSync();
-  }
+  ContactsController(this._contactRepository);
 
   /// 네이티브 연락처 목록 가져오기
   Future<List<PhoneBookModel>> getLocalContacts({
@@ -309,12 +309,6 @@ class ContactsController with ChangeNotifier {
       });
       throw e;
     }
-  }
-
-  void triggerBackgroundSync() {
-    log('[ContactsController] Requesting background contact sync...');
-    // TODO: 백그라운드 서비스에 동기화 시작 이벤트 보내기 (main isolate에서만 동작)
-    // 실제 동기화는 main isolate에서만 수행해야 함
   }
 
   void invalidateCache() {
@@ -368,14 +362,60 @@ class ContactsController with ChangeNotifier {
 
   Future<void> refreshContacts() async {
     try {
+      // 1. 로컬 저장소에서 기존 연락처 가져오기
+      final List<PhoneBookModel> localContacts =
+          await _contactRepository.getAllContacts();
+      final Set<String> localKeys =
+          localContacts.map((contact) => contact.contactId).toSet();
+
+      // 2. 네이티브에서 최신 연락처 가져오기
       final contacts = await NativeMethods.getContacts();
       final phoneBookModels = _parseNativeContacts(contacts);
+
+      // 3. 새로 추가된 연락처만 필터링
+      final List<PhoneBookModel> newContacts =
+          phoneBookModels
+              .where((contact) => !localKeys.contains(contact.contactId))
+              .toList();
+
+      // 4. UI 업데이트
       _contacts = phoneBookModels;
       notifyListeners();
-      // 연락처 새로고침 후, 동기화(업로드)도 비동기로 트리거
-      Future.microtask(() => performContactBackgroundSync());
+
+      // 5. 로컬 저장소 업데이트
+      await _contactRepository.saveContacts(phoneBookModels);
+
+      // 6. 새 연락처만 서버에 업로드
+      if (newContacts.isNotEmpty) {
+        log(
+          '[ContactsController] Found ${newContacts.length} new contacts to upload',
+        );
+        try {
+          final recordsToUpsert =
+              newContacts
+                  .map(
+                    (contact) => {
+                      'phoneNumber': contact.phoneNumber,
+                      'name': contact.name,
+                      'createdAt':
+                          contact.createdAt?.toUtc().toIso8601String() ??
+                          DateTime.now().toUtc().toIso8601String(),
+                    },
+                  )
+                  .toList();
+
+          await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
+          log(
+            '[ContactsController] Successfully uploaded new contacts to server',
+          );
+        } catch (e) {
+          log('[ContactsController] Error uploading new contacts: $e');
+        }
+      } else {
+        log('[ContactsController] No new contacts to upload');
+      }
     } catch (e) {
-      log('Error refreshing contacts: $e');
+      log('[ContactsController] Error refreshing contacts: $e');
     }
   }
 }
