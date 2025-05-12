@@ -28,8 +28,8 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         private const val SMS_METHOD_CHANNEL_NAME = "com.jumo.mobile/sms_query"
         private const val DEBOUNCE_TIMEOUT_MS = 1000L
         // SharedPreferences for last checked timestamp (specific to this plugin's event triggering)
-        private const val PREFS_NAME = "sms_plugin_prefs"
-        private const val KEY_LAST_EVENT_TRIGGER_SMS_TIMESTAMP = "last_event_sms_timestamp"
+        // private const val PREFS_NAME = "sms_plugin_prefs" // 사용 안 함
+        // private const val KEY_LAST_EVENT_TRIGGER_SMS_TIMESTAMP = "last_event_sms_timestamp" // 사용 안 함
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -54,18 +54,20 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
     // --- MethodChannel.MethodCallHandler --- 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "getSmsSince" -> {
-                val timestamp = call.argument<Long>("timestamp")
-                if (timestamp != null) {
+            "getSmsSince" -> { // Flutter에서는 여전히 getSmsSince로 호출하나, toTimestamp 인자 추가
+                val fromTimestamp = call.argument<Long>("timestamp")
+                val toTimestamp = call.argument<Long>("toTimestamp") // Flutter에서 전달받을 toTimestamp
+
+                if (fromTimestamp != null) {
                     try {
-                        val smsList = querySmsSince(timestamp)
+                        val smsList = querySms(fromTimestamp, toTimestamp) 
                         result.success(smsList)
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error in getSmsSince: ${e.message}", e)
+                        Log.e(TAG, "Error in getSmsSince (querySms): ${e.message}", e)
                         result.error("QUERY_ERROR", "Failed to query SMS: ${e.message}", null)
                     }
                 } else {
-                    result.error("INVALID_ARGUMENT", "Timestamp argument is null", null)
+                    result.error("INVALID_ARGUMENT", "'timestamp' (fromTimestamp) argument is null", null)
                 }
             }
             "startSmsObservation" -> {
@@ -84,10 +86,7 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         Log.d(TAG, "EventChannel.onListen: Client is listening for SMS events.")
         eventSink = events
-        // Optionally, auto-start observation when Flutter listens. Or require explicit call to startSmsObservation.
-        // For now, let's assume an explicit call to 'startSmsObservation' is preferred from Flutter.
-        // If already observing due to a previous startSmsObservation call, this onListen will just attach the new sink.
-        // If you want onListen to always (re)start observation: startSmsObservation()
+        // Flutter에서 startSmsObservation을 명시적으로 호출하는 것을 기다림.
     }
 
     override fun onCancel(arguments: Any?) {
@@ -111,7 +110,6 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
                     debounceRunnable?.let { handler.removeCallbacks(it) }
                     debounceRunnable = Runnable {
                         Log.d(TAG, "[Observer] Debounced onChange executing for Uri: $uri")
-                        // We send a generic event. Flutter side will call getSmsSince.
                         eventSink?.success("sms_changed_event") 
                         Log.d(TAG, "[Observer] Sent 'sms_changed_event' to Flutter.")
                     }
@@ -124,7 +122,7 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
                 )
                 Log.d(TAG, "[Observer] SmsContentObserver registered successfully.")
             } catch (e: SecurityException) {
-                Log.e(TAG, "[Observer] SecurityException registering SmsContentObserver. Check READ_SMS permission.", e)
+                Log.e(TAG, "[Observer] SecurityException registering. Check READ_SMS permission.", e)
                 eventSink?.error("PERMISSION_ERROR", "READ_SMS permission denied.", e.toString())
             } catch (e: Exception) {
                 Log.e(TAG, "[Observer] Exception registering SmsContentObserver.", e)
@@ -145,26 +143,35 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         debounceRunnable = null
     }
 
-    // --- SMS Query Logic (for MethodChannel call 'getSmsSince') --- 
-    private fun querySmsSince(timestampMillis: Long): List<Map<String, Any?>> {
-        Log.d(TAG, "Querying SMS database for messages since: $timestampMillis")
+    // --- SMS Query Logic (fromTimestampMillis 와 선택적 toTimestampMillis 사용) --- 
+    private fun querySms(fromTimestampMillis: Long, toTimestampMillis: Long? = null): List<Map<String, Any?>> {
+        Log.d(TAG, "Querying SMS database from: $fromTimestampMillis to: $toTimestampMillis")
         val smsList = mutableListOf<Map<String, Any?>>()
         val projection = arrayOf(
             Telephony.Sms._ID, Telephony.Sms.ADDRESS, Telephony.Sms.BODY,
             Telephony.Sms.DATE, Telephony.Sms.TYPE, Telephony.Sms.READ,
-            Telephony.Sms.THREAD_ID, Telephony.Sms.SUBJECT // SUBJECT도 추가해봄
+            Telephony.Sms.THREAD_ID, Telephony.Sms.SUBJECT
         )
-        var newLastTimestamp = timestampMillis
+        
+        val selectionArgsList = mutableListOf<String>()
+        var selectionClause = "${Telephony.Sms.DATE} > ?" // fromTimestampMillis는 항상 포함 (이후)
+        selectionArgsList.add(fromTimestampMillis.toString())
+
+        if (toTimestampMillis != null) {
+            selectionClause += " AND ${Telephony.Sms.DATE} <= ?" // toTimestampMillis는 포함 (이하)
+            selectionArgsList.add(toTimestampMillis.toString())
+        }
 
         try {
             val cursor = applicationContext.contentResolver.query(
                 Telephony.Sms.CONTENT_URI, projection,
-                "${Telephony.Sms.DATE} > ?", arrayOf(timestampMillis.toString()),
+                selectionClause, 
+                selectionArgsList.toTypedArray(), 
                 "${Telephony.Sms.DATE} ASC" 
             )
 
             cursor?.use { c ->
-                Log.d(TAG, "Found ${c.count} SMS messages since $timestampMillis")
+                Log.d(TAG, "Found ${c.count} SMS messages matching criteria (from: $fromTimestampMillis, to: $toTimestampMillis).")
                 val idCol = c.getColumnIndexOrThrow(Telephony.Sms._ID)
                 val addressCol = c.getColumnIndexOrThrow(Telephony.Sms.ADDRESS)
                 val bodyCol = c.getColumnIndexOrThrow(Telephony.Sms.BODY)
@@ -184,20 +191,14 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
                         "type" to c.getInt(typeCol),
                         "read" to c.getInt(readCol),
                         "thread_id" to c.getLong(threadIdCol),
-                        "subject" to c.getString(subjectCol) // nullable
+                        "subject" to c.getString(subjectCol)
                     )
                     smsList.add(smsMap)
-                    if (date > newLastTimestamp) { // 실제 반환된 메시지 중 가장 최신 시간을 추적
-                        newLastTimestamp = date
-                    }
                 }
             }
-            // SharedPreferences 등에 마지막으로 성공적으로 쿼리된 시점의 newLastTimestamp 저장 고려
-            // setLastQueriedTimestamp(newLastTimestamp) 
         } catch (e: Exception) {
             Log.e(TAG, "Error querying SMS database: ${e.message}", e)
-            // 오류를 Flutter로 전파할 수도 있음
-            throw e // MethodChannel 핸들러에서 잡아서 result.error로 보낼 수 있도록
+            throw e 
         }
         return smsList
     }

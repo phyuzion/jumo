@@ -9,6 +9,7 @@ const String _isAutoBlockDangerKey = 'isAutoBlockDanger';
 const String _isBombCallsBlockedKey = 'isBombCallsBlocked';
 const String _bombCallsCountKey = 'bombCallsCount';
 const String _lastSmsSyncTimestampKey = 'lastSmsUploadTimestamp';
+const String _lastCallLogSyncTimestampKey = 'lastCallLogSyncTimestamp';
 // ... 다른 설정 키들 필요 시 추가 ...
 
 /// 앱 설정 데이터 접근을 위한 추상 클래스 (인터페이스)
@@ -31,9 +32,13 @@ abstract class SettingsRepository {
   Future<int> getBombCallsCount();
   Future<void> setBombCallsCount(int count);
 
-  // --- SMS 동기화 타임스탬프 --- (추가)
+  // --- SMS 동기화 타임스탬프 ---
   Future<int> getLastSmsSyncTimestamp();
   Future<void> setLastSmsSyncTimestamp(int timestamp);
+
+  // --- 통화 기록 동기화 타임스탬프 --- (추가)
+  Future<int> getLastCallLogSyncTimestamp();
+  Future<void> setLastCallLogSyncTimestamp(int timestamp);
 
   // --- 일반 설정 값 접근 (Key 직접 사용) --- (선택적)
   // Future<T?> getSetting<T>(String key, {T? defaultValue});
@@ -129,7 +134,7 @@ class HiveSettingsRepository implements SettingsRepository {
     await _settingsBox.put(_bombCallsCountKey, count);
   }
 
-  // --- SMS 동기화 타임스탬프 구현 --- (추가)
+  // --- SMS 동기화 타임스탬프 구현 ---
   @override
   Future<int> getLastSmsSyncTimestamp() async {
     // 기본값 0으로 설정 (최초 실행 시 모든 SMS를 가져오도록)
@@ -141,6 +146,19 @@ class HiveSettingsRepository implements SettingsRepository {
   @override
   Future<void> setLastSmsSyncTimestamp(int timestamp) async {
     await _settingsBox.put(_lastSmsSyncTimestampKey, timestamp);
+  }
+
+  // --- 통화 기록 동기화 타임스탬프 구현 --- (추가)
+  @override
+  Future<int> getLastCallLogSyncTimestamp() async {
+    return Future.value(
+      _settingsBox.get(_lastCallLogSyncTimestampKey, defaultValue: 0) as int,
+    );
+  }
+
+  @override
+  Future<void> setLastCallLogSyncTimestamp(int timestamp) async {
+    await _settingsBox.put(_lastCallLogSyncTimestampKey, timestamp);
   }
 
   // --- 일반 설정 값 접근 구현 (선택적) ---

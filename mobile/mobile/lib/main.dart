@@ -105,12 +105,25 @@ Future<void> initializeDependencies() async {
   }
 
   try {
-    final callLogsBox = await Hive.openBox('call_logs');
+    String callLogsBoxName = 'call_logs';
+    var tempCallBox = await Hive.openBox(callLogsBoxName);
+    if (tempCallBox.containsKey('logs') && tempCallBox.get('logs') is String) {
+      log(
+        '[initializeDependencies] Old call_logs format (String) detected. Clearing box.',
+      );
+      await tempCallBox.clear();
+    }
+    await tempCallBox.close();
+
+    final Box<Map<dynamic, dynamic>> callLogsBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(callLogsBoxName);
     final callLogRepository = HiveCallLogRepository(callLogsBox);
     if (!getIt.isRegistered<CallLogRepository>()) {
       getIt.registerSingleton<CallLogRepository>(callLogRepository);
     }
-    log('[initializeDependencies] CallLogRepository registered in GetIt.');
+    log(
+      '[initializeDependencies] CallLogRepository registered in GetIt (new format).',
+    );
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing CallLogRepository: $e',
@@ -119,12 +132,25 @@ Future<void> initializeDependencies() async {
   }
 
   try {
-    final smsLogsBox = await Hive.openBox('sms_logs');
+    String smsLogsBoxName = 'sms_logs';
+    var tempSmsBox = await Hive.openBox(smsLogsBoxName);
+    if (tempSmsBox.containsKey('logs') && tempSmsBox.get('logs') is String) {
+      log(
+        '[initializeDependencies] Old sms_logs format (String) detected. Clearing box for migration.',
+      );
+      await tempSmsBox.clear();
+    }
+    await tempSmsBox.close();
+
+    final Box<Map<dynamic, dynamic>> smsLogsBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(smsLogsBoxName);
     final smsLogRepository = HiveSmsLogRepository(smsLogsBox);
     if (!getIt.isRegistered<SmsLogRepository>()) {
       getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
     }
-    log('[initializeDependencies] SmsLogRepository registered in GetIt.');
+    log(
+      '[initializeDependencies] SmsLogRepository registered in GetIt (new format).',
+    );
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing SmsLogRepository: $e',
@@ -231,7 +257,10 @@ Future<void> main() async {
   final smsLogRepository = getIt<SmsLogRepository>();
   final blockedNumberRepository = getIt<BlockedNumberRepository>();
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
-  final callLogContoller = CallLogController(callLogRepository);
+  final callLogContoller = CallLogController(
+    callLogRepository,
+    settingsRepository,
+  );
   final contactsController = ContactsController();
   final smsController = SmsController(settingsRepository, smsLogRepository);
   final blockedNumbersController = BlockedNumbersController(

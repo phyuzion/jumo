@@ -78,15 +78,33 @@ class SmsController {
   Future<void> refreshSms() async {
     log('[SmsController] refreshSms called.');
     try {
-      final int lastUploadTimestamp =
+      final int lastSyncTimestamp =
           await _settingsRepository.getLastSmsSyncTimestamp();
-      log('[SmsController] Last SMS sync timestamp: $lastUploadTimestamp');
+      log('[SmsController] Last SMS sync timestamp: $lastSyncTimestamp');
+
+      final now = DateTime.now();
+      int queryFromTimestamp;
+      final int queryUntilTimestamp = now.millisecondsSinceEpoch;
+
+      if (lastSyncTimestamp == 0) {
+        queryFromTimestamp =
+            now.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
+        log(
+          '[SmsController] First SMS sync, querying from: $queryFromTimestamp up to $queryUntilTimestamp',
+        );
+      } else {
+        queryFromTimestamp = lastSyncTimestamp + 1;
+        log(
+          '[SmsController] Subsequent SMS sync, querying from: $queryFromTimestamp up to $queryUntilTimestamp',
+        );
+      }
 
       List<dynamic>? nativeSmsListDyn;
       try {
         nativeSmsListDyn = await _methodChannel
             .invokeListMethod<Map<dynamic, dynamic>>('getSmsSince', {
-              'timestamp': lastUploadTimestamp,
+              'timestamp': queryFromTimestamp,
+              'toTimestamp': queryUntilTimestamp,
             });
       } on PlatformException catch (e) {
         log("[SmsController] Failed to get SMS from native: '${e.message}'.");
@@ -95,40 +113,50 @@ class SmsController {
 
       if (nativeSmsListDyn == null || nativeSmsListDyn.isEmpty) {
         log(
-          '[SmsController] No new SMS found from native since $lastUploadTimestamp.',
+          '[SmsController] No new SMS found from native for range (from: $queryFromTimestamp, to: $queryUntilTimestamp).',
         );
+        if (lastSyncTimestamp == 0) {
+          await _settingsRepository.setLastSmsSyncTimestamp(
+            queryUntilTimestamp,
+          );
+          log(
+            '[SmsController] Updated lastSmsSyncTimestamp to $queryUntilTimestamp after first sync attempt (no data).',
+          );
+        }
         return;
       }
 
-      final List<Map<String, dynamic>> nativeSmsList =
+      List<Map<String, dynamic>> nativeSmsList =
           nativeSmsListDyn
               .map((item) => Map<String, dynamic>.from(item as Map))
               .toList();
       log(
-        '[SmsController] Fetched ${nativeSmsList.length} SMS from native (all types since last sync).',
+        '[SmsController] Fetched ${nativeSmsList.length} SMS from native (already time-filtered).',
       );
 
       final List<Map<String, dynamic>> allProcessedSmsForLocalLog = [];
-      int latestTimestampInFetchedData = lastUploadTimestamp;
+      int latestTimestampInCurrentBatch = 0;
 
       for (final nativeSms in nativeSmsList) {
         final address = normalizePhone(nativeSms['address'] as String? ?? '');
         final body = nativeSms['body'] as String? ?? '';
         final dateMillis = nativeSms['date'] as int? ?? 0;
         final typeInt = nativeSms['type'] as int? ?? 0;
+        final nativeId = nativeSms['_id'] as int? ?? 0;
 
         String typeStrForLog = mapSmsTypeIntToStringWithAllTypes(typeInt);
 
         if (address.isNotEmpty && dateMillis > 0) {
           final smsMap = {
+            'native_id': nativeId,
             'address': address,
             'body': body,
             'date': dateMillis,
             'type': typeStrForLog,
           };
           allProcessedSmsForLocalLog.add(smsMap);
-          if (dateMillis > latestTimestampInFetchedData) {
-            latestTimestampInFetchedData = dateMillis;
+          if (dateMillis > latestTimestampInCurrentBatch) {
+            latestTimestampInCurrentBatch = dateMillis;
           }
         }
       }
@@ -141,27 +169,15 @@ class SmsController {
       }
 
       final List<Map<String, dynamic>> smsToUpload = [];
-      int latestTimestampInUploadBatch = lastUploadTimestamp;
 
-      for (final nativeSms in nativeSmsList) {
-        final address = normalizePhone(nativeSms['address'] as String? ?? '');
-        final body = nativeSms['body'] as String? ?? '';
-        final dateMillis = nativeSms['date'] as int? ?? 0;
-        final typeInt = nativeSms['type'] as int? ?? 0;
+      for (final processedSms in allProcessedSmsForLocalLog) {
+        final typeStrForUpload = mapSmsTypeIntToStringForUpload(
+          processedSms['type'] as String,
+          isAlreadyStringType: true,
+        );
 
-        String? typeStrForUpload = mapSmsTypeIntToStringForUpload(typeInt);
-
-        if (typeStrForUpload != null && address.isNotEmpty && dateMillis > 0) {
-          final smsMap = {
-            'address': address,
-            'body': body,
-            'date': dateMillis,
-            'type': typeStrForUpload,
-          };
-          smsToUpload.add(smsMap);
-          if (dateMillis > latestTimestampInUploadBatch) {
-            latestTimestampInUploadBatch = dateMillis;
-          }
+        if (typeStrForUpload != null) {
+          smsToUpload.add(processedSms);
         }
       }
 
@@ -179,10 +195,10 @@ class SmsController {
             bool uploadSuccess = await LogApi.updateSMSLog(smsForServer);
             if (uploadSuccess) {
               log(
-                '[SmsController] SMS upload successful. Updating last sync timestamp to $latestTimestampInUploadBatch',
+                '[SmsController] SMS upload successful. Updating last sync timestamp to $latestTimestampInCurrentBatch',
               );
               await _settingsRepository.setLastSmsSyncTimestamp(
-                latestTimestampInUploadBatch,
+                latestTimestampInCurrentBatch,
               );
             } else {
               log('[SmsController] SMS upload failed (API returned false).');
@@ -192,12 +208,15 @@ class SmsController {
           }
         }
       } else {
-        log('[SmsController] No INBOX/SENT SMS to upload.');
-        if (latestTimestampInFetchedData > lastUploadTimestamp) {
-          // 선택적: INBOX/SENT가 아닌 다른 타입의 새 SMS가 있었던 경우,
-          // 다음번 쿼리 범위를 줄이기 위해 타임스탬프 업데이트.
-          // log('[SmsController] Updating last sync timestamp to $latestTimestampInFetchedData as new non-uploadable SMS were processed.');
-          // await _settingsRepository.setLastSmsSyncTimestamp(latestTimestampInFetchedData);
+        log('[SmsController] No INBOX/SENT SMS to upload after filtering.');
+        if (latestTimestampInCurrentBatch > lastSyncTimestamp &&
+            latestTimestampInCurrentBatch != 0) {
+          log(
+            '[SmsController] Updating last sync timestamp to $latestTimestampInCurrentBatch as new SMS (though not for upload) were processed.',
+          );
+          await _settingsRepository.setLastSmsSyncTimestamp(
+            latestTimestampInCurrentBatch,
+          );
         }
       }
     } catch (e, st) {
@@ -205,15 +224,25 @@ class SmsController {
     }
   }
 
-  String? mapSmsTypeIntToStringForUpload(int typeInt) {
-    switch (typeInt) {
-      case 1:
-        return 'INBOX';
-      case 2:
-        return 'SENT';
-      default:
-        return null;
+  String? mapSmsTypeIntToStringForUpload(
+    dynamic typeValue, {
+    bool isAlreadyStringType = false,
+  }) {
+    if (isAlreadyStringType && typeValue is String) {
+      if (typeValue == 'INBOX' || typeValue == 'SENT') return typeValue;
+      return null;
     }
+    if (typeValue is int) {
+      switch (typeValue) {
+        case 1:
+          return 'INBOX';
+        case 2:
+          return 'SENT';
+        default:
+          return null;
+      }
+    }
+    return null;
   }
 
   String mapSmsTypeIntToStringWithAllTypes(int typeInt) {
@@ -236,9 +265,9 @@ class SmsController {
   }
 
   List<Map<String, dynamic>> prepareSmsForServer(
-    List<Map<String, dynamic>> localSms,
+    List<Map<String, dynamic>> filteredSmsList,
   ) {
-    return localSms.map((m) {
+    return filteredSmsList.map((m) {
       final phone = m['address'] as String? ?? '';
       final content = m['body'] as String? ?? '';
       final timeStr = (m['date'] ?? 0).toString();
