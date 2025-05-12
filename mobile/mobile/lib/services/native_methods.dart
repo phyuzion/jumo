@@ -63,4 +63,61 @@ class NativeMethods {
       return {'state': 'IDLE', 'number': null};
     }
   }
+
+  static Future<List<Map<String, dynamic>>> getContacts() async {
+    try {
+      final List<dynamic> result = await _channel.invokeMethod('getContacts');
+      return result.map((contact) {
+        final Map<String, dynamic> typedContact = Map<String, dynamic>.from(
+          contact,
+        );
+        // lastUpdated를 DateTime으로 변환 (밀리초 타임스탬프)
+        if (typedContact['lastUpdated'] != null) {
+          typedContact['lastUpdated'] = DateTime.fromMillisecondsSinceEpoch(
+            (typedContact['lastUpdated'] as int),
+          );
+        }
+        return typedContact;
+      }).toList();
+    } on PlatformException catch (e) {
+      log('Error getting contacts: ${e.message}');
+      return [];
+    }
+  }
+
+  static Future<String> upsertContact({
+    String? id,
+    required String displayName,
+    required String firstName,
+    required String middleName,
+    required String lastName,
+    required String phoneNumber,
+  }) async {
+    try {
+      final String result = await _channel.invokeMethod('upsertContact', {
+        'id': id,
+        'displayName': displayName,
+        'firstName': firstName,
+        'middleName': middleName,
+        'lastName': lastName,
+        'phoneNumber': phoneNumber,
+      });
+      return result;
+    } on PlatformException catch (e) {
+      log('Error upserting contact: ${e.message}');
+      rethrow;
+    }
+  }
+
+  static Future<bool> deleteContact(String id) async {
+    try {
+      final bool result = await _channel.invokeMethod('deleteContact', {
+        'id': id,
+      });
+      return result;
+    } on PlatformException catch (e) {
+      log('Error deleting contact: ${e.message}');
+      return false;
+    }
+  }
 }

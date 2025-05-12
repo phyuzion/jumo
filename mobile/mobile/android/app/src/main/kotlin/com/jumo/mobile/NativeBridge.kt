@@ -93,6 +93,49 @@ object NativeBridge {
                         result.error("STATE_ERROR", "Failed to get current call state", "$e")
                     }
                 }
+                "getContacts" -> {
+                    try {
+                        val contacts = ContactManager.getContacts(JumoApp.context)
+                        result.success(contacts)
+                    } catch (e: Exception) {
+                        Log.e("NativeBridge", "getContacts error: $e")
+                        result.error("CONTACT_ERROR", e.message, null)
+                    }
+                }
+                "upsertContact" -> {
+                    try {
+                        val id = call.argument<String>("id")
+                        val displayName = call.argument<String>("displayName") ?: ""
+                        val firstName = call.argument<String>("firstName") ?: ""
+                        val middleName = call.argument<String>("middleName") ?: ""
+                        val lastName = call.argument<String>("lastName") ?: ""
+                        val phoneNumber = call.argument<String>("phoneNumber") ?: ""
+
+                        val contactId = ContactManager.upsertContact(
+                            JumoApp.context,
+                            id,
+                            displayName,
+                            firstName,
+                            middleName,
+                            lastName,
+                            phoneNumber
+                        )
+                        result.success(contactId)
+                    } catch (e: Exception) {
+                        Log.e("NativeBridge", "upsertContact error: $e")
+                        result.error("CONTACT_ERROR", e.message, null)
+                    }
+                }
+                "deleteContact" -> {
+                    try {
+                        val id = call.argument<String>("id") ?: ""
+                        val success = ContactManager.deleteContact(JumoApp.context, id)
+                        result.success(success)
+                    } catch (e: Exception) {
+                        Log.e("NativeBridge", "deleteContact error: $e")
+                        result.error("CONTACT_ERROR", e.message, null)
+                    }
+                }
                 else -> {
                     result.notImplemented()
                 }
