@@ -115,8 +115,8 @@ Future<void> initializeDependencies() async {
     }
     await tempCallBox.close();
 
-    final Box<Map<dynamic, dynamic>> callLogsBox =
-        await Hive.openBox<Map<dynamic, dynamic>>(callLogsBoxName);
+    final Box<Map<String, dynamic>> callLogsBox =
+        await Hive.openBox<Map<String, dynamic>>(callLogsBoxName);
     final callLogRepository = HiveCallLogRepository(callLogsBox);
     if (!getIt.isRegistered<CallLogRepository>()) {
       getIt.registerSingleton<CallLogRepository>(callLogRepository);
@@ -142,8 +142,8 @@ Future<void> initializeDependencies() async {
     }
     await tempSmsBox.close();
 
-    final Box<Map<dynamic, dynamic>> smsLogsBox =
-        await Hive.openBox<Map<dynamic, dynamic>>(smsLogsBoxName);
+    final Box<Map<String, dynamic>> smsLogsBox =
+        await Hive.openBox<Map<String, dynamic>>(smsLogsBoxName);
     final smsLogRepository = HiveSmsLogRepository(smsLogsBox);
     if (!getIt.isRegistered<SmsLogRepository>()) {
       getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
@@ -257,10 +257,7 @@ Future<void> main() async {
   final smsLogRepository = getIt<SmsLogRepository>();
   final blockedNumberRepository = getIt<BlockedNumberRepository>();
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
-  final callLogContoller = CallLogController(
-    callLogRepository,
-    settingsRepository,
-  );
+  final callLogContoller = CallLogController(callLogRepository);
   final contactsController = ContactsController();
   final smsController = SmsController(settingsRepository, smsLogRepository);
   final blockedNumbersController = BlockedNumbersController(

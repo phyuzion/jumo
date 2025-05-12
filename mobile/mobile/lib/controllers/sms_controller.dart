@@ -78,26 +78,17 @@ class SmsController {
   Future<void> refreshSms() async {
     log('[SmsController] refreshSms called.');
     try {
-      final int lastSyncTimestamp =
-          await _settingsRepository.getLastSmsSyncTimestamp();
-      log('[SmsController] Last SMS sync timestamp: $lastSyncTimestamp');
+      // 1. 로컬 저장소에서 24시간 이내 문자 리스트를 먼저 가져온다.
+      final List<Map<String, dynamic>> localList =
+          await _smsLogRepository.getAllSmsLogs();
+      final Set<String> localKeys =
+          localList.map((e) => _generateSmsKey(e)).toSet();
 
+      // 2. 네이티브에서 24시간 이내 문자 리스트를 받아온다.
       final now = DateTime.now();
-      int queryFromTimestamp;
+      final int queryFromTimestamp =
+          now.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
       final int queryUntilTimestamp = now.millisecondsSinceEpoch;
-
-      if (lastSyncTimestamp == 0) {
-        queryFromTimestamp =
-            now.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
-        log(
-          '[SmsController] First SMS sync, querying from: $queryFromTimestamp up to $queryUntilTimestamp',
-        );
-      } else {
-        queryFromTimestamp = lastSyncTimestamp + 1;
-        log(
-          '[SmsController] Subsequent SMS sync, querying from: $queryFromTimestamp up to $queryUntilTimestamp',
-        );
-      }
 
       List<dynamic>? nativeSmsListDyn;
       try {
@@ -112,94 +103,63 @@ class SmsController {
       }
 
       if (nativeSmsListDyn == null || nativeSmsListDyn.isEmpty) {
-        log(
-          '[SmsController] No new SMS found from native for range (from: $queryFromTimestamp, to: $queryUntilTimestamp).',
-        );
-        if (lastSyncTimestamp == 0) {
-          await _settingsRepository.setLastSmsSyncTimestamp(
-            queryUntilTimestamp,
-          );
-          log(
-            '[SmsController] Updated lastSmsSyncTimestamp to $queryUntilTimestamp after first sync attempt (no data).',
-          );
-        }
+        log('[SmsController] No SMS found from native for last 24 hours.');
+        await _smsLogRepository.clearSmsLogs();
         return;
       }
 
       List<Map<String, dynamic>> nativeSmsList =
-          nativeSmsListDyn
-              .map((item) => Map<String, dynamic>.from(item as Map))
-              .toList();
+          nativeSmsListDyn.map((item) {
+            final map = Map<String, dynamic>.from(item as Map);
+            // type이 int면 String으로 변환, String이면 그대로, 아니면 'UNKNOWN'
+            final typeRaw = map['type'];
+            String typeStr;
+            if (typeRaw is int) {
+              typeStr = mapSmsTypeIntToStringWithAllTypes(typeRaw);
+            } else if (typeRaw is String) {
+              typeStr = typeRaw;
+            } else {
+              typeStr = 'UNKNOWN';
+            }
+            map['type'] = typeStr;
+            return map;
+          }).toList();
       log(
-        '[SmsController] Fetched ${nativeSmsList.length} SMS from native (already time-filtered).',
+        '[SmsController] Fetched ${nativeSmsList.length} SMS from native (24시간 이내).',
       );
 
-      final List<Map<String, dynamic>> allProcessedSmsForLocalLog = [];
-      int latestTimestampInCurrentBatch = 0;
+      // 3. 두 리스트를 비교해서, 로컬에 없는(새로 들어온) 문자만 추출한다.
+      final List<Map<String, dynamic>> newSmsList =
+          nativeSmsList
+              .where((sms) => !localKeys.contains(_generateSmsKey(sms)))
+              .toList();
 
-      for (final nativeSms in nativeSmsList) {
-        final address = normalizePhone(nativeSms['address'] as String? ?? '');
-        final body = nativeSms['body'] as String? ?? '';
-        final dateMillis = nativeSms['date'] as int? ?? 0;
-        final typeInt = nativeSms['type'] as int? ?? 0;
-        final nativeId = nativeSms['_id'] as int? ?? 0;
+      // 4. 로컬 저장소는 네이티브에서 받아온 전체 리스트로 즉시 덮어쓴다.
+      await _smsLogRepository.saveSmsLogs(nativeSmsList);
+      log(
+        '[SmsController] Local SMS log updated with ${nativeSmsList.length} SMS (24시간 이내 전체 덮어쓰기).',
+      );
 
-        String typeStrForLog = mapSmsTypeIntToStringWithAllTypes(typeInt);
-
-        if (address.isNotEmpty && dateMillis > 0) {
-          final smsMap = {
-            'native_id': nativeId,
-            'address': address,
-            'body': body,
-            'date': dateMillis,
-            'type': typeStrForLog,
-          };
-          allProcessedSmsForLocalLog.add(smsMap);
-          if (dateMillis > latestTimestampInCurrentBatch) {
-            latestTimestampInCurrentBatch = dateMillis;
-          }
-        }
-      }
-
-      if (allProcessedSmsForLocalLog.isNotEmpty) {
-        await _smsLogRepository.saveSmsLogs(allProcessedSmsForLocalLog);
-        log(
-          '[SmsController] Saved ${allProcessedSmsForLocalLog.length} processed SMS to local SmsLogRepository.',
-        );
-      }
-
-      final List<Map<String, dynamic>> smsToUpload = [];
-
-      for (final processedSms in allProcessedSmsForLocalLog) {
-        final typeStrForUpload = mapSmsTypeIntToStringForUpload(
-          processedSms['type'] as String,
-          isAlreadyStringType: true,
-        );
-
-        if (typeStrForUpload != null) {
-          smsToUpload.add(processedSms);
-        }
-      }
+      // 5. 새 문자만 서버에 업로드한다.
+      final List<Map<String, dynamic>> smsToUpload =
+          newSmsList.where((sms) {
+            final typeStr = sms['type'] as String;
+            return typeStr == 'INBOX' || typeStr == 'SENT';
+          }).toList();
 
       if (smsToUpload.isNotEmpty) {
         smsToUpload.sort(
           (a, b) => (a['date'] as int).compareTo(b['date'] as int),
         );
-
         final smsForServer = prepareSmsForServer(smsToUpload);
         if (smsForServer.isNotEmpty) {
           try {
             log(
-              '[SmsController] Uploading ${smsForServer.length} INBOX/SENT SMS to server.',
+              '[SmsController] Uploading ${smsForServer.length} new INBOX/SENT SMS to server.',
             );
             bool uploadSuccess = await LogApi.updateSMSLog(smsForServer);
             if (uploadSuccess) {
-              log(
-                '[SmsController] SMS upload successful. Updating last sync timestamp to $latestTimestampInCurrentBatch',
-              );
-              await _settingsRepository.setLastSmsSyncTimestamp(
-                latestTimestampInCurrentBatch,
-              );
+              log('[SmsController] SMS upload successful.');
             } else {
               log('[SmsController] SMS upload failed (API returned false).');
             }
@@ -208,16 +168,7 @@ class SmsController {
           }
         }
       } else {
-        log('[SmsController] No INBOX/SENT SMS to upload after filtering.');
-        if (latestTimestampInCurrentBatch > lastSyncTimestamp &&
-            latestTimestampInCurrentBatch != 0) {
-          log(
-            '[SmsController] Updating last sync timestamp to $latestTimestampInCurrentBatch as new SMS (though not for upload) were processed.',
-          );
-          await _settingsRepository.setLastSmsSyncTimestamp(
-            latestTimestampInCurrentBatch,
-          );
-        }
+        log('[SmsController] No new INBOX/SENT SMS to upload after filtering.');
       }
     } catch (e, st) {
       log('[SmsController] refreshSms error: $e\n$st');
@@ -280,5 +231,19 @@ class SmsController {
         'smsType': smsType,
       };
     }).toList();
+  }
+
+  // 기존 _generateSmsKey를 SmsController에도 복사(혹은 static으로 이동) 필요
+  String _generateSmsKey(Map<String, dynamic> smsMap) {
+    final nativeId = smsMap['native_id'];
+    final date = smsMap['date'];
+    final address = smsMap['address'];
+    if (nativeId != null && nativeId != 0) {
+      return 'sms_nid_[${nativeId}]';
+    }
+    if (date != null && address != null) {
+      return 'sms_dateaddr_[${date}_${address.hashCode}]';
+    }
+    return 'sms_fallback_[${DateTime.now().millisecondsSinceEpoch}_${smsMap.hashCode}]';
   }
 }
