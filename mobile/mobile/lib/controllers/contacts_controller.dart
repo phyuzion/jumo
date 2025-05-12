@@ -157,9 +157,6 @@ class ContactsController with ChangeNotifier {
 
         // 6. 변경된 연락처만 서버에 업로드 (비동기)
         if (changedContacts.isNotEmpty) {
-          log(
-            '[ContactsController] Found \\${changedContacts.length} changed contacts to upload',
-          );
           Future(() async {
             try {
               final recordsToUpsert =
@@ -182,8 +179,6 @@ class ContactsController with ChangeNotifier {
               log('[ContactsController] Error uploading changed contacts: $e');
             }
           });
-        } else {
-          log('[ContactsController] No changed contacts to upload');
         }
       } catch (e) {
         log('[ContactsController] Error refreshing contacts: $e');
