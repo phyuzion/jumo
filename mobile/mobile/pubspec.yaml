@@ -33,7 +33,6 @@ dependencies:
   build_runner: ^2.4.15
   hive_ce_flutter: ^2.2.0
   hive_ce_generator: ^1.8.2
-  crypto: ^3.0.6
   dio: ^5.8.0+1
   gql_dio_link: ^1.0.1+1
   flutter_broadcasts_4m: ^0.4.2

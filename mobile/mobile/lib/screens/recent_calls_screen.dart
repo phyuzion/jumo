@@ -152,7 +152,13 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                           iconData = Icons.phone;
                           iconColor = Colors.grey;
                       }
-                      leadingIconWidget = Icon(iconData, color: iconColor);
+                      leadingIconWidget = SizedBox(
+                        width: 32,
+                        height: 32,
+                        child: Center(
+                          child: Icon(iconData, color: iconColor, size: 28),
+                        ),
+                      );
                     } else {
                       leadingIconWidget = smsIconWithMarker(smsType);
                     }

@@ -31,9 +31,6 @@ class CallLogController with ChangeNotifier {
     notifyListeners();
     try {
       _callLogs = await _callLogRepository.getAllCallLogs();
-      log(
-        '[CallLogController] Loaded ${_callLogs.length} saved call logs from repository (expected recent 24h logs).',
-      );
     } catch (e) {
       log('[CallLogController] Error loading saved call logs: $e');
       _callLogs = [];
@@ -48,7 +45,6 @@ class CallLogController with ChangeNotifier {
       log('[CallLogController] Already refreshing call logs, skipping.');
       return;
     }
-    log('[CallLogController] refreshCallLogs called (Recent 24 hours).');
     _isLoading = true;
     notifyListeners();
 
@@ -57,9 +53,6 @@ class CallLogController with ChangeNotifier {
       // 0. (선택적) UI 즉각 반응을 위해 먼저 저장된 로그를 한번 로드 (하지만 중복 호출될 수 있으므로 아래 로직과 통합 고려)
       // 또는, 서버 업로드 비교용으로만 사용
       previouslySavedLogs = await _callLogRepository.getAllCallLogs();
-      log(
-        '[CallLogController] Fetched ${previouslySavedLogs.length} previously saved logs for diff.',
-      );
 
       // 1. 최근 24시간 범위 설정
       final now = DateTime.now();
@@ -67,15 +60,9 @@ class CallLogController with ChangeNotifier {
           now.subtract(const Duration(hours: 24)).millisecondsSinceEpoch;
       final queryToTimestamp = now.millisecondsSinceEpoch;
 
-      log(
-        '[CallLogController] Querying recent 24h logs from native: $queryFromTimestamp to $queryToTimestamp',
-      );
       Iterable<CallLogEntry> callEntries = await CallLog.query(
         dateFrom: queryFromTimestamp,
         dateTo: queryToTimestamp,
-      );
-      log(
-        '[CallLogController] CallLog.query returned ${callEntries.length} entries for recent 24h.',
       );
 
       // 2. 가져온 최근 24시간 로그를 내부 리스트(_callLogs)로 즉시 업데이트 및 UI 갱신
@@ -97,9 +84,6 @@ class CallLogController with ChangeNotifier {
 
       _callLogs = recentLogs; // UI에 먼저 반영
       notifyListeners();
-      log(
-        '[CallLogController] Updated UI with ${recentLogs.length} recent 24h logs.',
-      );
 
       // 3. 이전 저장된 로그와 비교하여 새로 추가된 로그만 서버에 비동기 업로드
       final Set<String> previouslySavedLogIds =
@@ -115,9 +99,6 @@ class CallLogController with ChangeNotifier {
           }).toList();
 
       if (newLogsToUpload.isNotEmpty) {
-        log(
-          '[CallLogController] Found ${newLogsToUpload.length} new logs to upload to server.',
-        );
         final logsForServer = CallLogController.prepareLogsForServer(
           newLogsToUpload,
         );
@@ -125,11 +106,7 @@ class CallLogController with ChangeNotifier {
           // 서버 업로드는 비동기로 처리하고 결과에 따라 UI를 직접 변경하지 않음 (오류 로깅만)
           LogApi.updateCallLog(logsForServer)
               .then((uploadSuccess) {
-                if (uploadSuccess) {
-                  log(
-                    '[CallLogController] New call logs uploaded to server successfully.',
-                  );
-                } else {
+                if (!uploadSuccess) {
                   log(
                     '[CallLogController] Call log upload failed (API returned false) for new logs.',
                   );
@@ -141,18 +118,12 @@ class CallLogController with ChangeNotifier {
                 );
               });
         }
-      } else {
-        log('[CallLogController] No new logs to upload to server.');
       }
 
       // 4. 최근 24시간 로그 전체를 저장소에 덮어쓰기
       await _callLogRepository.saveCallLogs(recentLogs);
-      log(
-        '[CallLogController] Saved ${recentLogs.length} recent 24h logs to local repository.',
-      );
     } catch (e, st) {
       log('[CallLogController] Error in refreshCallLogs: $e\n$st');
-      // 필요시 UI에 에러 상태 표시 (하지만 _callLogs는 이미 최신 상태일 수 있음)
     } finally {
       _isLoading = false;
       notifyListeners(); // 로딩 종료 및 최종 상태 반영
