@@ -280,12 +280,16 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   }
 
   Future<void> _onTapEdit(String number, PhoneBookModel? contact) async {
+    log(
+      '[RecentCallsScreen] EditContactScreen 진입: contactId=${contact?.contactId}, rawContactId=${contact?.rawContactId}, name=${contact?.name}, phone=${contact?.phoneNumber}',
+    );
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
             (_) => EditContactScreen(
               initialContactId: contact?.contactId,
+              initialRawContactId: contact?.rawContactId,
               initialName: contact?.name ?? '',
               initialPhone: normalizePhone(number),
             ),

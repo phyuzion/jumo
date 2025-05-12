@@ -222,12 +222,16 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _onTapEdit(PhoneBookModel model) async {
+    log(
+      '[ContactsScreen] EditContactScreen 진입: contactId=${model.contactId}, rawContactId=${model.rawContactId}, name=${model.name}, phone=${model.phoneNumber}',
+    );
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
             (_) => EditContactScreen(
               initialContactId: model.contactId,
+              initialRawContactId: model.rawContactId,
               initialName: model.name,
               initialPhone: model.phoneNumber,
             ),

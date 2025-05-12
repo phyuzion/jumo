@@ -104,7 +104,7 @@ object NativeBridge {
                 }
                 "upsertContact" -> {
                     try {
-                        val id = call.argument<String>("id")
+                        val rawContactId = call.argument<String>("rawContactId")
                         val displayName = call.argument<String>("displayName") ?: ""
                         val firstName = call.argument<String>("firstName") ?: ""
                         val middleName = call.argument<String>("middleName") ?: ""
@@ -113,7 +113,7 @@ object NativeBridge {
 
                         val contactId = ContactManager.upsertContact(
                             JumoApp.context,
-                            id,
+                            rawContactId,
                             displayName,
                             firstName,
                             middleName,

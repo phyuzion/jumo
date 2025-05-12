@@ -499,10 +499,11 @@ class _MyAppStatefulState extends State<MyAppStateful>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      log('[MyAppStateful] App resumed. Requesting background sync...');
+      log('[MyAppStateful] App resumed. Refreshing contacts...');
       try {
         final contactsCtrl = context.read<ContactsController>();
-        contactsCtrl.triggerBackgroundSync();
+        contactsCtrl.refreshContacts();
+        // contactsCtrl.triggerBackgroundSync(); // 필요시만 사용
       } catch (e) {
         log('[MyAppStateful] Error getting ContactsController: $e');
       }

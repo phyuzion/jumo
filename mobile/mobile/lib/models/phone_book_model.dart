@@ -9,6 +9,9 @@ class PhoneBookModel {
   /// flutter_contacts 의 Contact.id (Android에서 rawId 처리 포함)
   final String contactId;
 
+  /// Android RawContacts._ID (raw_contact_id)
+  final String? rawContactId;
+
   /// 표시 이름
   final String name;
 
@@ -31,6 +34,7 @@ class PhoneBookModel {
     this.memo,
     this.type,
     this.updatedAt,
+    this.rawContactId,
   });
 
   factory PhoneBookModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,7 @@ class PhoneBookModel {
       memo: json['memo'] as String?,
       type: json['type'] as int?,
       updatedAt: json['updatedAt'] as String?,
+      rawContactId: json['rawContactId'] as String?,
     );
   }
 
@@ -52,6 +57,7 @@ class PhoneBookModel {
       'memo': memo,
       'type': type,
       'updatedAt': updatedAt,
+      'rawContactId': rawContactId,
     };
   }
 
@@ -62,6 +68,7 @@ class PhoneBookModel {
     String? memo,
     int? type,
     String? updatedAt,
+    String? rawContactId,
   }) {
     return PhoneBookModel(
       contactId: contactId ?? this.contactId,
@@ -70,6 +77,7 @@ class PhoneBookModel {
       memo: memo ?? this.memo,
       type: type ?? this.type,
       updatedAt: updatedAt ?? this.updatedAt,
+      rawContactId: rawContactId ?? this.rawContactId,
     );
   }
 }

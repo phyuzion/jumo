@@ -86,7 +86,7 @@ class NativeMethods {
   }
 
   static Future<String> upsertContact({
-    String? id,
+    String? rawContactId,
     required String displayName,
     required String firstName,
     required String middleName,
@@ -95,7 +95,7 @@ class NativeMethods {
   }) async {
     try {
       final String result = await _channel.invokeMethod('upsertContact', {
-        'id': id,
+        'rawContactId': rawContactId,
         'displayName': displayName,
         'firstName': firstName,
         'middleName': middleName,

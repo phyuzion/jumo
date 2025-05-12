@@ -3,29 +3,26 @@ import 'dart:convert';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/graphql/phone_records_api.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:crypto/crypto.dart';
+import 'package:mobile/services/native_methods.dart';
 
-// compute 함수를 사용하기 위해 top-level 함수로 분리
-List<PhoneBookModel> _parseContacts(List<Contact> contacts) {
+// 네이티브 연락처 파싱 함수
+List<PhoneBookModel> _parseNativeContacts(List<Map<String, dynamic>> contacts) {
   final List<PhoneBookModel> result = [];
   for (final c in contacts) {
-    if (c.phones.isEmpty) continue;
-    // 가장 첫번째 전화번호만 사용
-    final rawPhone = c.phones.first.number.trim();
+    final rawPhone = (c['phoneNumber'] ?? '').toString().trim();
     if (rawPhone.isEmpty) continue;
-
     final normPhone = normalizePhone(rawPhone);
-    final rawName = c.displayName.trim(); // displayName 사용
+    final rawName = (c['displayName'] ?? '').toString().trim();
     final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
-
     result.add(
       PhoneBookModel(
-        contactId: c.id, // 디바이스 연락처 ID
+        contactId: c['id']?.toString() ?? '',
+        rawContactId: c['rawId']?.toString(),
         name: finalName,
         phoneNumber: normPhone,
       ),
@@ -34,29 +31,25 @@ List<PhoneBookModel> _parseContacts(List<Contact> contacts) {
   return result;
 }
 
-// 해시 계산 헬퍼 함수
-String _calculateContactHash(Contact contact) {
-  // 해시 계산에 사용할 데이터 조합 (ID, 이름, 첫번째 전화번호)
-  String combinedData = contact.id;
-  if (contact.displayName.isNotEmpty) {
-    combinedData += contact.displayName;
+// 네이티브 연락처 해시 계산
+String _calculateNativeContactHash(Map<String, dynamic> contact) {
+  String combinedData = contact['id']?.toString() ?? '';
+  if ((contact['displayName'] ?? '').toString().isNotEmpty) {
+    combinedData += contact['displayName'];
   }
-  if (contact.phones.isNotEmpty) {
-    final phone = contact.phones.first.number.trim();
-    if (phone.isNotEmpty) {
-      combinedData += normalizePhone(phone);
-    }
+  if ((contact['phoneNumber'] ?? '').toString().isNotEmpty) {
+    combinedData += normalizePhone(contact['phoneNumber']);
   }
-  // UTF-8 인코딩 후 SHA-256 해시 계산
   var bytes = utf8.encode(combinedData);
   var digest = sha256.convert(bytes);
   return digest.toString();
 }
 
-/// 백그라운드 연락처 동기화 로직 (top-level 함수)
+/// 백그라운드 연락처 동기화 로직 (네이티브)
 Future<void> performContactBackgroundSync() async {
-  final stopwatch = Stopwatch()..start(); // 전체 시간 측정
-  log('[BackgroundSync] Starting contact sync (hash-based delta)...');
+  final stopwatch = Stopwatch()..start();
+  log('[BackgroundSync] Starting contact sync (hash-based delta, native)...');
+
   const boxName = 'last_sync_state';
   if (!Hive.isBoxOpen(boxName)) {
     log('[BackgroundSync] Box \'$boxName\' is not open. Aborting sync.');
@@ -65,54 +58,43 @@ Future<void> performContactBackgroundSync() async {
   final Box stateBox = Hive.box(boxName);
 
   try {
-    // 1. 현재 로컬 연락처 로드 및 현재 해시 맵 생성
-    List<Contact> currentContactsRaw;
-    final stepWatch = Stopwatch()..start(); // 단계별 측정
+    // 1. 네이티브 연락처 로드 및 해시 맵 생성
+    List<Map<String, dynamic>> nativeContactsRaw;
+    final stepWatch = Stopwatch()..start();
     try {
-      final hasPermission = await FlutterContacts.requestPermission(
-        readonly: true,
-      );
-      if (!hasPermission) {
-        log('[BackgroundSync] Permission denied.');
-        return;
-      }
-      currentContactsRaw = await FlutterContacts.getContacts(
-        withProperties: true,
-        withPhoto: false,
-        withThumbnail: false,
-      );
+      nativeContactsRaw = await NativeMethods.getContacts();
       log(
-        '[BackgroundSync] Reading ${currentContactsRaw.length} contacts took: ${stepWatch.elapsedMilliseconds}ms',
+        '[BackgroundSync] Reading ${nativeContactsRaw.length} native contacts took: ${stepWatch.elapsedMilliseconds}ms',
       );
       stepWatch.reset();
     } catch (e) {
-      log('[BackgroundSync] Error getting contacts: $e');
+      log('[BackgroundSync] Error getting native contacts: $e');
       return;
     }
 
     stepWatch.start();
     final Map<String, String> currentHashes = {};
-    final Map<String, Contact> currentContactsById = {};
-    for (final contact in currentContactsRaw) {
-      final hash = _calculateContactHash(contact);
-      currentHashes[contact.id] = hash;
-      currentContactsById[contact.id] = contact;
+    final Map<String, Map<String, dynamic>> currentContactsById = {};
+    for (final contact in nativeContactsRaw) {
+      final hash = _calculateNativeContactHash(contact);
+      final id = contact['id']?.toString() ?? '';
+      currentHashes[id] = hash;
+      currentContactsById[id] = contact;
     }
     log(
-      '[BackgroundSync] Calculating ${currentContactsRaw.length} hashes took: ${stepWatch.elapsedMilliseconds}ms',
+      '[BackgroundSync] Calculating ${nativeContactsRaw.length} hashes took: ${stepWatch.elapsedMilliseconds}ms',
     );
     stepWatch.reset();
 
-    // 2. 이전 상태 (해시 맵) 로드 (타입 확인 및 처리 강화)
+    // 2. 이전 상태 (해시 맵) 로드
     stepWatch.start();
     final previousStateData = stateBox.get(
       ContactsController._lastSyncStateKey,
-    ); // dynamic으로 읽기
+    );
     Map<String, String> previousHashes = {};
     if (previousStateData != null) {
       try {
         if (previousStateData is String) {
-          // 정상 케이스: 문자열이면 JSON 디코드 후 캐스팅
           final decodedDynamicMap =
               jsonDecode(previousStateData) as Map<String, dynamic>;
           previousHashes = decodedDynamicMap.map(
@@ -120,40 +102,32 @@ Future<void> performContactBackgroundSync() async {
           );
           log('[BackgroundSync] Loaded previous state from JSON string.');
         } else if (previousStateData is Map) {
-          // 비정상 케이스: 이전에 Map으로 잘못 저장된 경우
           log(
             '[BackgroundSync] Warning: Loaded previous state directly as Map. Converting manually and resaving as JSON string.',
           );
-          previousHashes = <String, String>{}; // 새 맵 생성
+          previousHashes = <String, String>{};
           previousStateData.forEach((key, value) {
-            // 타입 체크하며 안전하게 변환
             if (key is String && value is String) {
               previousHashes[key] = value;
             } else {
               log(
-                '[BackgroundSync] Warning: Skipped invalid entry in stored map: key=${key.runtimeType}, value=${value.runtimeType}',
+                '[BackgroundSync] Warning: Skipped invalid entry in stored map: key=[31m${key.runtimeType}[0m, value=${value.runtimeType}',
               );
             }
           });
-          // 변환 후, 올바른 포맷(JSON 문자열)으로 다시 저장하여 문제 해결
           await stateBox.put(
             ContactsController._lastSyncStateKey,
             jsonEncode(previousHashes),
           );
         } else {
-          // 예상치 못한 타입 저장된 경우
           log(
             '[BackgroundSync] Previous state has unexpected type: ${previousStateData.runtimeType}. Clearing state.',
           );
-          await stateBox.delete(
-            ContactsController._lastSyncStateKey,
-          ); // 해당 키 데이터 삭제
+          await stateBox.delete(ContactsController._lastSyncStateKey);
         }
       } catch (e) {
         log('[BackgroundSync] Error processing previous contact hashes: $e');
-        previousHashes = {}; // 오류 시 빈 맵 사용
-        // 오류 발생 시 이전 상태 삭제 고려 (선택적)
-        // await stateBox.delete(ContactsController._lastSyncStateKey);
+        previousHashes = {};
       }
     }
     log(
@@ -180,11 +154,14 @@ Future<void> performContactBackgroundSync() async {
     final List<Map<String, dynamic>> recordsToUpsert = [];
     for (final id in changedContactIds) {
       final contact = currentContactsById[id];
-      if (contact != null && contact.phones.isNotEmpty) {
-        final normPhone = normalizePhone(contact.phones.first.number.trim());
+      if (contact != null &&
+          (contact['phoneNumber'] ?? '').toString().isNotEmpty) {
+        final normPhone = normalizePhone(
+          (contact['phoneNumber'] ?? '').toString().trim(),
+        );
         final name =
-            contact.displayName.trim().isNotEmpty
-                ? contact.displayName.trim()
+            (contact['displayName'] ?? '').toString().trim().isNotEmpty
+                ? (contact['displayName'] ?? '').toString().trim()
                 : '(No Name)';
         if (normPhone.isNotEmpty) {
           recordsToUpsert.add({
@@ -211,7 +188,6 @@ Future<void> performContactBackgroundSync() async {
         log(
           '[BackgroundSync] Upload successful, took: ${stepWatch.elapsedMilliseconds}ms',
         );
-        // 업로드 성공 시 현재 해시 맵 저장
         await stateBox.put(
           ContactsController._lastSyncStateKey,
           jsonEncode(currentHashes),
@@ -223,12 +199,10 @@ Future<void> performContactBackgroundSync() async {
         log(
           '[BackgroundSync] Upload failed: $e, took: ${stepWatch.elapsedMilliseconds}ms',
         );
-        // 업로드 실패 시 상태 저장 안 함 (다음 동기화 시 재시도)
       }
       stepWatch.stop();
     } else {
       log('[BackgroundSync] No contact changes detected.');
-      // 변경 없어도 현재 해시 상태 저장
       await stateBox.put(
         ContactsController._lastSyncStateKey,
         jsonEncode(currentHashes),
@@ -244,136 +218,86 @@ Future<void> performContactBackgroundSync() async {
 }
 
 class ContactsController with ChangeNotifier {
-  // GetStorage 관련 멤버 변수 완전 제거
-  // final _box = GetStorage();
-  // static const storageKey = 'phonebook';
-  // static List<PhoneBookModel> _savedContacts = [];
-  // static Map<String, PhoneBookModel> _contactIndex = {};
-  // static DateTime? _lastSyncTime;
-  // static const _cacheValidityDuration = Duration(minutes: 5);
-
-  // 메모리 캐시 (유지)
   List<PhoneBookModel> _contacts = [];
-  Map<String, PhoneBookModel> _contactCache =
-      {}; // <<< 기존 캐시 유지 또는 _contacts 사용
+  Map<String, PhoneBookModel> _contactCache = {};
   bool _isLoading = false;
-  DateTime? _lastLoadTime; // <<< 마지막 로드 시간 추가 (선택적 최적화)
-
-  // 이전 동기화 상태 저장 키 정의 (유지)
+  DateTime? _lastLoadTime;
   static const String _lastSyncStateKey = 'contacts_state';
 
   ContactsController() {
-    // 앱 시작 시 또는 필요 시 백그라운드 동기화 시작
-    // TODO: 앱 라이프사이클 이벤트 또는 다른 트리거와 연동 필요
     triggerBackgroundSync();
   }
 
-  /// 현재 로컬 연락처 목록 가져오기 (수정됨)
+  /// 네이티브 연락처 목록 가져오기
   Future<List<PhoneBookModel>> getLocalContacts({
-    bool forceRefresh = false, // <<< 강제 새로고침 옵션 추가
+    bool forceRefresh = false,
   }) async {
-    // <<< 캐시 및 로딩 상태 확인 >>>
     final now = DateTime.now();
     if (!forceRefresh &&
         _lastLoadTime != null &&
-        now.difference(_lastLoadTime!) <
-            const Duration(minutes: 1) && // 예: 1분 캐시
+        now.difference(_lastLoadTime!) < const Duration(minutes: 1) &&
         _contacts.isNotEmpty) {
       log('[ContactsController] Using cached contacts.');
       return _contacts;
     }
     if (_isLoading) {
       log('[ContactsController] Already loading contacts...');
-      // 로딩 중일 때 현재 캐시 반환 또는 Future 기다리기? (우선 현재 캐시 반환)
       return _contacts;
     }
-
-    log(
-      '[ContactsController] Fetching contacts from device... ForceRefresh: $forceRefresh',
-    );
-    // <<< 상태 변경을 마이크로태스크로 지연 >>>
     Future.microtask(() {
-      // if (mounted) { // <<< 제거
-      // Check if still relevant before updating state
       if (!_isLoading) {
-        // 혹시 모를 중복 방지
         _isLoading = true;
-        notifyListeners(); // 로딩 시작 알림
+        notifyListeners();
       }
-      // }
     });
-
     try {
-      final hasPermission = await FlutterContacts.requestPermission(
-        readonly: true,
-      );
-      if (!hasPermission) {
-        log('[ContactsController] Contact permission denied.');
-        throw Exception('연락처 접근 권한이 거부되었습니다.');
+      final nativeContacts = await NativeMethods.getContacts();
+      final phoneBookModels = _parseNativeContacts(nativeContacts);
+      for (var i = 0; i < phoneBookModels.length && i < 5; i++) {
+        final c = phoneBookModels[i];
+        log(
+          '[ContactsController] Contact #$i: contactId=${c.contactId}, rawContactId=${c.rawContactId}, name=${c.name}, phone=${c.phoneNumber}',
+        );
       }
-
-      final contactsRaw = await FlutterContacts.getContacts(
-        withProperties: true,
-        withPhoto: false,
-        withThumbnail: false,
-      );
-
-      // 파싱은 compute 사용 유지
-      final phoneBookModels = await compute(_parseContacts, contactsRaw);
-
-      // <<< 로드 완료 후 상태 업데이트 및 알림 >>>
-      // 이 부분은 비동기 작업 완료 후이므로 microtask 필요 없음
       _contacts = phoneBookModels;
       _contactCache = {for (var c in _contacts) c.phoneNumber: c};
       _lastLoadTime = now;
       _isLoading = false;
       notifyListeners();
-
       return _contacts;
     } catch (e) {
-      log('[ContactsController] Error fetching device contacts: $e');
-      // <<< 오류 시에도 microtask 또는 다음 프레임 콜백 사용 고려 >>>
+      log('[ContactsController] Error fetching native contacts: $e');
       Future.microtask(() {
-        // <<< microtask 추가
-        // if (mounted) { // <<< 제거
         _isLoading = false;
         notifyListeners();
-        // }
       });
       throw e;
     }
   }
 
-  /// 백그라운드 동기화 트리거 (변경 없음)
   void triggerBackgroundSync() {
     log('[ContactsController] Requesting background contact sync...');
-    // TODO: 백그라운드 서비스에 동기화 시작 이벤트 보내기
-    // 예: FlutterBackgroundService().invoke('startContactSyncNow');
-    // 또는 주기적 실행에 맡김
+    // TODO: 백그라운드 서비스에 동기화 시작 이벤트 보내기 (main isolate에서만 동작)
+    // 실제 동기화는 main isolate에서만 수행해야 함
   }
 
-  // 캐시 초기화 메소드 (변경 없음 - 내부 변수 초기화)
   void invalidateCache() {
     _contacts = [];
     _contactCache = {};
     _lastLoadTime = null;
     log('[ContactsController] Contacts cache invalidated.');
-    notifyListeners(); // 캐시 무효화 알림
+    notifyListeners();
   }
 
-  // <<< Getters 추가 >>>
   List<PhoneBookModel> get contacts => _contacts;
   Map<String, PhoneBookModel> get contactCache => _contactCache;
   bool get isLoading => _isLoading;
 
-  // <<< 이름 조회 함수 추가 (Provider 대신 Controller에 위치) >>>
   Future<String> getContactName(String phoneNumber) async {
     final normalizedNumber = normalizePhone(phoneNumber);
-    // 캐시 먼저 확인
     if (_contactCache.containsKey(normalizedNumber)) {
       return _contactCache[normalizedNumber]!.name;
     }
-    // 캐시 없으면 전체 로드 (하지만 보통 미리 로드되어 있을 것)
     final contacts = await getLocalContacts();
     try {
       final contact = contacts.firstWhere(
@@ -386,6 +310,34 @@ class ContactsController with ChangeNotifier {
         '[ContactsController] Error finding contact name for $normalizedNumber: $e',
       );
       return '';
+    }
+  }
+
+  /// 네이티브 연락처 가져오기 테스트 (디버깅용)
+  Future<void> getNativeContacts() async {
+    log('[ContactsController] Testing native getContacts...');
+    try {
+      final contacts = await NativeMethods.getContacts();
+      log('[ContactsController] Native contacts count: ${contacts.length}');
+      for (var i = 0; i < contacts.length && i < 5; i++) {
+        final contact = contacts[i];
+        log(
+          '''\n[ContactsController] Contact #$i:\n  ID: ${contact['id']}\n  DisplayName: ${contact['displayName']}\n  FirstName: ${contact['firstName']}\n  MiddleName: ${contact['middleName']}\n  LastName: ${contact['lastName']}\n  PhoneNumber: ${contact['phoneNumber']}\n  LastUpdated: ${contact['lastUpdated']}\n''',
+        );
+      }
+    } catch (e) {
+      log('[ContactsController] Error getting native contacts: $e');
+    }
+  }
+
+  Future<void> refreshContacts() async {
+    try {
+      final contacts = await NativeMethods.getContacts();
+      final phoneBookModels = _parseNativeContacts(contacts);
+      _contacts = phoneBookModels;
+      notifyListeners();
+    } catch (e) {
+      log('Error refreshing contacts: $e');
     }
   }
 }

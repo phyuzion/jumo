@@ -1,22 +1,26 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_contacts/flutter_contacts.dart';
+// import 'package:flutter_contacts/flutter_contacts.dart'; // 제거
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/graphql/phone_records_api.dart';
 import 'dart:developer';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/controllers/contacts_controller.dart';
 
 /// 신규: initialPhone==null => 전화번호 입력 가능
 /// 기존: 전화번호 수정불가, contactId, memo, type 편집
 class EditContactScreen extends StatefulWidget {
   final String? initialContactId;
+  final String? initialRawContactId;
   final String? initialName;
   final String? initialPhone;
 
   const EditContactScreen({
     super.key,
     this.initialContactId,
+    this.initialRawContactId,
     this.initialName,
     this.initialPhone,
   });
@@ -38,6 +42,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
   @override
   void initState() {
     super.initState();
+    log(
+      '[EditContactScreen] initState: initialContactId=${widget.initialContactId}, initialRawContactId=${widget.initialRawContactId}, initialName=${widget.initialName}, initialPhone=${widget.initialPhone}',
+    );
     _nameCtrl.text = widget.initialName ?? '';
     _phoneCtrl.text = widget.initialPhone ?? '';
     _checkBlockedStatus();
@@ -100,14 +107,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
       return false;
     }
 
-    final hasPerm = await FlutterContacts.requestPermission();
-    if (!hasPerm) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('주소록 권한이 필요합니다.')));
-      return false;
-    }
-
     _showLoadingDialog();
 
     try {
@@ -116,11 +115,39 @@ class _EditContactScreenState extends State<EditContactScreen> {
           widget.initialContactId != null &&
           widget.initialContactId!.isNotEmpty;
 
+      // 이름 분리 (간단하게 firstName만 name 전체로, 나머지는 빈값)
+      final firstName = name;
+      final middleName = '';
+      final lastName = '';
+      final displayName = name;
+
       if (isUpdateOperation) {
-        await _updateDeviceContact(widget.initialContactId, name);
-        deviceContactId = widget.initialContactId;
+        // 업데이트: rawContactId가 필수
+        if (widget.initialRawContactId == null ||
+            widget.initialRawContactId!.isEmpty) {
+          throw Exception('연락처 ID가 없어 업데이트할 수 없습니다.');
+        }
+        log(
+          '[EditContactScreen] Updating contact with rawContactId: ${widget.initialRawContactId}',
+        );
+        deviceContactId = await NativeMethods.upsertContact(
+          rawContactId: widget.initialRawContactId,
+          displayName: displayName,
+          firstName: firstName,
+          middleName: middleName,
+          lastName: lastName,
+          phoneNumber: phone,
+        );
       } else {
-        deviceContactId = await _insertDeviceContact(name, phone);
+        // 신규: id 없이 upsertContact 호출
+        log('[EditContactScreen] Creating new contact');
+        deviceContactId = await NativeMethods.upsertContact(
+          displayName: displayName,
+          firstName: firstName,
+          middleName: middleName,
+          lastName: lastName,
+          phoneNumber: phone,
+        );
       }
 
       final recordToUpsert = {
@@ -150,8 +177,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
   Future<void> _handleMainSaveAction() async {
     bool success = await _performSaveOperation();
     if (success && mounted) {
+      context.read<ContactsController>().refreshContacts();
       Fluttertoast.showToast(msg: "저장 완료");
-      Navigator.pop(context, true); // 화면 닫기
+      Navigator.pop(context, true);
     }
   }
 
@@ -190,9 +218,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
         setState(() {
           _isBlocked = false;
         });
-        bool success =
-            await _performSaveOperation(); // 타입은 변경되지 않았지만, 다른 정보가 수정됐을 수 있으므로 저장
+        bool success = await _performSaveOperation();
         if (success && mounted) {
+          context.read<ContactsController>().refreshContacts();
           Fluttertoast.showToast(msg: "차단해제 완료");
         }
       } else {
@@ -202,8 +230,9 @@ class _EditContactScreenState extends State<EditContactScreen> {
           _isBlocked = true; // 차단 상태로 UI 변경
         });
         await blocknumbersController.addBlockedNumber(normalizedPhone);
-        bool success = await _performSaveOperation(); // 변경된 타입 정보 저장
+        bool success = await _performSaveOperation();
         if (success && mounted) {
+          context.read<ContactsController>().refreshContacts();
           Fluttertoast.showToast(msg: "차단 완료");
         }
       }
@@ -227,95 +256,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
         return const Center(child: CircularProgressIndicator());
       },
     );
-  }
-
-  Future<String> _insertDeviceContact(String name, String phone) async {
-    try {
-      final contactToInsert = Contact(
-        name: Name(first: name),
-        phones: [Phone(phone)],
-      );
-      final insertedContact = await contactToInsert.insert();
-      log('[EditContactScreen] Inserted device contact: ${insertedContact.id}');
-      return insertedContact.id;
-    } catch (e) {
-      log('[EditContactScreen] _insertDeviceContact error: $e');
-      rethrow;
-    }
-  }
-
-  Future<void> _updateDeviceContact(String? contactId, String name) async {
-    Contact? foundContact;
-
-    if (contactId != null && contactId.isNotEmpty) {
-      try {
-        foundContact = await FlutterContacts.getContact(
-          contactId,
-          withProperties: true,
-          withAccounts: true,
-        );
-      } catch (e) {
-        log('[EditContactScreen] Failed to get contact by ID $contactId: $e');
-      }
-    }
-
-    if (foundContact == null && widget.initialPhone != null) {
-      final normalizedPhone = normalizePhone(widget.initialPhone!);
-      try {
-        final allContacts = await FlutterContacts.getContacts(
-          withProperties: true,
-          withAccounts: true,
-        );
-        for (final c in allContacts) {
-          if (c.phones.any(
-            (p) => normalizePhone(p.number) == normalizedPhone,
-          )) {
-            foundContact = c;
-            log('[EditContactScreen] Found contact by phone fallback: ${c.id}');
-            break;
-          }
-        }
-      } catch (e) {
-        log(
-          '[EditContactScreen] Failed to search contact by phone $normalizedPhone: $e',
-        );
-        throw Exception('디바이스에서 연락처를 찾을 수 없습니다.');
-      }
-    }
-
-    if (foundContact == null) {
-      log(
-        '[EditContactScreen] Contact not found for update (ID: $contactId, Phone: ${widget.initialPhone})',
-      );
-      throw Exception('수정할 연락처를 디바이스에서 찾을 수 없습니다.');
-    }
-
-    bool needsUpdate = false;
-    final newName = Name(first: name);
-    if (foundContact.name.first != newName.first ||
-        foundContact.name.last != newName.last ||
-        foundContact.name.middle != newName.middle) {
-      foundContact.name = newName;
-      needsUpdate = true;
-    }
-
-    if (needsUpdate) {
-      try {
-        await foundContact.update();
-        log(
-          '[EditContactScreen] Updated device contact name for ${foundContact.id}',
-        );
-      } catch (e) {
-        log(
-          '[EditContactScreen] _updateDeviceContact error for ${foundContact.id}: $e',
-        );
-        rethrow;
-      }
-    } else {
-      log(
-        '[EditContactScreen] Device contact name is already up-to-date for ${foundContact.id}.',
-      );
-    }
   }
 
   @override
