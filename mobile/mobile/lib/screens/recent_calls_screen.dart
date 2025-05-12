@@ -12,6 +12,7 @@ import 'package:mobile/screens/edit_contact_screen.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'dart:developer';
+import 'package:mobile/providers/recent_history_provider.dart';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -29,7 +30,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   @override
   void initState() {
     super.initState();
-    log('[RecentCallsScreen] initState called.');
     WidgetsBinding.instance.addObserver(this);
     _checkDefaultDialer();
     _scrollController.addListener(() {
@@ -58,43 +58,22 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
     setState(() => _isDefaultDialer = isDefault);
   }
 
-  Future<void> _refreshCalls() async {
-    log('[RecentCallsScreen] Refreshing calls and contacts...');
-    context.read<ContactsController>().invalidateCache();
-    await context.read<CallLogController>().refreshCallLogs();
-    await context.read<ContactsController>().getLocalContacts(
-      forceRefresh: true,
-    );
+  Future<void> _refreshHistory() async {
+    await context.read<RecentHistoryProvider>().refresh();
   }
 
   @override
   Widget build(BuildContext context) {
-    log('[RecentCallsScreen] build called.');
-
-    // CallLogController 구독 최적화
-    final callLogs = context.select((CallLogController clc) => clc.callLogs);
-    final isCallLogLoading = context.select(
-      (CallLogController clc) => clc.isLoading,
-    );
-
+    final recentHistory =
+        context.watch<RecentHistoryProvider>().recentHistoryList;
     // ContactsController 구독 최적화
     final contacts = context.select((ContactsController cc) => cc.contacts);
     final areContactsLoading = context.select(
       (ContactsController cc) => cc.isLoading,
     );
-
-    // contactCache는 contacts가 변경될 때만 재계산되도록 할 수 있지만,
-    // 현재 구조에서는 contacts를 select 했으므로 contacts가 바뀔 때 이 build 메소드가 실행됨.
-    // 따라서 여기서 contactCache를 만드는 것은 문제가 없음.
     final contactCache = {for (var c in contacts) c.phoneNumber: c};
 
-    // 최종 로딩 상태 결정
-    // final isLoading = isCallLogLoading || areContactsLoading || _isRefreshing;
-    final isLoading = isCallLogLoading || areContactsLoading;
-
-    log(
-      '[RecentCallsScreen] build: isLoading=$isLoading (callLog: $isCallLogLoading, contacts: $areContactsLoading), callLogs count: ${callLogs.length}',
-    );
+    final isLoading = areContactsLoading;
 
     return Scaffold(
       appBar: PreferredSize(
@@ -107,51 +86,75 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
           actions: [
             IconButton(
               icon: const Icon(Icons.refresh, size: 24),
-              onPressed: _refreshCalls,
+              onPressed: _refreshHistory,
             ),
           ],
         ),
       ),
       body: RefreshIndicator(
-        onRefresh: _refreshCalls,
+        onRefresh: _refreshHistory,
         child:
             isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : callLogs.isEmpty
-                ? Center(child: Text('최근 통화 기록이 없습니다.'))
+                : recentHistory.isEmpty
+                ? Center(child: Text('최근 통화/문자 기록이 없습니다.'))
                 : ListView.builder(
                   controller: _scrollController,
-                  itemCount: callLogs.length,
+                  itemCount: recentHistory.length,
                   itemBuilder: (context, index) {
-                    final call = callLogs[index];
-                    final number = call['number'] as String? ?? '';
-                    final callType = call['callType'] as String? ?? '';
-                    final ts = call['timestamp'] as int? ?? 0;
+                    final item = recentHistory[index];
+                    final historyType =
+                        item['historyType'] as String? ?? 'call';
+
+                    String number;
+                    String? body;
+                    String? callType;
+                    int ts;
+                    String? smsType;
+
+                    if (historyType == 'call') {
+                      number = item['number'] as String? ?? '';
+                      callType = item['callType'] as String? ?? '';
+                      ts = item['timestamp'] as int? ?? 0;
+                    } else {
+                      number =
+                          item['address'] as String? ??
+                          item['number'] as String? ??
+                          '';
+                      body = item['body'] as String?;
+                      ts = item['date'] as int? ?? 0;
+                      smsType = item['type'] as String?;
+                    }
 
                     final normalizedNumber = normalizePhone(number);
                     final contact = contactCache[normalizedNumber];
-
                     final dateStr = formatDateOnly(ts.toString());
                     final timeStr = formatTimeOnly(ts.toString());
 
                     IconData iconData;
                     Color iconColor;
-                    switch (callType.toLowerCase()) {
-                      case 'incoming':
-                        iconData = Icons.call_received;
-                        iconColor = Colors.green;
-                        break;
-                      case 'outgoing':
-                        iconData = Icons.call_made;
-                        iconColor = Colors.blue;
-                        break;
-                      case 'missed':
-                        iconData = Icons.call_missed;
-                        iconColor = Colors.red;
-                        break;
-                      default:
-                        iconData = Icons.phone;
-                        iconColor = Colors.grey;
+                    Widget leadingIconWidget;
+                    if (historyType == 'call') {
+                      switch ((callType ?? '').toLowerCase()) {
+                        case 'incoming':
+                          iconData = Icons.call_received;
+                          iconColor = Colors.green;
+                          break;
+                        case 'outgoing':
+                          iconData = Icons.call_made;
+                          iconColor = Colors.blue;
+                          break;
+                        case 'missed':
+                          iconData = Icons.call_missed;
+                          iconColor = Colors.red;
+                          break;
+                        default:
+                          iconData = Icons.phone;
+                          iconColor = Colors.grey;
+                      }
+                      leadingIconWidget = Icon(iconData, color: iconColor);
+                    } else {
+                      leadingIconWidget = smsIconWithMarker(smsType);
                     }
 
                     final displayName = contact?.name ?? number;
@@ -175,7 +178,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                                   index == _expandedIndex ? null : index;
                             });
                           },
-                          leading: Icon(iconData, color: iconColor),
+                          leading: leadingIconWidget,
                           title: Text(displayName),
                           trailing: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -289,7 +292,44 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
       ),
     );
     if (result == true) {
-      await _refreshCalls();
+      await _refreshHistory();
     }
+  }
+
+  Widget smsIconWithMarker(String? smsType) {
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Center(child: Icon(Icons.sms, color: Colors.grey, size: 28)),
+          if (smsType == 'SENT')
+            Positioned(
+              top: 0,
+              right: 0,
+              child: CircleAvatar(
+                radius: 9,
+                backgroundColor: Colors.deepOrange,
+                child: Icon(Icons.arrow_upward, color: Colors.white, size: 13),
+              ),
+            ),
+          if (smsType == 'INBOX')
+            Positioned(
+              top: 0,
+              left: 0,
+              child: CircleAvatar(
+                radius: 9,
+                backgroundColor: Colors.green,
+                child: Icon(
+                  Icons.arrow_downward,
+                  color: Colors.white,
+                  size: 13,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

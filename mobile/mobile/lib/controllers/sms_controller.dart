@@ -2,13 +2,15 @@ import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/services.dart';
 import 'package:mobile/graphql/log_api.dart';
-import 'package:mobile/repositories/settings_repository.dart';
 import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:flutter/foundation.dart';
 
-class SmsController {
-  final SettingsRepository _settingsRepository;
+class SmsController with ChangeNotifier {
   final SmsLogRepository _smsLogRepository;
+
+  List<Map<String, dynamic>> _smsLogs = [];
+  List<Map<String, dynamic>> get smsLogs => _smsLogs;
 
   static const MethodChannel _methodChannel = MethodChannel(
     'com.jumo.mobile/sms_query',
@@ -18,7 +20,7 @@ class SmsController {
   );
   StreamSubscription? _smsEventSubscription;
 
-  SmsController(this._settingsRepository, this._smsLogRepository);
+  SmsController(this._smsLogRepository);
 
   Future<void> initializeSmsFeatures() async {
     log('[SmsController] Initializing SMS features...');
@@ -136,6 +138,8 @@ class SmsController {
 
       // 4. 로컬 저장소는 네이티브에서 받아온 전체 리스트로 즉시 덮어쓴다.
       await _smsLogRepository.saveSmsLogs(nativeSmsList);
+      _smsLogs = nativeSmsList;
+      notifyListeners();
       log(
         '[SmsController] Local SMS log updated with ${nativeSmsList.length} SMS (24시간 이내 전체 덮어쓰기).',
       );

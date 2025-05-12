@@ -44,6 +44,7 @@ import 'package:mobile/repositories/blocked_history_repository.dart';
 import 'package:mobile/repositories/sync_state_repository.dart';
 import 'package:flutter_windowmanager_plus/flutter_windowmanager_plus.dart';
 import 'dart:io';
+import 'package:mobile/providers/recent_history_provider.dart';
 
 final getIt = GetIt.instance;
 
@@ -259,7 +260,7 @@ Future<void> main() async {
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
   final callLogContoller = CallLogController(callLogRepository);
   final contactsController = ContactsController();
-  final smsController = SmsController(settingsRepository, smsLogRepository);
+  final smsController = SmsController(smsLogRepository);
   final blockedNumbersController = BlockedNumbersController(
     contactsController,
     settingsRepository,
@@ -290,7 +291,7 @@ Future<void> main() async {
         Provider<NotificationRepository>.value(value: notificationRepository),
         Provider<PhoneStateController>.value(value: phoneStateController),
         Provider<AppController>.value(value: appController),
-        Provider<SmsController>.value(value: smsController),
+        ChangeNotifierProvider<SmsController>.value(value: smsController),
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
         ),
@@ -311,6 +312,13 @@ Future<void> main() async {
         Provider<BlockedNumberRepository>.value(value: blockedNumberRepository),
         Provider<BlockedHistoryRepository>.value(
           value: blockedHistoryRepository,
+        ),
+        ChangeNotifierProvider<RecentHistoryProvider>(
+          create:
+              (context) => RecentHistoryProvider(
+                callLogController: callLogContoller,
+                smsController: smsController,
+              ),
         ),
       ],
       child: MyAppStateful(initialRoutePayload: initialRoutePayload),

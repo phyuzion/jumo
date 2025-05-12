@@ -49,7 +49,7 @@ class HiveSmsLogRepository implements SmsLogRepository {
       return _smsLogsBox.values.map((dynamic e) {
         if (e is Map) {
           return Map<String, dynamic>.fromEntries(
-            e.entries.map(
+            (e as Map).entries.map(
               (entry) => MapEntry(entry.key.toString(), entry.value),
             ),
           );

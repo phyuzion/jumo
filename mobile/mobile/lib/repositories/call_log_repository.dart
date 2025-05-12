@@ -16,7 +16,6 @@ abstract class CallLogRepository {
 
   /// 모든 통화 기록 데이터를 삭제합니다 (로그아웃 등에서 사용).
   Future<void> clearCallLogs();
-
 }
 
 /// Hive를 사용하여 CallLogRepository 인터페이스를 구현하는 클래스
@@ -45,7 +44,7 @@ class HiveCallLogRepository implements CallLogRepository {
       return _callLogsBox.values.map((dynamic e) {
         if (e is Map) {
           return Map<String, dynamic>.fromEntries(
-            e.entries.map(
+            (e as Map).entries.map(
               (entry) => MapEntry(entry.key.toString(), entry.value),
             ),
           );
@@ -94,7 +93,6 @@ class HiveCallLogRepository implements CallLogRepository {
       log('[HiveCallLogRepository] Error clearing call logs: $e');
     }
   }
-
 }
 
 // 의존성 주입 설정 시 Box<String> 대신 Box를 사용하거나,
