@@ -9,9 +9,9 @@ import csv
 import io
 
 # 📌 설정값
-CSV_FILE_PATH = "./db 4.csv"  # CSV 파일 경로
+CSV_FILE_PATH = "./db 5 copy.csv"  # CSV 파일 경로
 BATCH_SIZE = 1000  # 한 번에 보낼 레코드 개수 (조절 가능)
-GRAPHQL_ENDPOINT = "https://jumo-vs8e.onrender.com/graphql"
+GRAPHQL_ENDPOINT = "http://localhost:4000/graphql"
 ADMIN_CREDENTIALS = {
     "username": "admin",
     "password": "1234"
@@ -114,18 +114,19 @@ def parse_csv_file(csv_file_path):
 
                 # --- 데이터 추출 (인덱스 기반) ---
                 try:
-                    # 최소 4개 컬럼이 있는지 확인
-                    if len(row) < 4:
+                    # 최소 5개 컬럼이 있는지 확인
+                    if len(row) < 5:
                         dropped_by_missing_data += 1
-                        error_info = { "line_num": line_num, "original_row": row, "error_message": "컬럼 개수 부족 (최소 4개 필요)"}
+                        error_info = { "line_num": line_num, "original_row": row, "error_message": "컬럼 개수 부족 (최소 5개 필요)"}
                         parsing_error_details.append(error_info)
                         continue
 
                     # 각 컬럼 데이터 추출
-                    title = row[0].strip()          # 첫 번째 컬럼: 제목/출처
-                    phone_number = row[1].strip()   # 두 번째 컬럼: 전화번호
-                    memo = row[2].strip()           # 세 번째 컬럼: 메모/이름
-                    updated_date_str = row[3].strip() # 네 번째 컬럼: 날짜 문자열
+                    user_type = row[0].strip()          # 첫 번째 컬럼: 유저타입
+                    user_name = row[1].strip()          # 두 번째 컬럼: 유저네임
+                    phone_number = row[2].strip()       # 세 번째 컬럼: 폰넘버
+                    name = row[3].strip()               # 네 번째 컬럼: 네임
+                    updated_date_str = row[4].strip()   # 다섯 번째 컬럼: 크리에이티드앳
 
                 except IndexError: # 혹시 모를 인덱스 에러
                     dropped_by_missing_data += 1
@@ -139,28 +140,45 @@ def parse_csv_file(csv_file_path):
                     continue
 
                 # --- 전화번호 전처리 및 검증 ---
+                # '#' 문자 제거 (앞뒤 모두)
+                phone_number = phone_number.strip('#')
+                # 작은따옴표 제거
+                phone_number = phone_number.strip("'")
+                # '*77' 또는 '*281' 제거
+                if phone_number.startswith('*77'):
+                    phone_number = phone_number[3:]
+                elif phone_number.startswith('*281'):
+                    phone_number = phone_number[4:]
+                
+                # 해외번호(+82)를 국내번호(0)로 변환
+                if phone_number.startswith('+82'):
+                    phone_number = '0' + phone_number[3:]
+                
                 if phone_number.startswith('10') and len(phone_number) == 10:
                     phone_number = '0' + phone_number
-                if not re.match(r'^01([0|1|6|7|8|9])-?([0-9]{3,4})-?([0-9]{4})$', phone_number):
+
+                # 전화번호 패턴 검사
+                is_valid = False
+                
+                # 1. 일반 휴대폰 번호 (010, 011, 016, 017, 018, 019)
+                if re.match(r'^01([0|1|6|7|8|9])-?([0-9]{3,4})-?([0-9]{4})$', phone_number):
+                    is_valid = True
+                
+                # 2. 지역번호 (051, 055, 054, 02, 070) + 7자리
+                elif re.match(r'^(051|055|054|02|070)-?([0-9]{3,4})-?([0-9]{4})$', phone_number):
+                    is_valid = True
+                
+                # 3. 특수번호 (1588, 1544, 1688, 1644) + 4자리
+                elif re.match(r'^(1588|1544|1688|1644)-?([0-9]{4})$', phone_number):
+                    is_valid = True
+
+                if not is_valid:
                     dropped_by_phone_format += 1
                     continue
+                    
                 if not phone_number or phone_number == "-1": # 전화번호 필수 체크
                     dropped_by_missing_data += 1 # 통합 카운트
                     continue
-
-                # --- userType 결정 (제목 기반) ---
-                user_type = "오피" # 기본값
-                if "출장" in title:
-                    user_type = "출장"
-                elif "아로마" in title:
-                    user_type = "아로마"
-                elif "타이" in title:
-                    user_type = "마사지"
-                elif "테라피" in title:
-                    user_type = "테라피"
-                elif "1인샵" in title:
-                    user_type = "1인샵"
-                # <<< 다른 키워드나 조건 추가 가능 >>>
 
                 # --- 시간 처리 (기존 로직 유지) ---
                 created_at = "2020-01-01T00:00:00+00:00" # 기본값
@@ -184,12 +202,15 @@ def parse_csv_file(csv_file_path):
 
                 # --- 최종 레코드 생성 ---
                 final_record = {
-                    "name": memo if memo and memo != "-1" else None,         # 세 번째 컬럼 -> name
-                    "phoneNumber": phone_number,                           # 두 번째 컬럼
-                    "userName": title if title and title != "\\\\N" and title != "-1" else None, # 첫 번째 컬럼 -> userName (NULL 처리, \\N 으로 수정)
-                    "userType": user_type,                                  # 결정된 userType
-                    "createdAt": created_at                                  # 파싱/변환된 시간
+                    "name": name if name and name != "-1" else None,         # 네 번째 컬럼 -> name
+                    "phoneNumber": phone_number,                           # 세 번째 컬럼
+                    "userName": user_name if user_name and user_name != "\\\\N" and user_name != "-1" else None, # 두 번째 컬럼 -> userName
+                    "userType": user_type,                                  # 첫 번째 컬럼 -> userType
+                    "createdAt": created_at,
                 }
+
+                # 디버깅을 위한 로그 추가
+                print(f"Debug - Record created: userType={user_type}, userName={user_name}, name={name}")
 
                 # 빈 레코드 필터링 (name과 userName 모두 비어있을 경우 제외)
                 if all(value is None or value == "" for value in [final_record["name"], final_record["userName"]]):
@@ -215,19 +236,112 @@ def parse_csv_file(csv_file_path):
     print(f"  - 주요 필드(name, userName) 모두 비어서 제외: {dropped_by_all_empty}")
     print(f"  - 총 제외된 레코드 수: {total_dropped}")
 
-    print(f"💾 제외 카운터 값을 {useless_log_path} 에 저장 시도 중...")
+    print(f"💾 제외 카운터 값과 상세 정보를 {useless_log_path} 에 저장 시도 중...")
     try:
         with open(useless_log_path, "w", encoding='utf-8') as f:
-            f.write(f"CSV 파싱 결과 ({csv_file_path}):\\n")
-            f.write(f"  - 파일 내 총 데이터 행 수: {initial_row_count}\\n")
-            f.write(f"  - 최종 변환된 레코드 수: {final_record_count}\\n")
-            f.write(f"  - --- 제외 상세 ---\\n")
-            f.write(f"  - 데이터 부족/추출 오류: {dropped_by_missing_data}\\n")
-            f.write(f"  - 전화번호 형식 오류로 제외: {dropped_by_phone_format}\\n")
-            f.write(f"  - 주요 필드(name, userName) 모두 비어서 제외: {dropped_by_all_empty}\\n")
-            f.write(f"  - 총 제외된 레코드 수: {total_dropped}\\n")
+            f.write(f"CSV 파싱 결과 ({csv_file_path}):\n")
+            f.write(f"  - 파일 내 총 데이터 행 수: {initial_row_count}\n")
+            f.write(f"  - 최종 변환된 레코드 수: {final_record_count}\n")
+            f.write(f"  - --- 제외 상세 ---\n")
+            f.write(f"  - 데이터 부족/추출 오류: {dropped_by_missing_data}\n")
+            f.write(f"  - 전화번호 형식 오류로 제외: {dropped_by_phone_format}\n")
+            f.write(f"  - 주요 필드(name, userName) 모두 비어서 제외: {dropped_by_all_empty}\n")
+            f.write(f"  - 총 제외된 레코드 수: {total_dropped}\n\n")
+            
+            # 제외된 데이터 상세 정보 저장
+            f.write("=== 제외된 데이터 상세 정보 ===\n\n")
+            
+            # 데이터 부족/추출 오류 데이터
+            if parsing_error_details:
+                f.write("1. 데이터 부족/추출 오류 데이터:\n")
+                for error in parsing_error_details:
+                    f.write(f"  - 라인 {error['line_num']}: {error['error_message']}\n")
+                    f.write(f"    원본 데이터: {error['original_row']}\n\n")
+            
+            # 전화번호 형식 오류 데이터 저장을 위한 리스트
+            phone_format_errors = []
+            
+            # 주요 필드 비어있는 데이터 저장을 위한 리스트
+            empty_fields_data = []
+            
+            # 원본 데이터를 다시 읽어서 제외된 데이터 상세 정보 수집
+            with open(csv_file_path, 'r', encoding='utf-8-sig', newline='') as csv_file:
+                reader = csv.reader(csv_file, quotechar='\"', quoting=csv.QUOTE_MINIMAL, skipinitialspace=True)
+                for line_num, row in enumerate(reader, 1):
+                    try:
+                        if len(row) < 5:
+                            continue
+                            
+                        user_type = row[0].strip()
+                        user_name = row[1].strip()
+                        phone_number = row[2].strip().strip('#')  # '#' 문자 제거 (앞뒤 모두)
+                        name = row[3].strip()
+                        
+                        # 전화번호 형식 검사
+                        phone_number = row[2].strip().strip('#')  # '#' 문자 제거 (앞뒤 모두)
+                        phone_number = phone_number.strip("'")    # 작은따옴표 제거
+                        # '*77' 또는 '*281' 제거
+                        if phone_number.startswith('*77'):
+                            phone_number = phone_number[3:]
+                        elif phone_number.startswith('*281'):
+                            phone_number = phone_number[4:]
+                            
+                        # 해외번호(+82)를 국내번호(0)로 변환
+                        if phone_number.startswith('+82'):
+                            phone_number = '0' + phone_number[3:]
+                            
+                        if phone_number.startswith('10') and len(phone_number) == 10:
+                            phone_number = '0' + phone_number
+
+                        # 전화번호 패턴 검사
+                        is_valid = False
+                        
+                        # 1. 일반 휴대폰 번호 (010, 011, 016, 017, 018, 019)
+                        if re.match(r'^01([0|1|6|7|8|9])-?([0-9]{3,4})-?([0-9]{4})$', phone_number):
+                            is_valid = True
+                        
+                        # 2. 지역번호 (051, 055, 054, 02, 070) + 7자리
+                        elif re.match(r'^(051|055|054|02|070)-?([0-9]{3,4})-?([0-9]{4})$', phone_number):
+                            is_valid = True
+                        
+                        # 3. 특수번호 (1588, 1544, 1688, 1644) + 4자리
+                        elif re.match(r'^(1588|1544|1688|1644)-?([0-9]{4})$', phone_number):
+                            is_valid = True
+
+                        if not is_valid:
+                            phone_format_errors.append({
+                                "line_num": line_num,
+                                "data": row,
+                                "phone": phone_number
+                            })
+                            continue
+                            
+                        # 주요 필드 비어있는지 검사
+                        if all(value is None or value == "" or value == "-1" for value in [name, user_name]):
+                            empty_fields_data.append({
+                                "line_num": line_num,
+                                "data": row
+                            })
+                            
+                    except Exception:
+                        continue
+            
+            # 전화번호 형식 오류 데이터 저장
+            if phone_format_errors:
+                f.write("\n2. 전화번호 형식 오류 데이터:\n")
+                for error in phone_format_errors:
+                    f.write(f"  - 라인 {error['line_num']}: 잘못된 전화번호 형식 ({error['phone']})\n")
+                    f.write(f"    원본 데이터: {error['data']}\n\n")
+            
+            # 주요 필드 비어있는 데이터 저장
+            if empty_fields_data:
+                f.write("\n3. 주요 필드(name, userName) 모두 비어있는 데이터:\n")
+                for data in empty_fields_data:
+                    f.write(f"  - 라인 {data['line_num']}:\n")
+                    f.write(f"    원본 데이터: {data['data']}\n\n")
+            
             f.flush()
-        print(f"✅ 제외 카운터 값이 {os.path.abspath(useless_log_path)} 에 저장되었습니다.")
+        print(f"✅ 제외된 데이터 상세 정보가 {os.path.abspath(useless_log_path)} 에 저장되었습니다.")
     except IOError as e: print(f"❌ {useless_log_path} 파일 저장 중 오류 발생: {e}")
 
     if parsing_error_details:
@@ -303,7 +417,7 @@ def log_upload_error(base_name, batch_data, error_response_text, batch_start_ind
     }
     try:
         with open(error_log_path, "a", encoding='utf-8') as f:
-            f.write(json.dumps(error_entry, ensure_ascii=False, indent=2) + "\\n,\\n")
+            f.write(json.dumps(error_entry, ensure_ascii=False, indent=2) + "\n")
         print(f"🔴 업로드 오류 발생: 상세 정보가 {error_log_path} 에 기록되었습니다.")
     except IOError as e: print(f"❌ 업로드 오류 로그 파일({error_log_path}) 쓰기 중 오류 발생: {e}")
     except Exception as e: print(f"❌ 업로드 오류 로그 저장 중 예외 발생: {e}")
@@ -369,12 +483,12 @@ def upload_records(access_token, records, base_name):
                 f.seek(0, os.SEEK_END)
                 if f.tell() > 3:
                     f.seek(-3, os.SEEK_END)
-                    if f.read(3) == b'\\n,\\n':
+                    if f.read(3) == b'\n,\n':
                         f.seek(-3, os.SEEK_END)
                         f.truncate()
                     else:
                          f.seek(-2, os.SEEK_END)
-                         if f.read(2) == b',\\n':
+                         if f.read(2) == b',\n':
                               f.seek(-2, os.SEEK_END)
                               f.truncate()
             with open(error_log_path, 'r', encoding='utf-8') as f:
@@ -385,10 +499,10 @@ def upload_records(access_token, records, base_name):
                           parsed_entries = json.loads(error_entries_str)
                           json.dump(parsed_entries, wf, ensure_ascii=False, indent=2)
                      print(f"ℹ️ 업로드 오류 로그 파일({error_log_path})을 JSON 배열 형식으로 업데이트했습니다.")
-                else: print(f"ℹ️ 업로드 오류 로그 파일({error_log_path})이 비어있어 후처리를 건너<0xEB><0x9C><0x95>니다.")
+                else: print(f"ℹ️ 업로드 오류 로그 파일({error_log_path})이 비어있어 후처리를 건너니다.")
         except Exception as e: print(f"⚠️ 업로드 오류 로그 파일({error_log_path}) 후처리 중 오류: {e}")
 
-    print("�� 모든 데이터 업로드 완료!" if success else "⚠️ 업로드 중 일부 배치가 실패했습니다.")
+    print("✅ 모든 데이터 업로드 완료!" if success else "⚠️ 업로드 중 일부 배치가 실패했습니다.")
 
 ### 실행 ###
 if __name__ == "__main__":
@@ -419,5 +533,5 @@ if __name__ == "__main__":
                     print("✋ 업로드를 취소했습니다.")
                     break
                 else: print("⚠️ 'y' 또는 'n'을 입력해주세요.")
-        else: print("❌ 변환된 데이터가 없습니다. 업로드를 건너<0xEB><0x9C><0x95>니다.")
+        else: print("❌ 변환된 데이터가 없습니다. 업로드를 건너니다.")
     else: print("❌ 로그인 실패로 종료합니다.")
