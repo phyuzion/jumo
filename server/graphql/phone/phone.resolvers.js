@@ -22,20 +22,11 @@ const { checkUserOrAdmin } = require('../auth/utils');
  *    기존 레코드를 찾아 업데이트, 없으면 push
  */
 function mergeRecords(existingRecords, newRecords, isAdmin, user) {
-
-  // 1) existingRecords => map by key
+  // 1) existingRecords => map by key: <userId> + '#' + <userName> + '#' + <userType>
   const map = {};
   for (const r of existingRecords) {
-    let key;
-    if (isAdmin) {
-      // 어드민일 때는 전화번호와 시간을 기준으로 키 생성
-      const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
-      key = `${r.phoneNumber}#${createdAt.toISOString()}`;
-    } else {
-      // 일반 유저일 때는 기존 로직 유지
-      const uid = r.userId ? String(r.userId) : '';
-      key = `${uid}#${r.userName||''}#${r.userType||'일반'}`;
-    }
+    const uid = r.userId ? String(r.userId) : '';
+    const key = `${uid}#${r.userName||''}#${r.userType||'일반'}`;
     map[key] = r;
   }
 
@@ -49,24 +40,15 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     if (isAdmin) {
       finalUserName = nr.userName?.trim() || 'Admin';
       finalUserType = nr.userType || '일반';
+      // admin 일 때는 userId 별도 지정이 없으면 null로 둠
     } else {
       finalUserId = user._id;
       finalUserName = user.name || '';
       finalUserType = user.userType || '일반';
     }
 
-    let key;
-    if (isAdmin) {
-      // 어드민일 때는 전화번호와 시간을 기준으로 키 생성
-      const createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
-      key = `${nr.phoneNumber}#${createdAt.toISOString()}`;
-    } else {
-      // 일반 유저일 때는 기존 로직 유지
-      key = `${finalUserId || ''}#${finalUserName}#${finalUserType}`;
-    }
-
+    const key = `${finalUserId || ''}#${finalUserName}#${finalUserType}`;
     let exist = map[key];
-    
 
     if (!exist) {
       // 새 레코드
@@ -80,28 +62,16 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date(),
       };
       map[key] = exist;
-      console.log('새 레코드 추가됨');
     } else {
       // 업데이트
-      if (isAdmin) {
-        
-        if (nr.name !== undefined) exist.name = nr.name;
-        if (nr.memo !== undefined) exist.memo = nr.memo;
-        if (nr.type !== undefined) exist.type = nr.type;
-        if (nr.userType !== undefined) exist.userType = nr.userType;
-        if (nr.userName !== undefined) exist.userName = nr.userName;
-        
-      } else {
-        // 일반 유저일 때는 기존 로직 유지
-        if (nr.name !== undefined) exist.name = nr.name;
-        if (nr.memo !== undefined) exist.memo = nr.memo;
-        if (nr.type !== undefined) exist.type = nr.type;
-        exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
-      }
+      if (nr.name !== undefined) exist.name = nr.name;
+      if (nr.memo !== undefined) exist.memo = nr.memo;
+      if (nr.type !== undefined) exist.type = nr.type;
+      exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
     }
   }
 
-  console.log('=== mergeRecords 종료 ===');
+  // return merged array
   return Object.values(map);
 }
 
@@ -140,27 +110,9 @@ module.exports = {
         return true;
       }
 
-      const existingDocs = await PhoneNumber.find(
-        { phoneNumber: { $in: phoneNumbers } },
-        { 
-          phoneNumber: 1, 
-          records: {
-            $map: {
-              input: "$records",
-              as: "record",
-              in: {
-                $mergeObjects: [
-                  "$$record",
-                  { phoneNumber: "$phoneNumber" }
-                ]
-              }
-            }
-          },
-          type: 1, 
-          blockCount: 1, 
-          _id: 1 
-        }
-      ).lean();
+      const existingDocs = await PhoneNumber.find({
+        phoneNumber: { $in: phoneNumbers }
+      }).lean();
 
       const phoneDocMap = {};
       for (const doc of existingDocs) {
