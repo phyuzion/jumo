@@ -224,6 +224,17 @@ class _LoginScreenState extends State<LoginScreen> {
         // <<< 항상 로그인 정보 저장 >>>
         await _authRepository.saveCredentials(loginId, password);
         log('[LoginScreen] Credentials saved via AuthRepository after login.');
+
+        // 저장된 크레덴셜 확인
+        final savedCredentials = await _authRepository.getSavedCredentials();
+        if (savedCredentials['savedLoginId'] != loginId ||
+            savedCredentials['password'] != password) {
+          log(
+            '[LoginScreen] Warning: Saved credentials do not match login credentials',
+          );
+          throw Exception('로그인 정보 저장 중 오류가 발생했습니다.');
+        }
+        log('[LoginScreen] Verified saved credentials match login credentials');
       } else {
         log(
           '[LoginScreen] Login successful but user data format is unexpected.',

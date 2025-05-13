@@ -515,13 +515,24 @@ class _MyAppStatefulState extends State<MyAppStateful>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      log('[MyAppStateful] App resumed. Refreshing contacts...');
+      log('[MyAppStateful] App resumed. Checking login state...');
       try {
-        final contactsCtrl = context.read<ContactsController>();
-        contactsCtrl.refreshContacts();
-        // contactsCtrl.triggerBackgroundSync(); // 필요시만 사용
+        final authRepository = context.read<AuthRepository>();
+        authRepository.getLoginStatus().then((isLoggedIn) {
+          if (isLoggedIn) {
+            log('[MyAppStateful] User is logged in. Refreshing contacts...');
+            final contactsCtrl = context.read<ContactsController>();
+            contactsCtrl.refreshContacts();
+          } else {
+            log(
+              '[MyAppStateful] User is not logged in. Skipping contacts refresh.',
+            );
+          }
+        });
       } catch (e) {
-        log('[MyAppStateful] Error getting ContactsController: $e');
+        log(
+          '[MyAppStateful] Error checking login state or refreshing contacts: $e',
+        );
       }
     }
   }

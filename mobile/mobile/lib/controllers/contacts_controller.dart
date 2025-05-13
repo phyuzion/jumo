@@ -70,19 +70,89 @@ class ContactsController with ChangeNotifier {
       }
     });
     try {
+      // 1. 로컬 저장소에서 기존 연락처 가져오기
+      final List<PhoneBookModel> localContacts =
+          await _contactRepository.getAllContacts();
+
+      final Map<String, PhoneBookModel> localMap = {
+        for (var c in localContacts) c.contactId: c,
+      };
+
+      // 2. 네이티브에서 최신 연락처 가져오기
       final nativeContacts = await NativeMethods.getContacts();
       final phoneBookModels = _parseNativeContacts(nativeContacts);
-      for (var i = 0; i < phoneBookModels.length && i < 5; i++) {
-        final c = phoneBookModels[i];
-        log(
-          '[ContactsController] Contact #$i: contactId=${c.contactId}, rawContactId=${c.rawContactId}, name=${c.name}, phone=${c.phoneNumber}',
-        );
-      }
+
+      // 3. 신규 또는 변경된 연락처만 필터링
+      final List<PhoneBookModel> changedContacts =
+          phoneBookModels.where((contact) {
+            final local = localMap[contact.contactId];
+            if (local == null) {
+              return true; // 신규
+            }
+            // 네 개 필드 중 하나라도 다르면 변경된 것
+            final isChanged =
+                local.name != contact.name ||
+                local.phoneNumber != contact.phoneNumber ||
+                local.rawContactId != contact.rawContactId ||
+                local.createdAt != contact.createdAt;
+
+            if (isChanged) {
+              log(
+                '[ContactsController] Changed contact detected: ${contact.name} (${contact.phoneNumber})',
+              );
+              log('  - Name changed: ${local.name} -> ${contact.name}');
+              log(
+                '  - Phone changed: ${local.phoneNumber} -> ${contact.phoneNumber}',
+              );
+              log(
+                '  - RawId changed: ${local.rawContactId} -> ${contact.rawContactId}',
+              );
+              log(
+                '  - CreatedAt changed: ${local.createdAt} -> ${contact.createdAt}',
+              );
+            }
+            return isChanged;
+          }).toList();
+      log(
+        '[ContactsController] Found ${changedContacts.length} changed contacts',
+      );
+
       _contacts = phoneBookModels;
       _contactCache = {for (var c in _contacts) c.phoneNumber: c};
       _lastLoadTime = now;
       _isLoading = false;
       notifyListeners();
+
+      // 4. 로컬 저장소 업데이트
+      await _contactRepository.saveContacts(phoneBookModels);
+
+      // 5. 변경된 연락처만 서버에 업로드
+      if (changedContacts.isNotEmpty) {
+        Future(() async {
+          try {
+            final recordsToUpsert =
+                changedContacts
+                    .map(
+                      (contact) => {
+                        'phoneNumber': contact.phoneNumber,
+                        'name': contact.name,
+                        'createdAt':
+                            contact.createdAt?.toUtc().toIso8601String() ??
+                            DateTime.now().toUtc().toIso8601String(),
+                      },
+                    )
+                    .toList();
+
+            await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
+          } catch (e, stackTrace) {
+            log('[ContactsController] Error uploading changed contacts: $e');
+            log('[ContactsController] Stack trace: $stackTrace');
+          }
+        });
+      } else {
+        log('[ContactsController] No contacts to upload to server');
+      }
+
       return _contacts;
     } catch (e) {
       log('[ContactsController] Error fetching native contacts: $e');
@@ -119,69 +189,18 @@ class ContactsController with ChangeNotifier {
   }
 
   Future<void> refreshContacts() async {
+    log('[ContactsController] refreshContacts started');
     _isLoading = true;
     notifyListeners();
     _isLoading = false;
-    // 네이티브 연락처 fetch를 백그라운드에서 비동기로 시작
+
+    // 백그라운드에서 getLocalContacts 호출
     Future(() async {
       try {
-        // 1. 로컬 저장소에서 기존 연락처 가져오기
-        final List<PhoneBookModel> localContacts =
-            await _contactRepository.getAllContacts();
-        final Map<String, PhoneBookModel> localMap = {
-          for (var c in localContacts) c.contactId: c,
-        };
-
-        // 2. 네이티브에서 최신 연락처 가져오기
-        final contacts = await NativeMethods.getContacts();
-        final phoneBookModels = _parseNativeContacts(contacts);
-
-        // 3. 신규 또는 변경된 연락처만 필터링
-        final List<PhoneBookModel> changedContacts =
-            phoneBookModels.where((contact) {
-              final local = localMap[contact.contactId];
-              if (local == null) return true; // 신규
-              // 네 개 필드 중 하나라도 다르면 변경된 것
-              return local.name != contact.name ||
-                  local.phoneNumber != contact.phoneNumber ||
-                  local.rawContactId != contact.rawContactId ||
-                  local.createdAt != contact.createdAt;
-            }).toList();
-
-        // 4. UI 업데이트 (fetch 끝난 시점에만)
-        _contacts = phoneBookModels;
-        notifyListeners();
-
-        // 5. 로컬 저장소 업데이트
-        await _contactRepository.saveContacts(phoneBookModels);
-
-        // 6. 변경된 연락처만 서버에 업로드 (비동기)
-        if (changedContacts.isNotEmpty) {
-          Future(() async {
-            try {
-              final recordsToUpsert =
-                  changedContacts
-                      .map(
-                        (contact) => {
-                          'phoneNumber': contact.phoneNumber,
-                          'name': contact.name,
-                          'createdAt':
-                              contact.createdAt?.toUtc().toIso8601String() ??
-                              DateTime.now().toUtc().toIso8601String(),
-                        },
-                      )
-                      .toList();
-              await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
-              log(
-                '[ContactsController] Successfully uploaded changed contacts to server',
-              );
-            } catch (e) {
-              log('[ContactsController] Error uploading changed contacts: $e');
-            }
-          });
-        }
-      } catch (e) {
+        await getLocalContacts(forceRefresh: true);
+      } catch (e, stackTrace) {
         log('[ContactsController] Error refreshing contacts: $e');
+        log('[ContactsController] Stack trace: $stackTrace');
       }
     });
   }
