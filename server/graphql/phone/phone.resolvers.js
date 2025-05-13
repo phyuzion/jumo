@@ -22,11 +22,19 @@ const { checkUserOrAdmin } = require('../auth/utils');
  *    기존 레코드를 찾아 업데이트, 없으면 push
  */
 function mergeRecords(existingRecords, newRecords, isAdmin, user) {
-  // 1) existingRecords => map by key: <userId> + '#' + <userName> + '#' + <userType>
+  // 1) existingRecords => map by key
   const map = {};
   for (const r of existingRecords) {
-    const uid = r.userId ? String(r.userId) : '';
-    const key = `${uid}#${r.userName||''}#${r.userType||'일반'}`;
+    let key;
+    if (isAdmin) {
+      // 어드민일 때는 전화번호와 시간을 기준으로 키 생성
+      const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+      key = `${r.phoneNumber}#${createdAt.toISOString()}`;
+    } else {
+      // 일반 유저일 때는 userId만으로 키 생성
+      const uid = r.userId ? String(r.userId) : '';
+      key = uid;
+    }
     map[key] = r;
   }
 
@@ -38,20 +46,30 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     let finalUserType = '일반';
 
     if (isAdmin) {
+      // 어드민의 경우 입력값 사용 (없으면 기본값)
       finalUserName = nr.userName?.trim() || 'Admin';
       finalUserType = nr.userType || '일반';
-      // admin 일 때는 userId 별도 지정이 없으면 null로 둠
     } else {
+      // 일반 유저의 경우 현재 로그인한 유저 정보 사용
       finalUserId = user._id;
       finalUserName = user.name || '';
       finalUserType = user.userType || '일반';
     }
 
-    const key = `${finalUserId || ''}#${finalUserName}#${finalUserType}`;
-    let exist = map[key];
+    let key;
+    if (isAdmin) {
+      // 어드민일 때는 전화번호와 시간을 기준으로 키 생성
+      const createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
+      key = `${nr.phoneNumber}#${createdAt.toISOString()}`;
+    } else {
+      // 일반 유저일 때는 userId만으로 키 생성
+      key = String(finalUserId);
+    }
 
+    let exist = map[key];
+    
     if (!exist) {
-      // 새 레코드
+      // 새 레코드 생성
       exist = {
         userId: finalUserId,
         userName: finalUserName,
@@ -63,15 +81,29 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
       };
       map[key] = exist;
     } else {
-      // 업데이트
-      if (nr.name !== undefined) exist.name = nr.name;
-      if (nr.memo !== undefined) exist.memo = nr.memo;
-      if (nr.type !== undefined) exist.type = nr.type;
+      // 기존 레코드 업데이트
+      if (isAdmin) {
+        // 어드민의 경우 모든 필드 업데이트 가능
+        if (nr.name !== undefined) exist.name = nr.name;
+        if (nr.memo !== undefined) exist.memo = nr.memo;
+        if (nr.type !== undefined) exist.type = nr.type;
+        if (nr.userType !== undefined) exist.userType = nr.userType;
+        if (nr.userName !== undefined) exist.userName = nr.userName;
+      } else {
+        // 일반 유저의 경우 name, memo, type만 업데이트 가능
+        // userId, userName, userType은 현재 로그인한 유저 정보로 고정
+        if (nr.name !== undefined) exist.name = nr.name;
+        if (nr.memo !== undefined) exist.memo = nr.memo;
+        if (nr.type !== undefined) exist.type = nr.type;
+        exist.userId = finalUserId;
+        exist.userName = finalUserName;
+        exist.userType = finalUserType;
+      }
+      // createdAt은 항상 업데이트
       exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
     }
   }
 
-  // return merged array
   return Object.values(map);
 }
 
@@ -110,9 +142,27 @@ module.exports = {
         return true;
       }
 
-      const existingDocs = await PhoneNumber.find({
-        phoneNumber: { $in: phoneNumbers }
-      }).lean();
+      const existingDocs = await PhoneNumber.find(
+        { phoneNumber: { $in: phoneNumbers } },
+        { 
+          phoneNumber: 1, 
+          records: {
+            $map: {
+              input: "$records",
+              as: "record",
+              in: {
+                $mergeObjects: [
+                  "$$record",
+                  { phoneNumber: "$phoneNumber" }
+                ]
+              }
+            }
+          },
+          type: 1, 
+          blockCount: 1, 
+          _id: 1 
+        }
+      ).lean();
 
       const phoneDocMap = {};
       for (const doc of existingDocs) {
@@ -188,17 +238,27 @@ module.exports = {
       // <<< 로그 추가: 입력된 번호 확인 >>>
       console.log(`[getPhoneNumber] Received request for phone: ${normalizedPhoneNumber}`);
 
-      // --- 검색 횟수 체크 로직 (복원) ---
+      // --- 검색 횟수 체크 로직 (KST 기준) ---
       if (isRequested && tokenData.userId) {
         const user = await User.findById(tokenData.userId).select('searchCount lastSearchTime grade');
         if (!user) {
           throw new UserInputError('유저를 찾을 수 없습니다.');
         }
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (!user.lastSearchTime || user.lastSearchTime < today) {
+
+        // KST 기준으로 오늘 날짜 계산 (UTC+9)
+        const now = new Date();
+        const kstToday = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+        kstToday.setHours(0, 0, 0, 0);
+        
+        // lastSearchTime을 KST로 변환하여 비교
+        const lastSearchKST = user.lastSearchTime ? 
+          new Date(user.lastSearchTime.getTime() + (9 * 60 * 60 * 1000)) : 
+          null;
+
+        if (!lastSearchKST || lastSearchKST < kstToday) {
           user.searchCount = 0;
         }
+
         const grade = await Grade.findOne({ name: user.grade });
         if (!grade) {
           throw new UserInputError('유효하지 않은 등급입니다.');
@@ -207,7 +267,7 @@ module.exports = {
           throw new ForbiddenError('오늘의 검색 제한을 초과했습니다. 내일 다시 시도해주세요.');
         }
         user.searchCount += 1;
-        user.lastSearchTime = new Date();
+        user.lastSearchTime = new Date(); // UTC로 저장
         await user.save();
       }
       // --- 검색 횟수 체크 로직 끝 ---
