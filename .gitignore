@@ -56,3 +56,6 @@ record_parcer/db 4.csv
 record_parcer/db (2).7z
 record_parcer/db 3.csv
 *.txt
+*.csv
+*.csv
+*.log
