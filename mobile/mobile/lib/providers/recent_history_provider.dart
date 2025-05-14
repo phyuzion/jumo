@@ -17,9 +17,6 @@ class RecentHistoryProvider with ChangeNotifier {
   StreamSubscription? _smsUpdatedSubscription;
 
   List<Map<String, dynamic>> get recentHistoryList {
-    log(
-      '[RecentHistoryProvider.recentHistoryList_getter] Called. Returning ${_recentHistoryList.length} items.',
-    );
     return _recentHistoryList;
   }
 
@@ -38,55 +35,50 @@ class RecentHistoryProvider with ChangeNotifier {
       event,
     ) {
       log(
-        '[RecentHistoryProvider] Received CallLogUpdatedEvent from EventBus. Updating history.',
+        '[RecentHistoryProvider] Received CallLogUpdatedEvent. Updating history.',
       );
-      _updateRecentHistoryList();
-      notifyListeners();
+      _updateRecentHistoryListAndNotify();
     });
 
+    // SmsUpdatedEvent도 이벤트 버스로 처리한다면 아래와 같이 구독
+    // _smsUpdatedSubscription = appEventBus.on<SmsUpdatedEvent>().listen((event) {
+    //   log('[RecentHistoryProvider] Received SmsUpdatedEvent. Updating history.');
+    //   _updateRecentHistoryListAndNotify();
+    // });
+
     _updateRecentHistoryList();
-    log('[RecentHistoryProvider.constructor] Finished.');
   }
 
   void _onAppControllerUpdate() {
-    log(
-      '[RecentHistoryProvider._onAppControllerUpdate] AppController notified.',
-    );
     final currentAppLoadingState = appController.isInitialUserDataLoading;
 
     if (_wasAppLoadingUserData && !currentAppLoadingState) {
       log(
-        '[RecentHistoryProvider._onAppControllerUpdate] Initial user data loading finished. Updating recent history.',
+        '[RecentHistoryProvider._onAppControllerUpdate] Initial user data loading finished. Updating history.',
       );
-      _updateRecentHistoryList();
-      notifyListeners();
+      _updateRecentHistoryListAndNotify();
     } else if (!currentAppLoadingState && !_wasAppLoadingUserData) {
+      // 이 경우는 AppController.requestUiUpdate() 호출 시 (예: SMS 이벤트 후)
       log(
-        '[RecentHistoryProvider._onAppControllerUpdate] AppController requested UI update (e.g., from SMS event). Updating recent history.',
+        '[RecentHistoryProvider._onAppControllerUpdate] AppController requested UI update (e.g., from SMS). Updating history.',
       );
-      _updateRecentHistoryList();
-      notifyListeners();
-    } else if (currentAppLoadingState && !_wasAppLoadingUserData) {
-      log(
-        '[RecentHistoryProvider._onAppControllerUpdate] Initial user data loading started.',
-      );
+      _updateRecentHistoryListAndNotify();
     }
     _wasAppLoadingUserData = currentAppLoadingState;
   }
 
+  // _updateRecentHistoryList와 notifyListeners를 합친 헬퍼 함수
+  void _updateRecentHistoryListAndNotify() {
+    _updateRecentHistoryList();
+    notifyListeners();
+  }
+
   void _updateRecentHistoryList() {
-    log('[RecentHistoryProvider._updateRecentHistoryList] Started.');
     if (appController.isInitialUserDataLoading && _recentHistoryList.isEmpty) {
-      log(
-        '[RecentHistoryProvider._updateRecentHistoryList] AppController is loading initial user data and list is empty, skipping update for now to prevent stale data view.',
-      );
       return;
     }
     final callLogs = callLogController.callLogs;
     final smsLogs = smsController.smsLogs;
-    log(
-      '[RecentHistoryProvider._updateRecentHistoryList] Fetched ${callLogs.length} call logs and ${smsLogs.length} SMS logs.',
-    );
 
     _recentHistoryList = [
       ...callLogs.map((e) => {...e, 'historyType': 'call'}),
@@ -98,19 +90,15 @@ class RecentHistoryProvider with ChangeNotifier {
       ),
     );
     log(
-      '[RecentHistoryProvider._updateRecentHistoryList] Sorted list. Final recent history list count: ${_recentHistoryList.length}',
+      '[RecentHistoryProvider._updateRecentHistoryList] List updated. Count: ${_recentHistoryList.length}',
     );
-    log('[RecentHistoryProvider._updateRecentHistoryList] Finished.');
   }
 
   Future<void> refresh() async {
     log(
-      '[RecentHistoryProvider.refresh] Started. Triggering AppController.triggerContactsLoadIfReady.',
+      '[RecentHistoryProvider.refresh] Triggering AppController.triggerContactsLoadIfReady.',
     );
     await appController.triggerContactsLoadIfReady();
-    log(
-      '[RecentHistoryProvider.refresh] Finished (AppController was triggered).',
-    );
   }
 
   @override

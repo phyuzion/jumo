@@ -13,7 +13,7 @@ object ContactManager {
     fun processContactsStreamed(
         context: Context,
         lastSyncTimestampEpochMillis: Long?, // Long? 타입으로 변경, null 가능
-        chunkSize: Int = 50, // 한 번에 처리할 청크 크기
+        chunkSize: Int = 1000, // 한 번에 처리할 청크 크기
         onChunkProcessed: (List<Map<String, Any?>>) -> Unit, // 각 청크 처리 후 호출될 콜백
         onFinished: () -> Unit, // 모든 데이터 처리 후 호출될 콜백
         onError: (Exception) -> Unit // 에러 발생 시 호출될 콜백

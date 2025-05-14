@@ -47,6 +47,8 @@ abstract class SettingsRepository {
   Future<int?> getLastContactsSyncTimestamp(); // null일 수 있음 (최초 실행 시)
   Future<void> setLastContactsSyncTimestamp(int timestamp);
 
+  Future<void> resetBlockingSettings(); // 차단 설정만 리셋하는 메소드 추가
+
   // --- 일반 설정 값 접근 (Key 직접 사용) --- (선택적)
   // Future<T?> getSetting<T>(String key, {T? defaultValue});
   // Future<void> setSetting<T>(String key, T value);
@@ -182,9 +184,18 @@ class HiveSettingsRepository implements SettingsRepository {
   @override
   Future<void> setLastContactsSyncTimestamp(int timestamp) async {
     await _settingsBox.put(_lastContactsSyncTimestampKey, timestamp);
-    log(
-      '[HiveSettingsRepository] Last contacts sync timestamp set to: $timestamp',
-    );
+  }
+
+  // resetBlockingSettings 메소드 구현 추가
+  @override
+  Future<void> resetBlockingSettings() async {
+    log('[HiveSettingsRepository] Resetting blocking settings on logout...');
+    await setTodayBlocked(false);
+    await setUnknownBlocked(false);
+    await setAutoBlockDanger(false);
+    await setBombCallsBlocked(false);
+    await setBombCallsCount(0);
+    log('[HiveSettingsRepository] Blocking settings reset.');
   }
 
   // --- 일반 설정 값 접근 구현 (선택적) ---

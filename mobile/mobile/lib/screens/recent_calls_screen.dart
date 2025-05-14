@@ -30,106 +30,53 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   @override
   void initState() {
     super.initState();
-    log('[_RecentCallsScreenState.initState] Called.');
     WidgetsBinding.instance.addObserver(this);
     _checkDefaultDialer();
-    _scrollController.addListener(() {
-      // 스크롤 관련 로직 로그는 필요시 추가 (현재는 생략)
-      // log('[_RecentCallsScreenState] Scroll listener: ${_scrollController.position.pixels}');
-    });
-    // initState에서 refresh를 호출하는 대신, Provider가 초기 데이터를 로드하도록 유도
-    // 만약 즉시 새로고침이 필요하다면 아래 주석 해제
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   log('[_RecentCallsScreenState.initState] addPostFrameCallback, calling _refreshHistory.');
-    //   _refreshHistory();
-    // });
-    log('[_RecentCallsScreenState.initState] Finished.');
+    _scrollController.addListener(() {});
   }
 
   @override
   void dispose() {
-    log('[_RecentCallsScreenState.dispose] Called.');
     WidgetsBinding.instance.removeObserver(this);
     _scrollController.dispose();
     super.dispose();
-    log('[_RecentCallsScreenState.dispose] Finished.');
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    log('[_RecentCallsScreenState.didChangeAppLifecycleState] State: $state');
     if (state == AppLifecycleState.resumed) {
-      log(
-        '[_RecentCallsScreenState.didChangeAppLifecycleState] App resumed, calling _checkDefaultDialer.',
-      );
       _checkDefaultDialer();
-      // 앱 재개 시 새로고침이 필요하다면 아래 주석 해제 또는 다른 로직과 연동
-      // log('[_RecentCallsScreenState.didChangeAppLifecycleState] App resumed, calling _refreshHistory.');
-      // _refreshHistory();
     }
   }
 
   Future<void> _checkDefaultDialer() async {
-    log('[_RecentCallsScreenState._checkDefaultDialer] Started.');
     final isDefault = await NativeDefaultDialerMethods.isDefaultDialer();
     if (!mounted) {
-      log(
-        '[_RecentCallsScreenState._checkDefaultDialer] Not mounted after await, skipping setState.',
-      );
       return;
     }
     setState(() => _isDefaultDialer = isDefault);
-    log(
-      '[_RecentCallsScreenState._checkDefaultDialer] Finished. isDefaultDialer: $_isDefaultDialer',
-    );
   }
 
   Future<void> _refreshHistory() async {
     log('[_RecentCallsScreenState._refreshHistory] Called.');
-    // Provider의 refresh 함수 내부에서 이미 로그가 찍히므로 여기서는 시작/끝만 로깅
     await context.read<RecentHistoryProvider>().refresh();
-    log('[_RecentCallsScreenState._refreshHistory] Finished.');
   }
 
   @override
   Widget build(BuildContext context) {
-    log('[_RecentCallsScreenState.build] Called.');
-
-    // Provider.watch를 사용하여 RecentHistoryProvider의 변경사항을 구독
     final recentHistoryProvider = context.watch<RecentHistoryProvider>();
-    final recentHistory = recentHistoryProvider.recentHistoryList; // Getter 호출
-    log(
-      '[_RecentCallsScreenState.build] Watched recentHistoryProvider, list length: ${recentHistory.length}',
-    );
+    final recentHistory = recentHistoryProvider.recentHistoryList;
 
-    // ContactsController 구독 최적화 (select 사용)
-    // select를 사용하면 ContactsController의 특정 필드 변경 시에만 리빌드됨
     final contacts = context.select((ContactsController cc) {
-      log(
-        '[_RecentCallsScreenState.build] Selecting contacts from ContactsController. Current length: ${cc.contacts.length}',
-      );
       return cc.contacts;
     });
     final areContactsLoading = context.select((ContactsController cc) {
-      log(
-        '[_RecentCallsScreenState.build] Selecting isLoading from ContactsController. Current value: ${cc.isLoading}',
-      );
       return cc.isLoading;
     });
 
-    // contactCache는 contacts가 변경될 때만 다시 계산되도록 build 메소드 내부에 둠
     final contactCache = {for (var c in contacts) c.phoneNumber: c};
-    log(
-      '[_RecentCallsScreenState.build] Created contactCache with ${contactCache.length} entries.',
-    );
-
-    // isLoading은 ContactsController의 로딩 상태만 반영 (RecentHistoryProvider의 로딩 상태는 Provider 내부에서 관리)
-    final isLoading = areContactsLoading; // 현재는 ContactsController의 로딩만 반영
-    // 만약 RecentHistoryProvider 자체의 로딩 상태도 필요하다면, 해당 Provider에 isLoading 상태 추가 필요
-    log(
-      '[_RecentCallsScreenState.build] isLoading: $isLoading (based on ContactsController)',
-    );
+    final isLoading = areContactsLoading;
 
     return Scaffold(
       appBar: PreferredSize(
@@ -143,9 +90,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
             IconButton(
               icon: const Icon(Icons.refresh, size: 24),
               onPressed: () {
-                log(
-                  '[_RecentCallsScreenState.build] Refresh button pressed, calling _refreshHistory.',
-                );
                 _refreshHistory();
               },
             ),
@@ -154,9 +98,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          log(
-            '[_RecentCallsScreenState.build] RefreshIndicator onRefresh triggered, calling _refreshHistory.',
-          );
           await _refreshHistory();
         },
         child:
@@ -168,8 +109,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                   controller: _scrollController,
                   itemCount: recentHistory.length,
                   itemBuilder: (context, index) {
-                    // itemBuilder 내부 로그는 매우 자주 호출될 수 있으므로 최소화
-                    // log('[_RecentCallsScreenState.build] ListView.builder itemBuilder for index $index');
                     final item = recentHistory[index];
                     final historyType =
                         item['historyType'] as String? ?? 'call';
@@ -244,14 +183,9 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                             height: 0,
                           ),
                         CustomExpansionTile(
-                          key: ValueKey(
-                            '${number}_$ts',
-                          ), // 키를 더 고유하게 (타입 추가 등 고려)
+                          key: ValueKey('${number}_$ts'),
                           isExpanded: index == _expandedIndex,
                           onTap: () {
-                            log(
-                              '[_RecentCallsScreenState.build] ExpansionTile for index $index tapped. New expandedIndex: ${index == _expandedIndex ? null : index}',
-                            );
                             setState(() {
                               _expandedIndex =
                                   index == _expandedIndex ? null : index;
@@ -292,9 +226,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                                     icon: Icons.call,
                                     color: Colors.green,
                                     onPressed: () {
-                                      log(
-                                        '[_RecentCallsScreenState.build] Call button pressed for $number.',
-                                      );
                                       _onTapCall(number);
                                     },
                                   ),
@@ -302,9 +233,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                                   icon: Icons.message,
                                   color: Colors.blue,
                                   onPressed: () {
-                                    log(
-                                      '[_RecentCallsScreenState.build] Message button pressed for $number.',
-                                    );
                                     _onTapMessage(number);
                                   },
                                 ),
@@ -312,9 +240,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                                   icon: Icons.search,
                                   color: Colors.orange,
                                   onPressed: () {
-                                    log(
-                                      '[_RecentCallsScreenState.build] Search button pressed for $number.',
-                                    );
                                     _onTapSearch(number);
                                   },
                                 ),
@@ -322,9 +247,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                                   icon: Icons.edit,
                                   color: Colors.blueGrey,
                                   onPressed: () {
-                                    log(
-                                      '[_RecentCallsScreenState.build] Edit button pressed for $number, contact: ${contact?.name}.',
-                                    );
                                     _onTapEdit(number, contact);
                                   },
                                 ),
@@ -341,7 +263,6 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   }
 
   Widget _buildActionButton({
-    // 이 함수는 build 내부에서만 사용되므로 별도 로그는 최소화
     required IconData icon,
     required Color color,
     required VoidCallback onPressed,
@@ -364,21 +285,14 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   }
 
   Future<void> _onTapMessage(String number) async {
-    log('[_RecentCallsScreenState._onTapMessage] Called for $number.');
     await NativeMethods.openSmsApp(number);
-    log('[_RecentCallsScreenState._onTapMessage] Finished for $number.');
   }
 
   Future<void> _onTapCall(String number) async {
-    log('[_RecentCallsScreenState._onTapCall] Called for $number.');
     await NativeMethods.makeCall(number);
-    log('[_RecentCallsScreenState._onTapCall] Finished for $number.');
   }
 
   void _onTapSearch(String number) {
-    log(
-      '[_RecentCallsScreenState._onTapSearch] Called for $number. Navigating to /search.',
-    );
     Navigator.pushNamed(
       context,
       '/search',
@@ -388,7 +302,7 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
 
   Future<void> _onTapEdit(String number, PhoneBookModel? contact) async {
     log(
-      '[_RecentCallsScreenState._onTapEdit] Called for $number. Contact ID: ${contact?.contactId}, Name: ${contact?.name}. Navigating to EditContactScreen.',
+      '[_RecentCallsScreenState._onTapEdit] Navigating to EditContactScreen for $number',
     );
     final result = await Navigator.push(
       context,
@@ -402,19 +316,12 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
             ),
       ),
     );
-    log(
-      '[_RecentCallsScreenState._onTapEdit] Returned from EditContactScreen with result: $result',
-    );
     if (result == true) {
-      log(
-        '[_RecentCallsScreenState._onTapEdit] EditContactScreen returned true, calling _refreshHistory.',
-      );
       await _refreshHistory();
     }
   }
 
   Widget smsIconWithMarker(String? smsType) {
-    // 이 함수는 build 내부에서만 사용되므로 별도 로그는 최소화
     return SizedBox(
       width: 32,
       height: 32,

@@ -37,7 +37,6 @@ import 'package:mobile/repositories/call_log_repository.dart';
 import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
-import 'package:mobile/repositories/sync_state_repository.dart';
 import 'package:flutter_windowmanager_plus/flutter_windowmanager_plus.dart';
 import 'dart:io';
 import 'package:mobile/providers/recent_history_provider.dart';
@@ -46,14 +45,10 @@ import 'package:mobile/repositories/contact_repository.dart';
 final getIt = GetIt.instance;
 
 Future<void> initializeDependencies() async {
-  log('[initializeDependencies] Starting...');
   final appDocumentDir = await getApplicationDocumentsDirectory();
   await Hive.initFlutter(appDocumentDir.path);
-  log('[initializeDependencies] Hive initialized.');
-
   if (!Hive.isAdapterRegistered(BlockedHistoryAdapter().typeId)) {
     Hive.registerAdapter(BlockedHistoryAdapter());
-    log('[initializeDependencies] BlockedHistoryAdapter registered.');
   }
 
   try {
@@ -62,7 +57,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<AuthRepository>()) {
       getIt.registerSingleton<AuthRepository>(authRepository);
     }
-    log('[initializeDependencies] AuthRepository registered in GetIt.');
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing AuthRepository: $e',
@@ -76,7 +70,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<SettingsRepository>()) {
       getIt.registerSingleton<SettingsRepository>(settingsRepository);
     }
-    log('[initializeDependencies] SettingsRepository registered in GetIt.');
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing SettingsRepository: $e',
@@ -94,7 +87,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<NotificationRepository>()) {
       getIt.registerSingleton<NotificationRepository>(notificationRepository);
     }
-    log('[initializeDependencies] NotificationRepository registered in GetIt.');
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing NotificationRepository: $e',
@@ -110,9 +102,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<CallLogRepository>()) {
       getIt.registerSingleton<CallLogRepository>(callLogRepository);
     }
-    log(
-      '[initializeDependencies] CallLogRepository registered in GetIt (using Box<Map<dynamic, dynamic>>).',
-    );
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing CallLogRepository: $e',
@@ -128,9 +117,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<SmsLogRepository>()) {
       getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
     }
-    log(
-      '[initializeDependencies] SmsLogRepository registered in GetIt (using Box<Map<dynamic, dynamic>>).',
-    );
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing SmsLogRepository: $e',
@@ -150,9 +136,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<BlockedNumberRepository>()) {
       getIt.registerSingleton<BlockedNumberRepository>(blockedNumberRepository);
     }
-    log(
-      '[initializeDependencies] BlockedNumberRepository registered in GetIt.',
-    );
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing BlockedNumberRepository: $e',
@@ -172,26 +155,9 @@ Future<void> initializeDependencies() async {
         blockedHistoryRepository,
       );
     }
-    log(
-      '[initializeDependencies] BlockedHistoryRepository registered in GetIt.',
-    );
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing BlockedHistoryRepository: $e',
-    );
-    rethrow;
-  }
-
-  try {
-    final syncStateBox = await Hive.openBox('last_sync_state');
-    final syncStateRepository = HiveSyncStateRepository(syncStateBox);
-    if (!getIt.isRegistered<SyncStateRepository>()) {
-      getIt.registerSingleton<SyncStateRepository>(syncStateRepository);
-    }
-    log('[initializeDependencies] SyncStateRepository registered in GetIt.');
-  } catch (e) {
-    log(
-      '[initializeDependencies] FATAL: Error initializing SyncStateRepository: $e',
     );
     rethrow;
   }
@@ -202,7 +168,6 @@ Future<void> initializeDependencies() async {
     if (!getIt.isRegistered<ContactRepository>()) {
       getIt.registerSingleton<ContactRepository>(contactRepository);
     }
-    log('[initializeDependencies] ContactRepository registered in GetIt.');
   } catch (e) {
     log(
       '[initializeDependencies] FATAL: Error initializing ContactRepository: $e',
@@ -214,7 +179,6 @@ Future<void> initializeDependencies() async {
     await Future.wait([
       // Hive.openBox('last_sync_state'),
     ]);
-    log('[initializeDependencies] Other Hive boxes opened.');
   } catch (e) {
     log(
       '[initializeDependencies] Warning: Error opening some other Hive boxes: $e',

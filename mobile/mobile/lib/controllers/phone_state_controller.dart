@@ -41,16 +41,16 @@ class PhoneStateController with WidgetsBindingObserver {
   void startListening() {
     _phoneStateSubscription?.cancel();
     _phoneStateSubscription = PhoneState.stream.listen((event) async {
-      log(
-        '[PhoneStateController][Stream] Received event: ${event.status}, Number: ${event.number}',
-      );
+      // log(
+      //   '[PhoneStateController][Stream] Received event: ${event.status}, Number: ${event.number}',
+      // );
       final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
       if (!isDef) {
         await _handlePhoneStateEvent(event.status, event.number);
       } else {
-        log(
-          '[PhoneStateController][Stream] Default dialer is active, ignoring event from phone_state package.',
-        );
+        // log(
+        //   '[PhoneStateController][Stream] Default dialer is active, ignoring event from phone_state package.',
+        // );
       }
     });
     log(
@@ -70,7 +70,7 @@ class PhoneStateController with WidgetsBindingObserver {
     bool isDefault,
   ) async {
     log(
-      '[PhoneStateController][Native] Received event: $method, Args: $args, IsDefault: $isDefault',
+      '[PhoneStateController][Native] Received event: $method, IsDefault: $isDefault',
     );
     String number = '';
     bool connected = false;
@@ -112,10 +112,10 @@ class PhoneStateController with WidgetsBindingObserver {
 
   bool _isDuplicateEvent(String? number, PhoneStateStatus? status) {
     final now = DateTime.now();
-    log('[_isDuplicateEvent] Checking: number=$number, status=$status');
-    log(
-      '[_isDuplicateEvent] Last processed: number=$_lastProcessedNumber, status=$_lastProcessedStatus, time=$_lastProcessedTime',
-    );
+    // log('[_isDuplicateEvent] Checking: number=$number, status=$status');
+    // log(
+    //   '[_isDuplicateEvent] Last processed: number=$_lastProcessedNumber, status=$_lastProcessedStatus, time=$_lastProcessedTime',
+    // );
 
     bool isDup = false;
     if (number == _lastProcessedNumber &&
@@ -129,11 +129,12 @@ class PhoneStateController with WidgetsBindingObserver {
       _lastProcessedNumber = number;
       _lastProcessedStatus = status;
       _lastProcessedTime = now;
-      log('[_isDuplicateEvent] Updated last processed info.');
+      // log('[_isDuplicateEvent] Updated last processed info.');
     } else {
-      log('[_isDuplicateEvent] Result: Duplicate FOUND!');
+      log(
+        '[_isDuplicateEvent] Duplicate event detected and ignored: num=$number, status=$status',
+      );
     }
-
     return isDup;
   }
 
@@ -144,13 +145,13 @@ class PhoneStateController with WidgetsBindingObserver {
     String? reason,
   }) async {
     if (_isDuplicateEvent(number, status)) {
-      log(
-        '[_handlePhoneStateEvent] Duplicate event ignored. Number: $number, Status: $status',
-      );
+      // log(
+      //   '[_handlePhoneStateEvent] Duplicate event ignored. Number: $number, Status: $status',
+      // );
       return;
     }
     log(
-      '[_handlePhoneStateEvent] Processing event. Number: $number, Status: $status',
+      '[_handlePhoneStateEvent] Processing event. Number: $number, Status: $status, Reason: $reason',
     );
 
     String? normalizedNumber;
@@ -158,27 +159,25 @@ class PhoneStateController with WidgetsBindingObserver {
       normalizedNumber = normalizePhone(number);
     } else {
       if (status == PhoneStateStatus.CALL_ENDED && _rejectedNumber != null) {
-        log(
-          '[_handlePhoneStateEvent] Ignoring CALL_ENDED event with null number, possibly after rejection.',
-        );
+        // log(
+        //   '[_handlePhoneStateEvent] Ignoring CALL_ENDED event with null number, possibly after rejection.',
+        // );
         _rejectedNumber = null;
         return;
       }
       if (status == PhoneStateStatus.NOTHING ||
           status == PhoneStateStatus.CALL_ENDED) {
-        log(
-          '[_handlePhoneStateEvent] Number is null or empty for status $status, processing as general state change.',
-        );
+        // log(
+        //   '[_handlePhoneStateEvent] Number is null or empty for status $status, processing as general state change.',
+        // );
         if (status == PhoneStateStatus.CALL_ENDED) {
-          log(
-            '[_handlePhoneStateEvent] Call ended (null number). Adding 1.5s delay before refreshing call logs.',
-          );
+          // log('[_handlePhoneStateEvent] Call ended (null number). Adding 1.5s delay before refreshing call logs.');
           await Future.delayed(const Duration(milliseconds: 1500));
           bool callLogChanged = await callLogController.refreshCallLogs();
           if (callLogChanged) {
-            log(
-              '[_handlePhoneStateEvent] Call logs changed (null number end), firing CallLogUpdatedEvent.',
-            );
+            // log(
+            //   '[_handlePhoneStateEvent] Call logs changed (null number end), firing CallLogUpdatedEvent.',
+            // );
             appEventBus.fire(CallLogUpdatedEvent());
           }
         }
@@ -193,7 +192,7 @@ class PhoneStateController with WidgetsBindingObserver {
     if (status == PhoneStateStatus.CALL_ENDED &&
         _rejectedNumber == normalizedNumber) {
       log(
-        '[_handlePhoneStateEvent] Ignoring CALL_ENDED event for recently rejected call: $normalizedNumber',
+        '[_handlePhoneStateEvent] Ignoring CALL_ENDED for recently REJECTED: $normalizedNumber',
       );
       _rejectedNumber = null;
       return;
@@ -203,9 +202,9 @@ class PhoneStateController with WidgetsBindingObserver {
     }
 
     if (status == PhoneStateStatus.CALL_INCOMING) {
-      log(
-        '[PhoneStateController] Checking block status for incoming call: $normalizedNumber',
-      );
+      // log(
+      //   '[PhoneStateController] Checking block status for incoming call: $normalizedNumber',
+      // );
       bool isBlocked = false;
       try {
         isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
@@ -220,15 +219,15 @@ class PhoneStateController with WidgetsBindingObserver {
         log('[PhoneStateController] Call from $normalizedNumber is BLOCKED.');
         _rejectedNumber = normalizedNumber;
         try {
-          log('[PhoneStateController] Attempting to reject call...');
+          // log('[PhoneStateController] Attempting to reject call...');
           await NativeMethods.rejectCall();
-          log('[PhoneStateController] Reject call command sent.');
+          // log('[PhoneStateController] Reject call command sent.');
         } catch (e) {
           log('[PhoneStateController] Error rejecting call: $e');
         }
         return;
       }
-      log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
+      // log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
     }
 
     final String callerName = '';
@@ -266,9 +265,7 @@ class PhoneStateController with WidgetsBindingObserver {
     }
 
     if (status == PhoneStateStatus.CALL_ENDED) {
-      log(
-        '[_handlePhoneStateEvent] Call ended. Adding 1.5s delay before refreshing call logs.',
-      );
+      // log('[_handlePhoneStateEvent] Call ended. Adding 1.5s delay before refreshing call logs.');
       await Future.delayed(const Duration(milliseconds: 1500));
       bool callLogChanged = await callLogController.refreshCallLogs();
       if (callLogChanged) {
@@ -287,9 +284,9 @@ class PhoneStateController with WidgetsBindingObserver {
     bool? connected,
     String? reason,
   }) {
-    log(
-      '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected, reason=$reason',
-    );
+    // log(
+    //   '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected, reason=$reason',
+    // );
 
     final service = FlutterBackgroundService();
     String state;
@@ -311,9 +308,9 @@ class PhoneStateController with WidgetsBindingObserver {
     }
 
     if (state == 'unknown') {
-      log(
-        '[PhoneStateController][notifyServiceCallState] Unknown stateMethod $stateMethod, not invoking service.',
-      );
+      // log(
+      //   '[PhoneStateController][notifyServiceCallState] Unknown stateMethod $stateMethod, not invoking service.',
+      // );
       return;
     }
 
@@ -325,14 +322,14 @@ class PhoneStateController with WidgetsBindingObserver {
       'reason': reasonValue,
     };
 
-    log(
-      '[PhoneStateController][notifyServiceCallState] Invoking service with callStateChanged. Payload: $payload',
-    );
+    // log(
+    //   '[PhoneStateController][notifyServiceCallState] Invoking service with callStateChanged. Payload: $payload',
+    // );
     try {
       service.invoke('callStateChanged', payload);
-      log(
-        '[PhoneStateController][notifyServiceCallState] Successfully invoked service with callStateChanged.',
-      );
+      // log(
+      //   '[PhoneStateController][notifyServiceCallState] Successfully invoked service with callStateChanged.',
+      // );
     } catch (e) {
       log(
         '[PhoneStateController][notifyServiceCallState] Error invoking service: $e',
@@ -342,14 +339,14 @@ class PhoneStateController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    log('[PhoneStateController.didChangeAppLifecycleState] State: $state');
+    // log('[PhoneStateController.didChangeAppLifecycleState] State: $state');
     if (state == AppLifecycleState.resumed) {
       // _syncInitialCallState();
     }
   }
 
   Future<void> syncInitialCallState() async {
-    log('[PhoneStateController] Syncing initial call state...');
+    // log('[PhoneStateController] Syncing initial call state...');
     // ... 내부 로직 동일 ...
   }
 }

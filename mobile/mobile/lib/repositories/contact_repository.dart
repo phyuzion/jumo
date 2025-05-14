@@ -53,9 +53,6 @@ class HiveContactRepository implements ContactRepository {
           );
         }
       }
-      log(
-        '[HiveContactRepository] getAllContacts: Successfully fetched ${resultList.length} contacts from Hive.',
-      );
       return resultList;
     } catch (e, s) {
       log(
@@ -87,9 +84,6 @@ class HiveContactRepository implements ContactRepository {
         // 각 Map<String, dynamic>은 Map<dynamic, dynamic>으로 암시적 변환 가능.
         await _contactsBox.putAll(
           entriesToPut.cast<String, Map<dynamic, dynamic>>(),
-        );
-        log(
-          '[HiveContactRepository] Saved ${entriesToPut.length} contacts to box: ${_contactsBox.name}',
         );
       } else {
         log(

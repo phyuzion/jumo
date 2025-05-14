@@ -1,7 +1,6 @@
 // lib/services/app_background_service.dart
 
 import 'dart:async';
-import 'dart:convert';
 import 'dart:developer';
 import 'dart:ui'; // DartPluginRegistrant 사용 위해 추가
 import 'dart:isolate'; // <<< Isolate 사용 위해 추가 >>>
@@ -9,8 +8,6 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_background_service_android/flutter_background_service_android.dart'; // AndroidServiceInstance 사용 위해 추가
 import 'package:flutter_local_notifications/flutter_local_notifications.dart'; // <<< Local Notifications 임포트 추가
 import 'package:mobile/graphql/notification_api.dart';
-import 'package:mobile/controllers/contacts_controller.dart';
-import 'package:mobile/graphql/log_api.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:mobile/models/blocked_history.dart';
@@ -23,8 +20,7 @@ import 'package:mobile/repositories/settings_repository.dart'; // <<< 추가
 import 'package:mobile/repositories/notification_repository.dart'; // <<< 추가
 import 'package:mobile/main.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart'; // <<< 추가
-import 'package:mobile/repositories/blocked_history_repository.dart'; // <<< 추가
-import 'package:mobile/repositories/sync_state_repository.dart'; // <<< 추가
+import 'package:mobile/repositories/blocked_history_repository.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
 
 const int CALL_STATUS_NOTIFICATION_ID = 1111;
@@ -56,8 +52,7 @@ Future<void> onStart(ServiceInstance service) async {
   late SettingsRepository settingsRepository;
   late NotificationRepository notificationRepository;
   late BlockedNumberRepository blockedNumberRepository;
-  late BlockedHistoryRepository blockedHistoryRepository; // <<< 추가
-  late SyncStateRepository syncStateRepository; // <<< 추가
+  late BlockedHistoryRepository blockedHistoryRepository;
   try {
     final appDocumentDir = await getApplicationDocumentsDirectory();
     Hive.init(appDocumentDir.path);
@@ -146,20 +141,6 @@ Future<void> onStart(ServiceInstance service) async {
     } else {
       log(
         '[BackgroundService][onStart] BlockedHistoryRepository already registered in GetIt.',
-      );
-    }
-
-    // <<< SyncStateRepository 등록 >>>
-    final syncStateBox = await Hive.openBox('last_sync_state');
-    syncStateRepository = HiveSyncStateRepository(syncStateBox);
-    if (!getIt.isRegistered<SyncStateRepository>()) {
-      getIt.registerSingleton<SyncStateRepository>(syncStateRepository);
-      log(
-        '[BackgroundService][onStart] SyncStateRepository registered in GetIt.',
-      );
-    } else {
-      log(
-        '[BackgroundService][onStart] SyncStateRepository already registered in GetIt.',
       );
     }
 

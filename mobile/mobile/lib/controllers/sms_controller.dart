@@ -13,9 +13,6 @@ class SmsController with ChangeNotifier {
 
   List<Map<String, dynamic>> _smsLogs = [];
   List<Map<String, dynamic>> get smsLogs {
-    log(
-      '[SmsController.smsLogs_getter] Called. Returning ${_smsLogs.length} logs.',
-    );
     return _smsLogs;
   }
 
@@ -32,46 +29,27 @@ class SmsController with ChangeNotifier {
   }
 
   Future<void> initializeSmsFeatures() async {
-    log('[SmsController.initializeSmsFeatures] Started.');
     await startSmsObservation();
     listenToSmsEvents();
-    log(
-      '[SmsController.initializeSmsFeatures] Finished (observation and listener setup).',
-    );
   }
 
   Future<void> startSmsObservation() async {
-    log('[SmsController.startSmsObservation] Started.');
     try {
       await _methodChannel.invokeMethod('startSmsObservation');
-      log(
-        '[SmsController.startSmsObservation] Requested to start SMS observation via MethodChannel.',
-      );
     } on PlatformException catch (e) {
       log(
         "[SmsController.startSmsObservation] Failed to start SMS observation: '${e.message}'.",
       );
     }
-    log('[SmsController.startSmsObservation] Finished.');
   }
 
   void listenToSmsEvents() {
-    log('[SmsController.listenToSmsEvents] Started.');
     _smsEventSubscription?.cancel();
     _smsEventSubscription = _eventChannel.receiveBroadcastStream().listen(
       (event) {
-        log(
-          '[SmsController.listenToSmsEvents] Received SMS event from native: $event',
-        );
         if (event == "sms_changed_event") {
-          log(
-            '[SmsController.listenToSmsEvents] Triggering refreshSms due to sms_changed_event.',
-          );
           refreshSms().then((changed) {
             if (changed) {
-              log(
-                '[SmsController.listenToSmsEvents] SMS data changed by event, requesting UI update via AppController.',
-              );
               appController.requestUiUpdate(source: 'SmsEvent');
             }
           });
@@ -82,58 +60,38 @@ class SmsController with ChangeNotifier {
           '[SmsController.listenToSmsEvents] Error in SMS event channel: $error',
         );
       },
-      onDone: () {
-        log('[SmsController.listenToSmsEvents] SMS event channel closed.');
-      },
+      onDone: () {},
       cancelOnError: true,
-    );
-    log(
-      '[SmsController.listenToSmsEvents] Listening to SMS events from native. Finished.',
     );
   }
 
   Future<void> stopSmsObservationAndDispose() async {
-    log('[SmsController.stopSmsObservationAndDispose] Started.');
     _smsEventSubscription?.cancel();
     _smsEventSubscription = null;
     try {
       await _methodChannel.invokeMethod('stopSmsObservation');
-      log(
-        '[SmsController.stopSmsObservationAndDispose] Requested to stop SMS observation via MethodChannel.',
-      );
     } on PlatformException catch (e) {
       log(
         "[SmsController.stopSmsObservationAndDispose] Failed to stop SMS observation: '${e.message}'.",
       );
     }
-    log('[SmsController.stopSmsObservationAndDispose] Finished.');
   }
 
   Future<bool> refreshSms() async {
-    log('[SmsController.refreshSms] Started.');
     List<Map<String, dynamic>> oldSmsLogsSnapshot = List.from(_smsLogs);
     bool dataActuallyChanged = false;
 
     try {
-      log(
-        '[SmsController.refreshSms] Getting local SMS logs from repository (for diffing new)...',
-      );
       final List<Map<String, dynamic>> localStoredSmsForDiff =
           await _smsLogRepository.getAllSmsLogs();
       final Set<String> localStoredKeysForDiff =
           localStoredSmsForDiff.map((e) => _generateSmsKey(e)).toSet();
-      log(
-        '[SmsController.refreshSms] Got ${localStoredSmsForDiff.length} local SMS logs for diffing new uploads, ${localStoredKeysForDiff.length} unique keys.',
-      );
 
       final now = DateTime.now();
       final int queryFromTimestamp =
           now.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
       final int queryUntilTimestamp = now.millisecondsSinceEpoch;
 
-      log(
-        '[SmsController.refreshSms] Querying native SMS from $queryFromTimestamp to $queryUntilTimestamp...',
-      );
       List<dynamic>? nativeSmsListDyn;
       try {
         nativeSmsListDyn = await _methodChannel
@@ -145,8 +103,7 @@ class SmsController with ChangeNotifier {
         log(
           "[SmsController.refreshSms] Failed to get SMS from native: '${e.message}'.",
         );
-        dataActuallyChanged = false;
-        return dataActuallyChanged;
+        return false;
       }
 
       List<Map<String, dynamic>> nativeSmsList = [];
@@ -167,9 +124,6 @@ class SmsController with ChangeNotifier {
               return map;
             }).toList();
       }
-      log(
-        '[SmsController.refreshSms] Fetched and processed ${nativeSmsList.length} SMS from native (24시간 이내).',
-      );
 
       if (oldSmsLogsSnapshot.length != nativeSmsList.length) {
         dataActuallyChanged = true;
@@ -184,19 +138,9 @@ class SmsController with ChangeNotifier {
 
       if (dataActuallyChanged) {
         _smsLogs = nativeSmsList;
-        log(
-          '[SmsController.refreshSms] _smsLogs updated as data changed (${_smsLogs.length} items).',
-        );
-      } else {
-        log(
-          '[SmsController.refreshSms] Loaded data from native is same as current _smsLogs.',
-        );
-      }
+      } else {}
 
       await _smsLogRepository.saveSmsLogs(nativeSmsList);
-      log(
-        '[SmsController.refreshSms] Local SMS storage updated with ${nativeSmsList.length} SMS (full overwrite of last 24h).',
-      );
 
       final List<Map<String, dynamic>> newSmsToUploadToServer =
           nativeSmsList
@@ -204,9 +148,6 @@ class SmsController with ChangeNotifier {
                 (sms) => !localStoredKeysForDiff.contains(_generateSmsKey(sms)),
               )
               .toList();
-      log(
-        '[SmsController.refreshSms] Found ${newSmsToUploadToServer.length} new SMS messages for server upload.',
-      );
 
       final List<Map<String, dynamic>> smsToUploadFilteredType =
           newSmsToUploadToServer.where((sms) {
@@ -219,49 +160,21 @@ class SmsController with ChangeNotifier {
           (a, b) => (a['date'] as int).compareTo(b['date'] as int),
         );
         final smsForServer = prepareSmsForServer(smsToUploadFilteredType);
-        log(
-          '[SmsController.refreshSms] Prepared ${smsForServer.length} INBOX/SENT SMS for server upload.',
-        );
         if (smsForServer.isNotEmpty) {
-          try {
+          LogApi.updateSMSLog(smsForServer).then((success) {}).catchError((
+            e,
+            s,
+          ) {
             log(
-              '[SmsController.refreshSms] Uploading ${smsForServer.length} SMS to server...',
+              '[SmsController.refreshSms] Async SMS upload error: $e',
+              stackTrace: s,
             );
-            LogApi.updateSMSLog(smsForServer)
-                .then((uploadSuccess) {
-                  if (uploadSuccess) {
-                    log(
-                      '[SmsController.refreshSms] SMS upload successful (async).',
-                    );
-                  } else {
-                    log(
-                      '[SmsController.refreshSms] SMS upload failed (API returned false) (async).',
-                    );
-                  }
-                })
-                .catchError((uploadError) {
-                  log(
-                    '[SmsController.refreshSms] LogApi.updateSMSLog FAILED (async): $uploadError',
-                  );
-                });
-          } catch (e) {
-            log(
-              '[SmsController.refreshSms] Synchronous error during LogApi.updateSMSLog call (should be rare): $e',
-            );
-          }
+          });
         }
-      } else {
-        log(
-          '[SmsController.refreshSms] No new INBOX/SENT SMS to upload after filtering.',
-        );
       }
     } catch (e, st) {
-      log('[SmsController.refreshSms] Error: $e\n$st');
+      log('[SmsController.refreshSms] Error: $e', stackTrace: st);
       dataActuallyChanged = false;
-    } finally {
-      log(
-        '[SmsController.refreshSms] Finished. Returning dataActuallyChanged: $dataActuallyChanged',
-      );
     }
     return dataActuallyChanged;
   }

@@ -41,6 +41,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _refreshContacts() async {
+    log('[ContactsScreen] _refreshContacts 호출 full sync');
     await context.read<ContactsController>().syncContacts(forceFullSync: true);
   }
 

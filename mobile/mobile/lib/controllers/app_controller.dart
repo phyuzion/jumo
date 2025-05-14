@@ -36,8 +36,6 @@ class AppController with ChangeNotifier {
   final _isInitializing = ValueNotifier<bool>(false);
   bool get isInitializing => _isInitializing.value;
   ValueNotifier<bool> get isInitializingNotifier => _isInitializing;
-  String _initializationMessage = '';
-  String get initializationMessage => _initializationMessage;
 
   // 초기화 상태
   bool _isInitialized = false;
@@ -45,8 +43,6 @@ class AppController with ChangeNotifier {
 
   final ValueNotifier<bool> _isCoreInitializing = ValueNotifier(false);
   ValueNotifier<bool> get isCoreInitializing => _isCoreInitializing;
-  String _coreInitMessage = '';
-  String get coreInitMessage => _coreInitMessage;
 
   // 초기 사용자 데이터 로딩 상태를 위한 ValueNotifier 추가
   final ValueNotifier<bool> _isInitialUserDataLoading = ValueNotifier(false);
@@ -70,9 +66,7 @@ class AppController with ChangeNotifier {
   }
 
   Future<bool> checkEssentialPermissions() async {
-    log('[AppController.checkEssentialPermissions] Started.');
     final result = await PermissionController.requestAllEssentialPermissions();
-    log('[AppController.checkEssentialPermissions] Finished. Result: $result');
     return result;
   }
 
@@ -83,8 +77,6 @@ class AppController with ChangeNotifier {
       return;
     }
     try {
-      _initializationMessage = '전화 상태 감지 서비스 시작 중...';
-      log('[AppController.initializeApp] Starting phone state listening...');
       if (_phoneStateController != null) {
         _phoneStateController!.startListening();
         log('[AppController.initializeApp] Phone state listening started.');
@@ -94,15 +86,8 @@ class AppController with ChangeNotifier {
         );
       }
 
-      _initializationMessage = '알림 서비스 초기화 중...';
-      log('[AppController.initializeApp] Initializing local notifications...');
       await LocalNotificationService.initialize();
-      log('[AppController.initializeApp] Local notifications initialized.');
-
-      _initializationMessage = '백그라운드 서비스 설정 중...';
-      log('[AppController.initializeApp] Configuring background service...');
       await configureBackgroundService();
-      log('[AppController.initializeApp] Background service configured.');
 
       _isInitialized = true;
       log(
@@ -113,30 +98,6 @@ class AppController with ChangeNotifier {
       _isInitialized = false;
     }
     log('[AppController.initializeApp] Finished.');
-  }
-
-  Future<void> checkUpdate() async {
-    log('[AppController.checkUpdate] Started.');
-    try {
-      final UpdateController updateController = UpdateController();
-      final ver = await updateController.getServerVersion();
-      log(
-        '[AppController.checkUpdate] Server version: $ver, App version: $APP_VERSION',
-      );
-      if (ver.isNotEmpty && ver != APP_VERSION) {
-        log(
-          '[AppController.checkUpdate] Update available, attempting download and install...',
-        );
-        updateController.downloadAndInstallApk();
-      } else {
-        log(
-          '[AppController.checkUpdate] App is up to date or server version not found.',
-        );
-      }
-    } catch (e) {
-      log('[AppController.checkUpdate] Error: $e');
-    }
-    log('[AppController.checkUpdate] Finished.');
   }
 
   Future<void> cleanupOnLogout() async {
@@ -194,20 +155,10 @@ class AppController with ChangeNotifier {
 
     // <<< 기본 전화 앱 상태 요청 처리 리스너 추가 >>>
     service.on('requestDefaultDialerStatus').listen((event) async {
-      log(
-        '[AppController.configureBackgroundService] Received requestDefaultDialerStatus from background.',
-      );
       try {
         final bool isDefault =
             await NativeDefaultDialerMethods.isDefaultDialer();
-        log(
-          '[AppController.configureBackgroundService] Checked isDefaultDialer status: $isDefault',
-        );
-        // 백그라운드로 결과 응답 보내기
         service.invoke('respondDefaultDialerStatus', {'isDefault': isDefault});
-        log(
-          '[AppController.configureBackgroundService] Sent respondDefaultDialerStatus to background.',
-        );
       } catch (e) {
         log(
           '[AppController.configureBackgroundService] Error handling requestDefaultDialerStatus: $e',
@@ -268,7 +219,6 @@ class AppController with ChangeNotifier {
   }
 
   Future<List<Map<String, dynamic>>> getNotifications() async {
-    log('[AppController.getNotifications] Called.');
     return await _notificationRepository.getAllNotifications();
   }
 
@@ -279,9 +229,6 @@ class AppController with ChangeNotifier {
     if (removedCount > 0) {
       appEventBus.fire(NotificationCountUpdatedEvent());
     }
-    log(
-      '[AppController.removeExpiredNotifications] Finished. Removed $removedCount notifications.',
-    );
   }
 
   Future<void> saveNotification({
@@ -372,171 +319,104 @@ class AppController with ChangeNotifier {
   // <<< 새로운 핵심 데이터 및 서비스 초기화 함수 >>>
   Future<void> performCoreInitialization() async {
     if (_isCoreInitializing.value) {
-      log(
-        '[AppController.performCoreInitialization] Already in progress. Skipping.',
-      );
       return;
     }
-    log('[AppController.performCoreInitialization] Started.');
-    final stopwatch = Stopwatch()..start();
     _isCoreInitializing.value = true;
     notifyListeners();
-    _coreInitMessage = '초기 설정 로딩 중...';
 
     try {
-      _coreInitMessage = '차단 설정 로딩 중...';
-      log(
-        '[AppController.performCoreInitialization] Step 1 (was 2): Initializing blocked numbers (local)...',
-      );
+      // 1. 차단 목록 초기화 (가장 먼저 실행)
       await blockedNumbersController.initialize();
-      log(
-        '[AppController.performCoreInitialization] Step 1 (was 2): Blocked numbers initialized.',
-      );
 
-      _coreInitMessage = '백그라운드 서비스 시작 중...';
-      log(
-        '[AppController.performCoreInitialization] Step 2 (was 3): Starting background service...',
-      );
+      // 2. 백그라운드 서비스 활성화 (이전 Step 1)
+
       await startBackgroundService();
-      log(
-        '[AppController.performCoreInitialization] Step 2 (was 3): Background service start requested.',
-      );
 
-      _coreInitMessage = '백그라운드 작업 요청 중...';
-      log(
-        '[AppController.performCoreInitialization] Step 3 (was 4): Requesting initial background tasks (delay 2s)...',
-      );
+      // 3. 백그라운드 작업 동기화 (이전 Step 2)
       final service = FlutterBackgroundService();
-      await Future.delayed(const Duration(seconds: 2));
+      await Future.delayed(const Duration(seconds: 1));
       if (await service.isRunning()) {
-        log(
-          '[AppController.performCoreInitialization] Step 3.1 (was 4.1): Service is running. Invoking tasks: syncBlockedListsNow...',
-        );
         try {
           service.invoke('syncBlockedListsNow');
-          log(
-            '[AppController.performCoreInitialization] Step 3.1 (was 4.1): Successfully invoked background tasks.',
-          );
         } catch (e) {
           log(
-            '[AppController.performCoreInitialization] Step 3.1 (was 4.1): Error invoking background tasks: $e',
+            '[AppController.performCoreInitialization] Error invoking background tasks: $e',
           );
         }
       } else {
         log(
-          '[AppController.performCoreInitialization] Step 3.1 (was 4.1): Background service is NOT running after start request. Cannot invoke tasks.',
+          '[AppController.performCoreInitialization] Background service NOT running. Cannot invoke tasks.',
         );
       }
-      log(
-        '[AppController.performCoreInitialization] Step 3 (was 4): Initial background tasks request finished.',
-      );
-
-      _coreInitMessage = '핵심 초기화 완료';
-      log(
-        '[AppController.performCoreInitialization] All core (non-user-data) steps complete.',
-      );
     } catch (e, st) {
-      _coreInitMessage = '핵심 초기화 중 오류 발생';
       log(
-        '[AppController.performCoreInitialization] Error during core initialization: $e\n$st',
+        '[AppController.performCoreInitialization] Error: $e',
+        stackTrace: st,
       );
     } finally {
       _isCoreInitializing.value = false;
       notifyListeners();
-      stopwatch.stop();
-      log(
-        '[AppController.performCoreInitialization] Finished. Total time: ${stopwatch.elapsedMilliseconds}ms',
-      );
     }
   }
 
   Future<void> triggerContactsLoadIfReady() async {
-    log('[AppController.triggerContactsLoadIfReady] Started.');
+    log(
+      '[AppController.triggerContactsLoadIfReady] User data load process STARTED.',
+    );
     if (_isInitialUserDataLoading.value) {
-      log(
-        '[AppController.triggerContactsLoadIfReady] Already loading initial user data. Skipping.',
-      );
       return;
     }
     _isInitialUserDataLoading.value = true;
     notifyListeners();
 
-    bool contactsChanged = false;
     bool callLogChanged = false;
     bool smsLogChanged = false;
 
     try {
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 1: Loading contacts...',
-      );
+      // 1. 연락처 로드 (이전 Step 1)
+
       if (contactsController.isSyncing) {
-        log(
-          '[AppController.triggerContactsLoadIfReady] Contacts are already syncing. Skipping contact load trigger.',
-        );
       } else if (contactsController.initialLoadAttempted) {
-        log(
-          '[AppController.triggerContactsLoadIfReady] Contacts initial load was already attempted. Triggering a non-forced refresh for contacts.',
-        );
         await contactsController.syncContacts();
       } else {
-        log(
-          '[AppController.triggerContactsLoadIfReady] Triggering initial contacts load via ContactsController.',
-        );
         await contactsController.syncContacts();
       }
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 1: Contacts loading process finished.',
-      );
 
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 2: Loading call logs...',
-      );
+      // 2. 통화 기록 로드 (이전 Step 2)
       callLogChanged = await callLogController.refreshCallLogs();
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 2: Call logs loaded/refreshed. Changed: $callLogChanged',
-      );
 
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 3: Initializing SMS features and loading SMS logs...',
-      );
+      // 3. SMS 기능 초기화 및 기록 로드 (이전 Step 3)
       if (_smsController == null) {
         log(
-          '[AppController.triggerContactsLoadIfReady] SmsController is null, skipping SMS features.',
+          '[AppController.triggerContactsLoadIfReady] Step 3: SmsController is null, skipping SMS features.',
         );
       } else {
         final smsPermissionStatus = await Permission.sms.status;
         if (smsPermissionStatus.isGranted) {
-          log(
-            '[AppController.triggerContactsLoadIfReady] SMS permission granted. Initializing SMS features...',
-          );
           await _smsController!.startSmsObservation();
           _smsController!.listenToSmsEvents();
           smsLogChanged = await _smsController!.refreshSms();
-          log(
-            '[AppController.triggerContactsLoadIfReady] Step 3: SMS features initialized and logs loaded/refreshed. Changed: $smsLogChanged',
-          );
         } else {
           log(
-            '[AppController.triggerContactsLoadIfReady] SMS permission not granted. SMS features will not be initialized.',
+            '[AppController.triggerContactsLoadIfReady] SMS permission not granted.',
           );
         }
       }
     } catch (e, st) {
       log(
-        '[AppController.triggerContactsLoadIfReady] Error loading initial user data: $e\n$st',
+        '[AppController.triggerContactsLoadIfReady] Error: $e',
+        stackTrace: st,
       );
     } finally {
       _isInitialUserDataLoading.value = false;
-      log(
-        '[AppController.triggerContactsLoadIfReady] Finished loading all initial user data. ContactsChanged (assumed): N/A, CallLogChanged: $callLogChanged, SmsLogChanged: $smsLogChanged',
-      );
+
       notifyListeners();
     }
   }
 
   // UI 업데이트 요청을 위한 메소드
   void requestUiUpdate({String source = 'Unknown'}) {
-    log('[AppController.requestUiUpdate] UI update requested from: $source');
+    log('[AppController.requestUiUpdate] Requested from: $source');
     notifyListeners();
   }
 

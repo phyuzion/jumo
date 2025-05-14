@@ -6,16 +6,14 @@ import 'package:dio/dio.dart';
 import 'package:gql_dio_link/gql_dio_link.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
-import 'package:mobile/models/blocked_history.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/main.dart';
-import 'package:hive_ce/hive.dart';
 import 'package:mobile/repositories/notification_repository.dart';
 import 'package:mobile/repositories/call_log_repository.dart';
 import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
-import 'package:mobile/repositories/sync_state_repository.dart';
+import 'package:mobile/repositories/settings_repository.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -144,16 +142,15 @@ class GraphQLClientManager {
         log('[GraphQL] Error clearing blocked history data: $e');
       }
 
-      // <<< SyncStateRepository 클리어 >>>
+      // <<< SettingsRepository 차단 설정 초기화 추가 >>>
       try {
-        final syncStateRepository = getIt<SyncStateRepository>();
-        await syncStateRepository.clearAllSyncStates();
-        log('[GraphQL] Cleared sync state data via SyncStateRepository.');
+        final settingsRepository = getIt<SettingsRepository>();
+        await settingsRepository.resetBlockingSettings();
+        log('[GraphQL] Blocking settings reset via SettingsRepository.');
       } catch (e) {
-        log('[GraphQL] Error clearing sync state data: $e');
+        log('[GraphQL] Error resetting blocking settings: $e');
       }
 
-      // <<< 다른 Box들은 이제 없음 (모두 Repository로 관리됨) >>>
       log('[GraphQL] Cleared auth data via AuthRepository.');
       log('[GraphQL] All user-specific data cleared via repositories.');
     } catch (e) {
