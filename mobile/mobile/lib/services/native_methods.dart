@@ -1,82 +1,168 @@
 // lib/services/native_methods.dart
 import 'package:flutter/services.dart';
 import 'dart:developer';
+import 'dart:async';
 
 class NativeMethods {
-  static const _channel = MethodChannel('com.jumo.mobile/native');
+  static const _methodChannel = MethodChannel('com.jumo.mobile/native');
+  static const _contactsEventChannel = EventChannel(
+    'com.jumo.mobile/contactsStream',
+  );
+
+  // 네이티브 스트림 구독 관리를 위한 변수
+  static StreamSubscription<dynamic>? _nativeContactsStreamSubscription;
 
   static void setMethodCallHandler(
     Future<dynamic> Function(MethodCall call) handler,
   ) {
-    _channel.setMethodCallHandler(handler);
+    _methodChannel.setMethodCallHandler(handler);
   }
 
   static Future<String> getMyPhoneNumber() async {
-    final result = await _channel.invokeMethod<String>('getMyPhoneNumber');
+    final result = await _methodChannel.invokeMethod<String>(
+      'getMyPhoneNumber',
+    );
     return result ?? '';
   }
 
   static Future<void> makeCall(String phoneNumber) async {
-    if (await _channel.invokeMethod('makeCall', {
-      'phoneNumber': phoneNumber,
-    })) {}
+    await _methodChannel.invokeMethod('makeCall', {'phoneNumber': phoneNumber});
   }
 
   static Future<void> openSmsApp(String phoneNumber) async {
-    if (await _channel.invokeMethod('openSmsApp', {
+    await _methodChannel.invokeMethod('openSmsApp', {
       'phoneNumber': phoneNumber,
-    })) {}
+    });
   }
 
   static Future<void> acceptCall() async {
-    await _channel.invokeMethod('acceptCall');
+    await _methodChannel.invokeMethod('acceptCall');
   }
 
   static Future<void> rejectCall() async {
-    await _channel.invokeMethod('rejectCall');
+    await _methodChannel.invokeMethod('rejectCall');
   }
 
   static Future<void> hangUpCall() async {
-    await _channel.invokeMethod('hangUpCall');
+    await _methodChannel.invokeMethod('hangUpCall');
   }
 
   static Future<void> toggleMute(bool muteOn) async {
-    await _channel.invokeMethod('toggleMute', {'muteOn': muteOn});
+    await _methodChannel.invokeMethod('toggleMute', {'muteOn': muteOn});
   }
 
   static Future<void> toggleHold(bool holdOn) async {
-    await _channel.invokeMethod('toggleHold', {'holdOn': holdOn});
+    await _methodChannel.invokeMethod('toggleHold', {'holdOn': holdOn});
   }
 
   static Future<void> toggleSpeaker(bool speakerOn) async {
-    await _channel.invokeMethod('toggleSpeaker', {'speakerOn': speakerOn});
+    await _methodChannel.invokeMethod('toggleSpeaker', {
+      'speakerOn': speakerOn,
+    });
   }
 
   static Future<Map<String, dynamic>> getCurrentCallState() async {
     try {
-      final result = await _channel.invokeMapMethod<String, dynamic>(
+      final result = await _methodChannel.invokeMapMethod<String, dynamic>(
         'getCurrentCallState',
       );
-      return result ?? {'state': 'IDLE', 'number': null};
+      return result ?? {'state': 'IDLE', 'number': null, 'connectedTime': null};
     } catch (e) {
-      log('Error calling getCurrentCallState: $e');
-      return {'state': 'IDLE', 'number': null};
+      log('[NativeMethods] Error calling getCurrentCallState: $e');
+      return {'state': 'IDLE', 'number': null, 'connectedTime': null};
     }
   }
 
-  static Future<List<Map<String, dynamic>>> getContacts() async {
-    try {
-      final List<dynamic> result = await _channel.invokeMethod('getContacts');
-      return result.map((contact) {
-        final Map<String, dynamic> typedContact = Map<String, dynamic>.from(
-          contact,
+  static Stream<List<Map<String, dynamic>>> getContactsStream() {
+    log(
+      '[NativeMethods] getContactsStream: Creating new stream with StreamController.',
+    );
+
+    final StreamController<List<Map<String, dynamic>>> controller =
+        StreamController<List<Map<String, dynamic>>>();
+
+    // 기존 구독이 있다면 취소 (한 번에 하나의 스트림만 활성화 가정)
+    _nativeContactsStreamSubscription?.cancel();
+
+    _nativeContactsStreamSubscription = _contactsEventChannel
+        .receiveBroadcastStream() // 이 스트림의 이벤트 타입은 dynamic
+        .listen(
+          (dynamic event) {
+            // 네이티브에서 오는 이벤트
+            if (controller.isClosed) return;
+
+            if (event is List) {
+              List<Map<String, dynamic>> chunk = [];
+              for (final dynamic item in event) {
+                if (item is Map) {
+                  try {
+                    final Map<String, dynamic> contactMap = item
+                        .map<String, dynamic>(
+                          (key, value) => MapEntry(key.toString(), value),
+                        );
+                    chunk.add(contactMap);
+                  } catch (e) {
+                    log(
+                      '[NativeMethods] getContactsStream: Error converting map item: $item, error: $e',
+                    );
+                  }
+                } else {
+                  log(
+                    '[NativeMethods] getContactsStream: Received non-Map item in list: $item',
+                  );
+                }
+              }
+
+              if (chunk.isNotEmpty) {
+                log(
+                  '[NativeMethods] getContactsStream: Adding chunk of ${chunk.length} contacts to controller.',
+                );
+                controller.add(chunk);
+              } else {
+                log(
+                  '[NativeMethods] getContactsStream: Chunk is empty after processing, adding empty list to controller.',
+                );
+                controller.add([]);
+              }
+            } else {
+              log(
+                '[NativeMethods] getContactsStream: Received non-List event: $event. Adding empty list to controller.',
+              );
+              controller.add([]);
+            }
+          },
+          onError: (dynamic error, StackTrace stackTrace) {
+            if (controller.isClosed) return;
+            if (error is PlatformException) {
+              log(
+                '[NativeMethods] getContactsStream: PlatformException: ${error.code} - ${error.message} Details: ${error.details}',
+              );
+            } else {
+              log(
+                '[NativeMethods] getContactsStream: Error: $error\nStackTrace: $stackTrace',
+              );
+            }
+            controller.addError(error, stackTrace);
+          },
+          onDone: () {
+            if (controller.isClosed) return;
+            log(
+              '[NativeMethods] getContactsStream: Native stream subscription done.',
+            );
+            controller.close();
+          },
+          cancelOnError: true,
         );
-        return typedContact;
-      }).toList();
-    } on PlatformException catch (e) {
-      log('Error getting contacts: ${e.message}');
-      return [];
-    }
+
+    controller.onCancel = () {
+      log(
+        '[NativeMethods] getContactsStream: Stream cancelled by listener. Cancelling native subscription.',
+      );
+      _nativeContactsStreamSubscription?.cancel();
+      _nativeContactsStreamSubscription = null;
+    };
+
+    return controller.stream;
   }
 
   static Future<String> upsertContact({
@@ -88,7 +174,7 @@ class NativeMethods {
     required String phoneNumber,
   }) async {
     try {
-      final String result = await _channel.invokeMethod('upsertContact', {
+      final String result = await _methodChannel.invokeMethod('upsertContact', {
         'rawContactId': rawContactId,
         'displayName': displayName,
         'firstName': firstName,
@@ -98,19 +184,23 @@ class NativeMethods {
       });
       return result;
     } on PlatformException catch (e) {
-      log('Error upserting contact: ${e.message}');
+      log(
+        '[NativeMethods] Error upserting contact: ${e.message} Details: ${e.details}',
+      );
       rethrow;
     }
   }
 
   static Future<bool> deleteContact(String id) async {
     try {
-      final bool result = await _channel.invokeMethod('deleteContact', {
+      final bool result = await _methodChannel.invokeMethod('deleteContact', {
         'id': id,
       });
       return result;
     } on PlatformException catch (e) {
-      log('Error deleting contact: ${e.message}');
+      log(
+        '[NativeMethods] Error deleting contact: ${e.message} Details: ${e.details}',
+      );
       return false;
     }
   }

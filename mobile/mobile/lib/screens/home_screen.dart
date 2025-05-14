@@ -46,10 +46,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _isUiReady = false;
   String _uiReadyMessage = '앱 준비 중...';
 
-  late AppController _appController;
-  late ContactsController _contactsController;
-  late PhoneStateController _phoneStateController;
-
   @override
   void initState() {
     super.initState();
@@ -84,6 +80,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _checkDefaultDialer();
       _searchFocusNode.unfocus();
       _loadNotificationCount();
+      context.read<ContactsController>().refreshContacts(force: false);
+      log('[HomeScreen] App resumed, called refreshContacts(force: false).');
     }
   }
 
@@ -96,11 +94,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
     }
 
-    _appController = context.read<AppController>();
-    _contactsController = context.read<ContactsController>();
-    _phoneStateController = context.read<PhoneStateController>();
+    final appController = context.read<AppController>();
+    final phoneStateController = context.read<PhoneStateController>();
 
-    await _phoneStateController.syncInitialCallState();
+    await phoneStateController.syncInitialCallState();
     log('[HomeScreen] Initial call state sync attempted.');
 
     try {
@@ -110,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       log('[HomeScreen] Error sending native initialized notification: $e');
     }
 
-    _appController
+    appController
         .performCoreInitialization()
         .then((_) {
           log(
@@ -129,25 +126,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         });
     log('[HomeScreen] Requested AppController core initialization.');
 
-    log('[HomeScreen] Starting contacts load (async)...');
-    _contactsController
-        .getLocalContacts(forceRefresh: false)
-        .then((_) {
-          log(
-            '[ContactsController] Initial contacts load completed in background.',
-          );
-        })
-        .catchError((e) {
-          log('[ContactsController] Error loading initial contacts: $e');
-        });
-
     if (mounted) {
       setState(() {
         _isUiReady = true;
       });
     }
     log(
-      '[HomeScreen] UI is ready (Core init & Contacts loading in background).',
+      '[HomeScreen] UI is ready. Contacts loading is managed by ContactsController.',
     );
 
     log('[HomeScreen] HomeScreen initialization finished.');

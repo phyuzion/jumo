@@ -41,22 +41,28 @@ class HiveCallLogRepository implements CallLogRepository {
   @override
   Future<List<Map<String, dynamic>>> getAllCallLogs() async {
     try {
-      return _callLogsBox.values.map((dynamic e) {
-        if (e is Map) {
-          return Map<String, dynamic>.fromEntries(
-            (e as Map).entries.map(
-              (entry) => MapEntry(entry.key.toString(), entry.value),
-            ),
+      final List<Map<String, dynamic>> resultList = [];
+      for (final dynamic valueFromBox in _callLogsBox.values) {
+        if (valueFromBox is Map) {
+          final Map<String, dynamic> correctlyTypedMap = valueFromBox.map(
+            (key, value) => MapEntry(key.toString(), value),
           );
+          resultList.add(correctlyTypedMap);
         } else {
           log(
-            '[HiveCallLogRepository] getAllCallLogs: Unexpected item type: \\${e.runtimeType}',
+            '[HiveCallLogRepository] getAllCallLogs: Unexpected item type: ${valueFromBox.runtimeType}. Value: $valueFromBox',
           );
-          return <String, dynamic>{};
         }
-      }).toList();
-    } catch (e) {
-      log('[HiveCallLogRepository] Error getting all call logs: $e');
+      }
+      log(
+        '[HiveCallLogRepository] getAllCallLogs: Successfully fetched ${resultList.length} call logs from Hive.',
+      );
+      return resultList;
+    } catch (e, s) {
+      log(
+        '[HiveCallLogRepository] Error getting all call logs: $e',
+        stackTrace: s,
+      );
       return [];
     }
   }
@@ -64,6 +70,10 @@ class HiveCallLogRepository implements CallLogRepository {
   @override
   Future<void> saveCallLogs(List<Map<String, dynamic>> newCallLogs) async {
     try {
+      if (!_callLogsBox.isOpen) {
+        log('[HiveCallLogRepository] saveCallLogs: Box is not open!');
+        return;
+      }
       await _callLogsBox.clear();
       final Map<String, Map<String, dynamic>> entriesToPut = {};
       for (final callLog in newCallLogs) {
@@ -76,8 +86,8 @@ class HiveCallLogRepository implements CallLogRepository {
           '[HiveCallLogRepository] Saved ${entriesToPut.length} call logs (24시간 이내 전체 덮어쓰기).',
         );
       }
-    } catch (e) {
-      log('[HiveCallLogRepository] Error saving call logs: $e');
+    } catch (e, s) {
+      log('[HiveCallLogRepository] Error saving call logs: $e', stackTrace: s);
       rethrow;
     }
   }
@@ -85,12 +95,19 @@ class HiveCallLogRepository implements CallLogRepository {
   @override
   Future<void> clearCallLogs() async {
     try {
+      if (!_callLogsBox.isOpen) {
+        log('[HiveCallLogRepository] clearCallLogs: Box is not open!');
+        return;
+      }
       await _callLogsBox.clear();
       log(
         '[HiveCallLogRepository] Cleared all call logs from box: ${_callLogsBox.name}',
       );
-    } catch (e) {
-      log('[HiveCallLogRepository] Error clearing call logs: $e');
+    } catch (e, s) {
+      log(
+        '[HiveCallLogRepository] Error clearing call logs: $e',
+        stackTrace: s,
+      );
     }
   }
 }

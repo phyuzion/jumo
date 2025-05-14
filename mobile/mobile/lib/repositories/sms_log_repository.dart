@@ -27,41 +27,43 @@ class HiveSmsLogRepository implements SmsLogRepository {
   // SMS를 위한 고유 키 생성.
   // SmsController에서 nativeSmsMap을 만들 때 'native_id' 필드에 네이티브 SMS ID를 넣어준다고 가정합니다.
   String _generateSmsKey(Map<String, dynamic> smsMap) {
-    final nativeId = smsMap['native_id']; // SmsController에서 추가한 필드
+    final nativeId = smsMap['native_id'];
     final date = smsMap['date'];
     final address = smsMap['address'];
-
-    if (nativeId != null && nativeId != 0) {
-      return 'sms_nid_${nativeId}'; // 네이티브 ID가 있으면 우선 사용 (가장 확실한 고유키)
+    if (nativeId != null && nativeId != 0 && nativeId.toString().isNotEmpty) {
+      return 'sms_nid_${nativeId}';
     }
-    // 네이티브 ID가 없거나 0인 경우 (혹은 이전 데이터 호환 등), date와 address 조합 사용
-    // 이 경우 완벽한 고유성을 보장하지 못할 수 있으므로 주의.
     if (date != null && address != null) {
       return 'sms_dateaddr_${date}_${address.hashCode}';
     }
-    // 최후의 수단 (이런 경우는 거의 없어야 함)
     return 'sms_fallback_${DateTime.now().millisecondsSinceEpoch}_${smsMap.hashCode}';
   }
 
   @override
   Future<List<Map<String, dynamic>>> getAllSmsLogs() async {
     try {
-      return _smsLogsBox.values.map((dynamic e) {
-        if (e is Map) {
-          return Map<String, dynamic>.fromEntries(
-            (e as Map).entries.map(
-              (entry) => MapEntry(entry.key.toString(), entry.value),
-            ),
+      final List<Map<String, dynamic>> resultList = [];
+      for (final dynamic valueFromBox in _smsLogsBox.values) {
+        if (valueFromBox is Map) {
+          final Map<String, dynamic> correctlyTypedMap = valueFromBox.map(
+            (key, value) => MapEntry(key.toString(), value),
           );
+          resultList.add(correctlyTypedMap);
         } else {
           log(
-            '[HiveSmsLogRepository] getAllSmsLogs: Unexpected item type: \\${e.runtimeType}',
+            '[HiveSmsLogRepository] getAllSmsLogs: Unexpected item type: ${valueFromBox.runtimeType}. Value: $valueFromBox',
           );
-          return <String, dynamic>{};
         }
-      }).toList();
-    } catch (e) {
-      log('[HiveSmsLogRepository] Error getting all SMS logs: $e');
+      }
+      log(
+        '[HiveSmsLogRepository] getAllSmsLogs: Successfully fetched ${resultList.length} SMS logs from Hive.',
+      );
+      return resultList;
+    } catch (e, s) {
+      log(
+        '[HiveSmsLogRepository] Error getting all SMS logs: $e',
+        stackTrace: s,
+      );
       return [];
     }
   }
@@ -69,6 +71,10 @@ class HiveSmsLogRepository implements SmsLogRepository {
   @override
   Future<void> saveSmsLogs(List<Map<String, dynamic>> newSmsLogs) async {
     try {
+      if (!_smsLogsBox.isOpen) {
+        log('[HiveSmsLogRepository] saveSmsLogs: Box is not open!');
+        return;
+      }
       await _smsLogsBox.clear();
       final Map<String, Map<String, dynamic>> entriesToPut = {};
       for (final smsMap in newSmsLogs) {
@@ -81,8 +87,8 @@ class HiveSmsLogRepository implements SmsLogRepository {
           '[HiveSmsLogRepository] Saved ${entriesToPut.length} SMS logs (24시간 이내 전체 덮어쓰기).',
         );
       }
-    } catch (e) {
-      log('[HiveSmsLogRepository] Error saving SMS logs: $e');
+    } catch (e, s) {
+      log('[HiveSmsLogRepository] Error saving SMS logs: $e', stackTrace: s);
       rethrow;
     }
   }
@@ -90,12 +96,16 @@ class HiveSmsLogRepository implements SmsLogRepository {
   @override
   Future<void> clearSmsLogs() async {
     try {
+      if (!_smsLogsBox.isOpen) {
+        log('[HiveSmsLogRepository] clearSmsLogs: Box is not open!');
+        return;
+      }
       await _smsLogsBox.clear();
       log(
         '[HiveSmsLogRepository] Cleared all SMS logs from box: ${_smsLogsBox.name}',
       );
-    } catch (e) {
-      log('[HiveSmsLogRepository] Error clearing SMS logs: $e');
+    } catch (e, s) {
+      log('[HiveSmsLogRepository] Error clearing SMS logs: $e', stackTrace: s);
     }
   }
 }

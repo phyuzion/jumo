@@ -24,12 +24,9 @@ class _SearchScreenState extends State<SearchScreen> {
   SearchResultModel? _result;
   final _focusNode = FocusNode();
 
-  Map<String, PhoneBookModel> _localContactsCache = {};
-
   @override
   void initState() {
     super.initState();
-    _loadLocalContacts();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments;
@@ -47,20 +44,6 @@ class _SearchScreenState extends State<SearchScreen> {
       }
       _focusNode.requestFocus();
     });
-  }
-
-  Future<void> _loadLocalContacts() async {
-    try {
-      final contactsCtrl = context.read<ContactsController>();
-      final contacts = await contactsCtrl.getLocalContacts();
-      if (mounted) {
-        setState(() {
-          _localContactsCache = {for (var c in contacts) c.phoneNumber: c};
-        });
-      }
-    } catch (e) {
-      log('[SearchScreen] Error loading local contacts: $e');
-    }
   }
 
   void _onSubmit(String num) async {
@@ -112,6 +95,7 @@ class _SearchScreenState extends State<SearchScreen> {
           keyboardType: TextInputType.phone,
           textInputAction: TextInputAction.search,
           onSubmitted: _onSubmit,
+          focusNode: _focusNode,
           decoration: const InputDecoration(
             hintText: '전화번호 검색',
             border: InputBorder.none,

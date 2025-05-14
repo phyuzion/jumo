@@ -15,10 +15,6 @@ import 'package:mobile/screens/decider_screen.dart';
 import 'package:mobile/screens/login_screen.dart';
 import 'package:mobile/screens/home_screen.dart';
 import 'package:mobile/screens/search_screen.dart';
-import 'package:mobile/deprecated/dialer_screen.dart';
-import 'package:mobile/deprecated/incoming_call_screen.dart';
-import 'package:mobile/deprecated/on_call_screen.dart';
-import 'package:mobile/deprecated/call_ended_screen.dart';
 import 'package:mobile/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -581,35 +577,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
           return SearchScreen(isRequested: isRequested);
         },
         '/settings': (_) => const SettingsScreen(),
-        '/dialer': (_) => const DialerScreen(),
-        '/incoming': (ctx) {
-          final number =
-              ModalRoute.of(ctx)?.settings.arguments as String? ?? '';
-          return IncomingCallScreen(incomingNumber: number);
-        },
-        '/onCall': (ctx) {
-          final args = ModalRoute.of(ctx)?.settings.arguments;
-          String number = '';
-          bool connected = false;
-          if (args is Map<String, dynamic>) {
-            number = args['number'] as String? ?? '';
-            connected = args['connected'] as bool? ?? false;
-          }
-          return OnCallScreen(phoneNumber: number, connected: connected);
-        },
-        '/callEnded': (ctx) {
-          final args = ModalRoute.of(ctx)?.settings.arguments;
-          String number = '';
-          String reason = '';
-          if (args is Map<String, dynamic>) {
-            number = args['number'] as String? ?? '';
-            reason = args['reason'] as String? ?? '';
-          }
-          return CallEndedScreen(
-            callEndedNumber: number,
-            callEndedReason: reason,
-          );
-        },
+
         '/board': (_) => const BoardScreen(),
         '/contentDetail': (ctx) {
           final contentId = ModalRoute.of(ctx)?.settings.arguments as String?;

@@ -4,11 +4,12 @@ import 'package:graphql_flutter/graphql_flutter.dart'; // <<< 추가
 import 'package:fluttertoast/fluttertoast.dart'; // <<< fluttertoast 임포트 추가
 // import 'package:get_storage/get_storage.dart'; // 제거
 import 'package:mobile/graphql/user_api.dart';
-import 'package:mobile/graphql/client.dart'; // GraphQLClientManager 추가 (saveLoginCredentials)
+// import 'package:mobile/graphql/client.dart'; // GraphQLClientManager는 UserApi 내부에서 사용될 것으로 가정
 import 'package:mobile/repositories/auth_repository.dart'; // <<< 추가
 import 'package:mobile/services/native_methods.dart'; // <<< 임포트 추가
 import 'package:mobile/utils/constants.dart'; // <<< 임포트 추가
 import 'package:provider/provider.dart'; // <<< Provider 추가
+import 'package:mobile/controllers/app_controller.dart'; // AppController import
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -205,16 +206,19 @@ class _LoginScreenState extends State<LoginScreen> {
         phoneNumber: _myNumber,
       );
 
-      if (loginResult != null && loginResult['user'] is Map) {
-        final userData = loginResult['user'] as Map<String, dynamic>; // 타입 캐스팅
-        final token = loginResult['accessToken'] as String?; // 토큰도 가져옴
+      // 로그인 성공 조건 강화: loginResult, user 데이터, accessToken 모두 null이 아니어야 함
+      if (loginResult != null &&
+          loginResult['user'] is Map &&
+          loginResult['accessToken'] != null) {
+        final userData = loginResult['user'] as Map<String, dynamic>;
+        final token = loginResult['accessToken'] as String; // Non-null로 처리
 
         // AuthRepository를 통해 정보 저장
-        if (token != null) await _authRepository.setToken(token); // 토큰 저장
+        await _authRepository.setToken(token);
         await _authRepository.setUserId(userData['id'] ?? '');
         await _authRepository.setUserName(userData['name'] ?? '');
         await _authRepository.setUserType(userData['userType'] ?? '');
-        await _authRepository.setLoginStatus(true);
+        await _authRepository.setLoginStatus(true); // 로그인 상태 true로 설정
         await _authRepository.setUserValidUntil(userData['validUntil'] ?? '');
         await _authRepository.setUserRegion(userData['region'] ?? '');
         await _authRepository.setUserGrade(userData['grade'] ?? '');
@@ -235,14 +239,20 @@ class _LoginScreenState extends State<LoginScreen> {
           throw Exception('로그인 정보 저장 중 오류가 발생했습니다.');
         }
         log('[LoginScreen] Verified saved credentials match login credentials');
-      } else {
-        log(
-          '[LoginScreen] Login successful but user data format is unexpected.',
-        );
-      }
 
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/home');
+        if (!mounted) return;
+        // 홈으로 가기 전에 AppController를 통해 연락처 로드 시작
+        // DeciderScreen에서 이미 권한을 확인하고 넘어왔으므로, 여기서는 로그인 성공이 주 조건
+        log('[LoginScreen] Login successful. Triggering contacts load.');
+        await context.read<AppController>().triggerContactsLoadIfReady();
+        Navigator.pushReplacementNamed(context, '/home');
+      } else {
+        // loginResult가 null이거나 user 데이터가 없는 경우도 성공으로 간주하지 않음 (토큰 없을 수 있음)
+        log(
+          '[LoginScreen] Login failed or response data/token is null/unexpected. Result: $loginResult',
+        );
+        throw Exception('로그인에 실패했습니다. 아이디 또는 비밀번호를 확인해주세요.'); // 사용자에게 더 명확한 메시지
+      }
     } catch (e) {
       String errorMessage = '로그인 중 오류가 발생했습니다.';
       if (e is OperationException) {

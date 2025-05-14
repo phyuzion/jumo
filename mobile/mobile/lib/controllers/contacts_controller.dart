@@ -3,35 +3,60 @@ import 'dart:convert';
 import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
-import 'package:hive_ce/hive.dart';
-import 'package:mobile/graphql/phone_records_api.dart';
 import 'package:mobile/models/phone_book_model.dart';
-import 'package:mobile/utils/constants.dart';
-import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/repositories/contact_repository.dart';
+import 'package:mobile/services/native_methods.dart';
+import 'package:mobile/utils/constants.dart';
+import 'package:mobile/graphql/phone_records_api.dart';
 
 // 네이티브 연락처 파싱 함수
-List<PhoneBookModel> _parseNativeContacts(List<Map<String, dynamic>> contacts) {
+List<PhoneBookModel> _parseNativeContacts(
+  List<Map<String, dynamic>> contactsRawData,
+) {
   final List<PhoneBookModel> result = [];
-  for (final c in contacts) {
+  for (final c in contactsRawData) {
     final rawPhone = (c['phoneNumber'] ?? '').toString().trim();
     if (rawPhone.isEmpty) continue;
     final normPhone = normalizePhone(rawPhone);
-    final rawName = (c['displayName'] ?? '').toString().trim();
-    final finalName = rawName.isNotEmpty ? rawName : '(No Name)';
+    // 네이티브에서 전달되는 이름 필드를 모두 활용하도록 수정
+    String displayName = (c['displayName'] ?? '').toString().trim();
+    String firstName = (c['firstName'] ?? '').toString().trim();
+    String middleName = (c['middleName'] ?? '').toString().trim();
+    String lastName = (c['lastName'] ?? '').toString().trim();
+
+    // displayName이 비어있으면 다른 이름 필드를 조합하여 생성 시도
+    if (displayName.isEmpty) {
+      List<String> nameParts = [];
+      if (firstName.isNotEmpty) nameParts.add(firstName);
+      if (middleName.isNotEmpty) nameParts.add(middleName);
+      if (lastName.isNotEmpty) nameParts.add(lastName);
+      displayName = nameParts.join(' ').trim();
+    }
+    if (displayName.isEmpty) {
+      displayName = '(No Name)';
+    }
+
+    dynamic lastUpdatedValue = c['lastUpdated'];
+    DateTime? parsedCreatedAt;
+    if (lastUpdatedValue is int) {
+      parsedCreatedAt = DateTime.fromMillisecondsSinceEpoch(
+        lastUpdatedValue,
+        isUtc: true,
+      );
+    } else if (lastUpdatedValue is String) {
+      parsedCreatedAt = DateTime.tryParse(lastUpdatedValue);
+    }
+
     result.add(
       PhoneBookModel(
         contactId: c['id']?.toString() ?? '',
         rawContactId: c['rawId']?.toString(),
-        name: finalName,
+        name: displayName, // 최종 결정된 displayName 사용
+        // 개별 이름 필드도 모델에 저장하려면 PhoneBookModel에 필드 추가 필요
+        // firstName: firstName,
+        // lastName: lastName,
         phoneNumber: normPhone,
-        createdAt:
-            c['lastUpdated'] != null
-                ? DateTime.fromMillisecondsSinceEpoch(
-                  c['lastUpdated'],
-                  isUtc: true,
-                )
-                : null,
+        createdAt: parsedCreatedAt,
       ),
     );
   }
@@ -43,238 +68,304 @@ class ContactsController with ChangeNotifier {
   List<PhoneBookModel> _contacts = [];
   Map<String, PhoneBookModel> _contactCache = {};
   bool _isLoading = false;
-  DateTime? _lastLoadTime;
+  bool _isSyncing = false;
+  DateTime? _lastFullSyncTime;
+  StreamSubscription<List<Map<String, dynamic>>>? _contactsStreamSubscription;
+  bool _initialLoadAttempted = false; // 초기 로드 시도 여부 플래그
 
-  ContactsController(this._contactRepository);
-
-  /// 네이티브 연락처 목록 가져오기
-  Future<List<PhoneBookModel>> getLocalContacts({
-    bool forceRefresh = false,
-  }) async {
-    final overallStopwatch = Stopwatch()..start(); // 전체 시간 측정 시작
+  ContactsController(this._contactRepository) {
     log(
-      '[ContactsController][PERF] getLocalContacts started at ${DateTime.now().toIso8601String()}',
+      '[ContactsController] Instance created. Initial load to be triggered externally.',
     );
+  }
 
-    final now = DateTime.now();
-    if (!forceRefresh &&
-        _lastLoadTime != null &&
-        now.difference(_lastLoadTime!) < const Duration(minutes: 1) &&
-        _contacts.isNotEmpty) {
-      log('[ContactsController] Using cached contacts.');
-      overallStopwatch.stop();
+  List<PhoneBookModel> get contacts => List.unmodifiable(_contacts);
+  Map<String, PhoneBookModel> get contactCache =>
+      Map.unmodifiable(_contactCache);
+  bool get isLoading => _isLoading;
+  bool get isSyncing => _isSyncing;
+  bool get initialLoadAttempted => _initialLoadAttempted; // 외부에서 확인 가능하도록
+
+  Future<void> loadInitialContacts() async {
+    log('[ContactsController] loadInitialContacts called.');
+    if (_isSyncing || _initialLoadAttempted) {
+      // 이미 동기화 중이거나, 초기 로드가 이미 시도되었다면 중복 실행 방지
       log(
-        '[ContactsController][PERF] getLocalContacts finished (cached) in ${overallStopwatch.elapsedMilliseconds}ms',
+        '[ContactsController] Already syncing or initial load attempted, skipping initial load. isSyncing: $_isSyncing, initialLoadAttempted: $_initialLoadAttempted',
       );
-      return _contacts;
+      return;
     }
-    if (_isLoading) {
-      log('[ContactsController] Already loading contacts...');
-      overallStopwatch.stop();
-      log(
-        '[ContactsController][PERF] getLocalContacts finished (already loading) in ${overallStopwatch.elapsedMilliseconds}ms',
-      );
-      return _contacts;
-    }
+    _initialLoadAttempted = true; // 로드 시도 플래그 설정
+    _isLoading = true;
+    notifyListeners();
 
-    Future.microtask(() {
-      if (!_isLoading) {
-        _isLoading = true;
-        notifyListeners();
-      }
-    });
-
-    final stopwatch = Stopwatch(); // 단계별 시간 측정용
-
+    List<PhoneBookModel> cachedContactsForDiff = [];
     try {
-      log(
-        '[ContactsController][PERF] Step 1: Loading local contacts from repository...',
-      );
-      stopwatch.start();
-      final List<PhoneBookModel> localContacts =
-          await _contactRepository.getAllContacts();
-      stopwatch.stop();
-      log(
-        '[ContactsController][PERF] Step 1 finished in ${stopwatch.elapsedMilliseconds}ms. Found ${localContacts.length} local contacts.',
-      );
-      stopwatch.reset();
-
-      final Map<String, PhoneBookModel> localMap = {
-        for (var c in localContacts) c.contactId: c,
-      };
-
-      log(
-        '[ContactsController][PERF] Step 2: Fetching contacts from native...',
-      );
-      stopwatch.start();
-      final nativeContacts = await NativeMethods.getContacts();
-      stopwatch.stop();
-      log(
-        '[ContactsController][PERF] Step 2 finished in ${stopwatch.elapsedMilliseconds}ms. Fetched ${nativeContacts.length} contacts from native.',
-      );
-      stopwatch.reset();
-
-      log('[ContactsController][PERF] Step 3: Parsing native contacts...');
-      stopwatch.start();
-      final phoneBookModels = _parseNativeContacts(nativeContacts);
-      stopwatch.stop();
-      log(
-        '[ContactsController][PERF] Step 3 finished in ${stopwatch.elapsedMilliseconds}ms. Parsed into ${phoneBookModels.length} PhoneBookModels.',
-      );
-      stopwatch.reset();
-
-      log('[ContactsController][PERF] Step 4: Filtering changed contacts...');
-      stopwatch.start();
-      final List<PhoneBookModel> changedContacts =
-          phoneBookModels.where((contact) {
-            final local = localMap[contact.contactId];
-            if (local == null) {
-              return true; // 신규
-            }
-            final isChanged =
-                local.name != contact.name ||
-                local.phoneNumber != contact.phoneNumber ||
-                local.rawContactId != contact.rawContactId ||
-                (local.createdAt?.millisecondsSinceEpoch !=
-                    contact
-                        .createdAt
-                        ?.millisecondsSinceEpoch); // DateTime 비교 수정
-            // if (isChanged) { ... 상세 로그는 필요시 활성화 ... }
-            return isChanged;
-          }).toList();
-      stopwatch.stop();
-      log(
-        '[ContactsController][PERF] Step 4 finished in ${stopwatch.elapsedMilliseconds}ms. Found ${changedContacts.length} changed contacts.',
-      );
-      stopwatch.reset();
-
-      log('[ContactsController][PERF] Updating in-memory cache and state...');
-      _contacts = phoneBookModels;
-      _contactCache = {for (var c in _contacts) c.phoneNumber: c};
-      _lastLoadTime = now; // 이 시점은 모든 데이터 처리가 끝난 후가 더 적합할 수 있음
-      // _isLoading = false; // notifyListeners는 finally에서 한번만
-      // notifyListeners();
-      log('[ContactsController][PERF] In-memory cache updated.');
-
-      log(
-        '[ContactsController][PERF] Step 5: Saving all contacts to local repository...',
-      );
-      stopwatch.start();
-      await _contactRepository.saveContacts(phoneBookModels);
-      stopwatch.stop();
-      log(
-        '[ContactsController][PERF] Step 5 finished in ${stopwatch.elapsedMilliseconds}ms.',
-      );
-      stopwatch.reset();
-
-      if (changedContacts.isNotEmpty) {
+      cachedContactsForDiff = await _contactRepository.getAllContacts();
+      if (cachedContactsForDiff.isNotEmpty) {
+        _contacts = List.from(cachedContactsForDiff);
+        _updateContactCache();
         log(
-          '[ContactsController][PERF] Step 6: Preparing to upload ${changedContacts.length} changed contacts to server (async)...',
-        );
-        Future(() async {
-          final uploadStopwatch = Stopwatch()..start();
-          log(
-            '[ContactsController][PERF][UploadTask] Started at ${DateTime.now().toIso8601String()}',
-          );
-          try {
-            final recordsToUpsert =
-                changedContacts
-                    .map(
-                      (contact) => {
-                        'phoneNumber': contact.phoneNumber,
-                        'name': contact.name,
-                        'createdAt':
-                            contact.createdAt?.toUtc().toIso8601String() ??
-                            DateTime.now().toUtc().toIso8601String(),
-                      },
-                    )
-                    .toList();
-            await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
-            uploadStopwatch.stop();
-            log(
-              '[ContactsController][PERF][UploadTask] Successfully uploaded in ${uploadStopwatch.elapsedMilliseconds}ms.',
-            );
-          } catch (e, stackTrace) {
-            uploadStopwatch.stop();
-            log(
-              '[ContactsController][PERF][UploadTask] Error uploading contacts in ${uploadStopwatch.elapsedMilliseconds}ms: $e',
-            );
-            log('[ContactsController] Stack trace: $stackTrace');
-          }
-        });
-      } else {
-        log(
-          '[ContactsController][PERF] Step 6: No contacts to upload to server.',
+          '[ContactsController] Loaded ${cachedContactsForDiff.length} contacts from Hive cache for initial display.',
         );
       }
-
-      overallStopwatch.stop();
+    } catch (e, s) {
       log(
-        '[ContactsController][PERF] getLocalContacts finished successfully in ${overallStopwatch.elapsedMilliseconds}ms',
+        '[ContactsController] Error loading contacts from Hive for initial display: $e',
+        stackTrace: s,
       );
-      return _contacts;
-    } catch (e, stackTrace) {
-      // stackTrace 추가
-      log('[ContactsController] Error in getLocalContacts: $e');
-      log(
-        '[ContactsController] Stack trace for error: $stackTrace',
-      ); // 에러 발생 시 스택 트레이스 로깅
-      overallStopwatch.stop();
-      log(
-        '[ContactsController][PERF] getLocalContacts finished with error in ${overallStopwatch.elapsedMilliseconds}ms',
-      );
-      // _isLoading = false; // notifyListeners는 finally에서
-      // notifyListeners();
-      rethrow; // finally에서 notifyListeners를 호출하므로 여기서는 rethrow만
+      _contacts = [];
+      _contactCache = {};
     } finally {
-      Future.microtask(() {
-        _isLoading = false;
-        notifyListeners(); // 로딩 완료 또는 에러 발생 시 UI 업데이트
-        log(
-          '[ContactsController][PERF] Executed finally block. isLoading: $_isLoading',
-        );
-      });
+      // 이 시점에서는 UI가 캐시된 데이터로 먼저 그려질 수 있도록 isLoading을 false로 할 수 있으나,
+      // 전체 동기화가 아직 시작 전이므로, _startFullContactsSync에서 isLoading을 다시 관리.
+      // 여기서는 notifyListeners()만 호출하여 캐시 로드 결과를 반영.
+      notifyListeners();
+    }
+    // clearPreviousContacts는 항상 false로 전달 (캐시와 비교하여 diff 업로드 위함)
+    // 또는, 앱 첫 실행 시에는 서버에 데이터가 없을 수 있으므로 clearPreviousContacts:true (모두 업로드) 전략도 가능
+    await _startFullContactsSync(
+      clearPreviousContacts: _contacts.isEmpty,
+      originalContactsForDiff: cachedContactsForDiff,
+    );
+  }
+
+  Future<void> refreshContacts({bool force = false}) async {
+    log('[ContactsController] refreshContacts(force: $force) called');
+    if (!_initialLoadAttempted && !force) {
+      log(
+        '[ContactsController] Initial load not attempted yet. Calling loadInitialContacts instead of refresh(force:false).',
+      );
+      await loadInitialContacts(); // 초기 로드가 안됐으면 refresh(force:false)도 초기 로드처럼 동작
+      return;
+    }
+    if (!force && _isSyncing) {
+      log(
+        '[ContactsController] Already syncing and not a forced refresh, refresh skipped.',
+      );
+      return;
+    }
+    if (force || !_isSyncing) {
+      List<PhoneBookModel> currentContactsForDiff = List.from(_contacts);
+      await _startFullContactsSync(
+        clearPreviousContacts: force,
+        originalContactsForDiff: currentContactsForDiff,
+      );
+    } else {
+      log(
+        '[ContactsController] Syncing is already in progress, not starting new one unless forced.',
+      );
     }
   }
 
-  List<PhoneBookModel> get contacts => _contacts;
-  Map<String, PhoneBookModel> get contactCache => _contactCache;
-  bool get isLoading => _isLoading;
+  Future<void> _startFullContactsSync({
+    required bool clearPreviousContacts,
+    required List<PhoneBookModel> originalContactsForDiff,
+  }) async {
+    if (_isSyncing) {
+      log(
+        '[ContactsController] _startFullContactsSync: Already syncing. Aborting this call.',
+      );
+      return;
+    }
+    _isSyncing = true;
+    _isLoading = true;
+    notifyListeners();
+
+    log(
+      '[ContactsController] _startFullContactsSync: Starting full sync (clearPrevious: $clearPreviousContacts).',
+    );
+
+    List<PhoneBookModel> newContactListForThisSync = [];
+    if (clearPreviousContacts) {
+      _contacts = [];
+      _contactCache = {};
+      notifyListeners();
+    }
+
+    await _contactsStreamSubscription?.cancel();
+    _contactsStreamSubscription = null;
+
+    try {
+      _contactsStreamSubscription = NativeMethods.getContactsStream().listen(
+        (List<Map<String, dynamic>> chunkData) {
+          if (chunkData.isEmpty && newContactListForThisSync.isEmpty) {
+            log('[ContactsController] Stream: Received initial empty chunk.');
+          }
+
+          final List<PhoneBookModel> parsedChunk = _parseNativeContacts(
+            chunkData,
+          );
+          if (parsedChunk.isNotEmpty) {
+            newContactListForThisSync.addAll(parsedChunk);
+            log(
+              '[ContactsController] Stream: Received and parsed chunk of ${parsedChunk.length}. Total for this sync: ${newContactListForThisSync.length}',
+            );
+            // 점진적 UI 업데이트 (clearPreviousContacts가 false일 때만 의미있음, 현재는 onDone에서 한번에 업데이트)
+            if (!clearPreviousContacts) {
+              // 기존 _contacts에 parsedChunk를 합치고, 중복 제거 및 정렬 후 _contacts 업데이트 및 notifyListeners()
+              // 이 부분은 UX를 위해 중요하지만, 지금은 onDone에서 전체 업데이트로 단순화.
+            }
+          }
+        },
+        onError: (error, stackTrace) {
+          log(
+            '[ContactsController] Error in contacts stream: $error',
+            stackTrace: stackTrace,
+          );
+          _finishSync(isSuccess: false);
+        },
+        onDone: () async {
+          log(
+            '[ContactsController] Contacts stream done. Total contacts received: ${newContactListForThisSync.length}.',
+          );
+          await _handleSyncCompletion(
+            newContactListForThisSync,
+            originalContactsForDiff,
+            clearPreviousContacts,
+          );
+        },
+      );
+    } catch (e, s) {
+      log(
+        '[ContactsController] Error starting contacts stream: $e',
+        stackTrace: s,
+      );
+      _finishSync(isSuccess: false);
+    }
+  }
+
+  Future<void> _handleSyncCompletion(
+    List<PhoneBookModel> newContactsFromSync,
+    List<PhoneBookModel> originalContacts,
+    bool wasCleared,
+  ) async {
+    _contacts = List.from(newContactsFromSync);
+    _updateContactCache();
+    _lastFullSyncTime = DateTime.now();
+
+    log(
+      '[ContactsController] Saving ${_contacts.length} contacts to Hive (on main isolate)...',
+    );
+    try {
+      final saveStopwatch = Stopwatch()..start();
+      await _contactRepository.saveContacts(_contacts);
+      saveStopwatch.stop();
+      log(
+        '[ContactsController] Saved contacts to Hive (on main isolate) in ${saveStopwatch.elapsedMilliseconds}ms.',
+      );
+
+      log('[ContactsController] Preparing contacts for server upload...');
+      List<PhoneBookModel> contactsToUpload = [];
+
+      if (wasCleared || originalContacts.isEmpty) {
+        contactsToUpload = List.from(newContactsFromSync);
+        log(
+          '[ContactsController] Uploading all ${contactsToUpload.length} contacts (wasCleared: $wasCleared, originalEmpty: ${originalContacts.isEmpty}).',
+        );
+      } else {
+        final Map<String, PhoneBookModel> originalContactsMap = {
+          for (var c in originalContacts) c.contactId: c,
+        };
+        for (var newContact in newContactsFromSync) {
+          final PhoneBookModel? originalContact =
+              originalContactsMap[newContact.contactId];
+          bool changed = false;
+          if (originalContact == null) {
+            changed = true;
+          } else {
+            bool nameChanged = originalContact.name != newContact.name;
+            bool phoneChanged =
+                normalizePhone(originalContact.phoneNumber) !=
+                normalizePhone(newContact.phoneNumber);
+            bool timestampChanged =
+                (originalContact.createdAt?.millisecondsSinceEpoch ?? 0) !=
+                (newContact.createdAt?.millisecondsSinceEpoch ?? 0);
+            if (nameChanged || phoneChanged || timestampChanged) {
+              changed = true;
+            }
+          }
+          if (changed) {
+            contactsToUpload.add(newContact);
+          }
+        }
+        log(
+          '[ContactsController] Found ${contactsToUpload.length} changed/new contacts to upload based on diff.',
+        );
+      }
+
+      if (contactsToUpload.isNotEmpty) {
+        final recordsToUpsert =
+            contactsToUpload.map((contact) {
+              Map<String, dynamic> serverMap = {
+                'phoneNumber': normalizePhone(contact.phoneNumber),
+                'name': contact.name,
+              };
+              if (contact.createdAt != null) {
+                serverMap['createdAt'] =
+                    contact.createdAt!.toUtc().toIso8601String();
+              }
+              return serverMap;
+            }).toList();
+
+        log(
+          '[ContactsController] Uploading ${recordsToUpsert.length} records to server (createdAt as UTC ISO8601 string)...',
+        );
+        try {
+          await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
+          log('[ContactsController] Successfully uploaded contacts to server.');
+        } catch (e, s) {
+          log(
+            '[ContactsController] Error uploading contacts to server: $e',
+            stackTrace: s,
+          );
+        }
+      } else {
+        log('[ContactsController] No contacts to upload to server.');
+      }
+    } catch (e, s) {
+      log(
+        '[ContactsController] Error in _handleSyncCompletion (Hive save or server prep): $e',
+        stackTrace: s,
+      );
+    } finally {
+      _finishSync(isSuccess: true);
+    }
+  }
+
+  void _finishSync({required bool isSuccess}) {
+    _isSyncing = false;
+    _isLoading = false;
+    notifyListeners();
+    log('[ContactsController] Sync finished. Success: $isSuccess');
+  }
+
+  void _updateContactCache() {
+    _contactCache = {for (var c in _contacts) normalizePhone(c.phoneNumber): c};
+    log(
+      '[ContactsController] Contact cache updated with ${_contactCache.length} entries.',
+    );
+  }
 
   Future<String> getContactName(String phoneNumber) async {
     final normalizedNumber = normalizePhone(phoneNumber);
     if (_contactCache.containsKey(normalizedNumber)) {
       return _contactCache[normalizedNumber]!.name;
     }
-    final contacts = await getLocalContacts();
     try {
-      final contact = contacts.firstWhere(
-        (c) => c.phoneNumber == normalizedNumber,
-        orElse: () => PhoneBookModel(contactId: '', name: '', phoneNumber: ''),
+      final contact = _contacts.firstWhere(
+        (c) => normalizePhone(c.phoneNumber) == normalizedNumber,
       );
-      return contact.name.isNotEmpty ? contact.name : '';
+      return contact.name;
     } catch (e) {
-      log(
-        '[ContactsController] Error finding contact name for $normalizedNumber: $e',
-      );
       return '';
     }
   }
 
-  Future<void> refreshContacts() async {
-    log('[ContactsController] refreshContacts started');
-    _isLoading = true;
-    notifyListeners();
-    _isLoading = false;
-
-    // 백그라운드에서 getLocalContacts 호출
-    Future(() async {
-      try {
-        await getLocalContacts(forceRefresh: true);
-      } catch (e, stackTrace) {
-        log('[ContactsController] Error refreshing contacts: $e');
-        log('[ContactsController] Stack trace: $stackTrace');
-      }
-    });
+  @override
+  void dispose() {
+    log('[ContactsController] dispose called. Cancelling stream subscription.');
+    _contactsStreamSubscription?.cancel();
+    super.dispose();
   }
 }

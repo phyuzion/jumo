@@ -65,7 +65,9 @@ class AppController {
   }
 
   Future<void> initializeApp() async {
-    log('[AppController] Performing pre-login initialization...');
+    log(
+      '[AppController] Performing pre-login initialization (initializeApp called)...',
+    );
     if (_isInitialized) {
       log('[AppController] Already pre-initialized, skipping...');
       return;
@@ -388,6 +390,27 @@ class AppController {
         '[AppController] Total core data and service initialization took: ${stopwatch.elapsedMilliseconds}ms',
       );
     }
+  }
+
+  // <<< 연락처 로드를 트리거하는 새로운 메소드 >>>
+  Future<void> triggerContactsLoadIfReady() async {
+    if (contactsController.isSyncing) {
+      log('[AppController] Contacts are already syncing. Skipping trigger.');
+      return;
+    }
+
+    if (contactsController.initialLoadAttempted) {
+      log(
+        '[AppController] Contacts initial load was already attempted. Triggering a non-forced refresh for consistency.',
+      );
+      await contactsController.refreshContacts(force: false);
+      return;
+    }
+
+    log(
+      '[AppController] Triggering initial contacts load via ContactsController as conditions are assumed to be met.',
+    );
+    await contactsController.loadInitialContacts();
   }
 }
 

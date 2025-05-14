@@ -6,17 +6,19 @@ import android.net.Uri
 import android.telephony.TelephonyManager
 import android.util.Log
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 object NativeBridge {
     private const val METHOD_CHANNEL_NAME = "com.jumo.mobile/native"
+    private const val EVENT_CHANNEL_CONTACTS_STREAM_NAME = "com.jumo.mobile/contactsStream"
     private var methodChannel: MethodChannel? = null
+    private var contactsEventChannel: EventChannel? = null
 
     private val bridgeScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -71,23 +73,6 @@ object NativeBridge {
                         result.error("STATE_ERROR", "Failed to get current call state", "$e")
                     }
                 }
-                "getContacts" -> {
-                    bridgeScope.launch {
-                        try {
-                            val contacts = withContext(Dispatchers.IO) {
-                                ContactManager.getContacts(JumoApp.context)
-                            }
-                            withContext(Dispatchers.Main) {
-                                result.success(contacts)
-                            }
-                        } catch (e: Exception) {
-                            Log.e("NativeBridge", "getContacts error: $e")
-                            withContext(Dispatchers.Main) {
-                                result.error("CONTACT_ERROR", e.message, e.stackTraceToString())
-                            }
-                        }
-                    }
-                }
                 "upsertContact" -> { 
                      try {
                         val rawContactId = call.argument<String>("rawContactId")
@@ -125,11 +110,15 @@ object NativeBridge {
                 else -> result.notImplemented()
             }
         }
+
+        contactsEventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL_CONTACTS_STREAM_NAME)
+        contactsEventChannel?.setStreamHandler(ContactsStreamHandler(JumoApp.context, bridgeScope))
     }
 
     fun dispose() {
         bridgeScope.cancel("NativeBridge disposed")
         methodChannel?.setMethodCallHandler(null)
+        contactsEventChannel?.setStreamHandler(null)
     }
 
     fun getMyPhoneNumberFromTelephony(): String { 
@@ -144,4 +133,52 @@ object NativeBridge {
     fun notifyIncomingNumber(number: String) { methodChannel?.invokeMethod("onIncomingNumber", number) }
     fun notifyOnCall(number: String, connected: Boolean) { methodChannel?.invokeMethod("onCall", mapOf("number" to number, "connected" to connected)) }
     fun notifyCallEnded(endedNumber: String, reason: String) { methodChannel?.invokeMethod("onCallEnded", mapOf("number" to endedNumber, "reason" to reason)) }
+}
+
+class ContactsStreamHandler(private val context: Context, private val scope: CoroutineScope) : EventChannel.StreamHandler {
+    override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+        if (events == null) {
+            Log.w("ContactsStreamHandler", "EventSink is null onListen, cannot stream.")
+            return
+        }
+
+        Log.d("ContactsStreamHandler", "onListen called. Starting to stream contacts.")
+        scope.launch {
+            try {
+                ContactManager.processContactsStreamed(
+                    context = context,
+                    chunkSize = 50,
+                    onChunkProcessed = {
+                        chunk -> 
+                        launch(Dispatchers.Main) {
+                           Log.d("ContactsStreamHandler", "Sending chunk of ${chunk.size} contacts")
+                           events.success(chunk) 
+                        }
+                    },
+                    onFinished = {
+                        launch(Dispatchers.Main) {
+                            Log.d("ContactsStreamHandler", "Finished streaming all contacts.")
+                            events.endOfStream()
+                        }
+                    },
+                    onError = { 
+                        exception -> 
+                        launch(Dispatchers.Main) {
+                            Log.e("ContactsStreamHandler", "Error streaming contacts: ${exception.message}")
+                            events.error("CONTACT_STREAM_ERROR", exception.message, exception.stackTraceToString())
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                launch(Dispatchers.Main) {
+                    Log.e("ContactsStreamHandler", "Outer catch in onListen: Error streaming contacts: ${e.message}")
+                    events.error("CONTACT_STREAM_ERROR", "Unexpected error in onListen: ${e.message}", e.stackTraceToString())
+                }
+            }
+        }
+    }
+
+    override fun onCancel(arguments: Any?) {
+        Log.d("ContactsStreamHandler", "onCancel called. Contact streaming cancelled by Flutter.")
+    }
 }

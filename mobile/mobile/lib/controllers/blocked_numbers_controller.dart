@@ -18,11 +18,7 @@ class BlockedNumbersController {
   final BlockedNumberRepository _blockedNumberRepository;
   final BlockedHistoryRepository _blockedHistoryRepository;
 
-  List<BlockedNumber> _blockedNumbers = [];
-  List<BlockedHistory> _blockedHistory = [];
   bool _isInitialized = false;
-  List<String> _dangerNumbers = [];
-  List<String> _bombCallsNumbers = [];
   bool _isTodayBlocked = false;
   bool _isUnknownBlocked = false;
   bool _isAutoBlockDanger = false;
@@ -105,21 +101,25 @@ class BlockedNumbersController {
 
   Future<void> _loadUserBlockedNumbers() async {
     try {
-      final numbers = await _blockedNumberRepository.getAllUserBlockedNumbers();
-      log(
-        '[BlockedNumbers] Loaded ${numbers.length} user blocked numbers from Repo.',
-      );
+      // 이 함수는 이제 내부 상태를 채우기보다, 필요시 getter를 통해 접근하도록 변경되었으므로 호출 의미가 적음.
+      // final numbers = await _blockedNumberRepository.getAllUserBlockedNumbers();
+      // log(
+      //   '[BlockedNumbers] Loaded ${numbers.length} user blocked numbers from Repo.',
+      // );
     } catch (e) {
-      log('[BlockedNumbers] Error loading user blocked numbers from Repo: $e');
+      log(
+        '[BlockedNumbers] Error loading user blocked numbers from Repo (if ever called): $e',
+      );
     }
   }
 
   Future<void> _loadBlockedHistory() async {
     try {
-      await _blockedHistoryRepository.getAllBlockedHistory();
-      log('[BlockedNumbers] Blocked history loaded via Repo.');
+      // 이 함수도 getter를 통해 접근하도록 변경.
+      // await _blockedHistoryRepository.getAllBlockedHistory();
+      // log('[BlockedNumbers] Blocked history loaded via Repo.');
     } catch (e) {
-      log('Error loading blocked history via Repo: $e');
+      log('Error loading blocked history via Repo (if ever called): $e');
     }
   }
 
@@ -220,14 +220,17 @@ class BlockedNumbersController {
           await _settingsRepository.isUnknownBlocked();
       if (isUnknownBlockedSetting) {
         try {
-          final savedContacts = await _contactsController.getLocalContacts();
+          final savedContacts = _contactsController.contacts;
           if (!savedContacts.any(
-            (contact) => contact.phoneNumber == normalizedPhoneNumber,
+            (contact) =>
+                normalizePhone(contact.phoneNumber) == normalizedPhoneNumber,
           )) {
             blockType = 'unknown';
           }
         } catch (e) {
-          log('[BlockedNumbers] Error checking unknown number: $e');
+          log(
+            '[BlockedNumbers] Error checking unknown number with contacts getter: $e',
+          );
         }
       }
     }
@@ -239,7 +242,8 @@ class BlockedNumbersController {
         '[isNumberBlockedAsync] Checking user block: Normalized incoming = $normalizedPhoneNumber, Blocked List = $userBlockedList',
       );
       if (userBlockedList.any(
-        (blockedNum) => normalizedPhoneNumber.contains(blockedNum),
+        (blockedNum) =>
+            normalizedPhoneNumber.contains(normalizePhone(blockedNum)),
       )) {
         blockType = 'user';
         log(
@@ -253,7 +257,9 @@ class BlockedNumbersController {
           await _settingsRepository.isAutoBlockDanger();
       if (isAutoBlockDangerSetting) {
         final dangerList = await _blockedNumberRepository.getDangerNumbers();
-        if (dangerList.contains(normalizedPhoneNumber)) {
+        if (dangerList
+            .map((d) => normalizePhone(d))
+            .contains(normalizedPhoneNumber)) {
           blockType = 'danger';
         }
       }
@@ -262,7 +268,9 @@ class BlockedNumbersController {
             await _settingsRepository.isBombCallsBlocked();
         if (isBombCallsBlockedSetting) {
           final bombList = await _blockedNumberRepository.getBombNumbers();
-          if (bombList.contains(normalizedPhoneNumber)) {
+          if (bombList
+              .map((b) => normalizePhone(b))
+              .contains(normalizedPhoneNumber)) {
             blockType = 'bomb_calls';
           }
         }
@@ -270,14 +278,18 @@ class BlockedNumbersController {
     }
 
     if (blockType != null) {
-      log('[isNumberBlockedAsync] Final Block Type: $blockType');
+      log(
+        '[isNumberBlockedAsync] Final Block Type: $blockType for $normalizedPhoneNumber',
+      );
       if (addHistory) {
         await _addBlockedHistory(normalizedPhoneNumber, blockType);
       }
       return true;
     }
 
-    log('[isNumberBlockedAsync] Final Result: NOT BLOCKED');
+    log(
+      '[isNumberBlockedAsync] Final Result: $normalizedPhoneNumber NOT BLOCKED',
+    );
     return false;
   }
 

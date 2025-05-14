@@ -41,9 +41,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _refreshContacts() async {
-    await context.read<ContactsController>().getLocalContacts(
-      forceRefresh: true,
-    );
+    await context.read<ContactsController>().refreshContacts(force: true);
   }
 
   @override
@@ -109,7 +107,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       body: RefreshIndicator(
         onRefresh: _refreshContacts,
         child:
-            isLoading
+            (isLoading && data.isEmpty && _searchQuery.isEmpty)
                 ? const Center(child: CircularProgressIndicator())
                 : data.isEmpty
                 ? Center(
@@ -137,7 +135,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                             height: 0,
                           ),
                         CustomExpansionTile(
-                          key: ValueKey('${phone}_$i'),
+                          key: ValueKey('${c.contactId}_${c.phoneNumber}_$i'),
                           isExpanded: i == _expandedIndex,
                           onTap: () {
                             setState(() {
@@ -225,7 +223,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     log(
       '[ContactsScreen] EditContactScreen 진입: contactId=${model.contactId}, rawContactId=${model.rawContactId}, name=${model.name}, phone=${model.phoneNumber}',
     );
-    Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder:
@@ -237,11 +235,11 @@ class _ContactsScreenState extends State<ContactsScreen> {
               initialContactModel: model,
             ),
       ),
-    ).then((shouldRefresh) {
-      if (shouldRefresh == true) {
-        _refreshContacts();
-      }
-    });
+    );
+    if (result == true) {
+      await context.read<ContactsController>().refreshContacts(force: true);
+      log('[ContactsScreen] Refreshed contacts after edit.');
+    }
   }
 
   Future<void> _onTapAddContact() async {
@@ -250,7 +248,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
       MaterialPageRoute(builder: (_) => const EditContactScreen()),
     );
     if (result == true) {
-      await _refreshContacts();
+      await context.read<ContactsController>().refreshContacts(force: true);
+      log('[ContactsScreen] Refreshed contacts after add.');
     }
   }
 

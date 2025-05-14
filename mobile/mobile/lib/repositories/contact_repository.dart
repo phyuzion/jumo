@@ -15,43 +15,48 @@ abstract class ContactRepository {
 
   /// 모든 연락처 데이터를 삭제합니다 (로그아웃 등에서 사용).
   Future<void> clearContacts();
+
+  String get boxName; // Box 이름을 외부에서 알 수 있도록 getter 추가
 }
 
 /// Hive를 사용하여 ContactRepository 인터페이스를 구현하는 클래스
 class HiveContactRepository implements ContactRepository {
   final Box<Map<String, dynamic>> _contactsBox;
 
+  // Box 이름을 외부에서도 접근 가능하도록 static const 또는 getter로 제공
+  static const String boxNameValue = _contactsBoxName;
+
+  @override
+  String get boxName => _contactsBoxName;
+
   HiveContactRepository(this._contactsBox);
 
   @override
   Future<List<PhoneBookModel>> getAllContacts() async {
     try {
-      return _contactsBox.values.map((dynamic e) {
-        if (e is Map) {
-          final map = Map<String, dynamic>.fromEntries(
-            (e as Map).entries.map(
-              (entry) => MapEntry(entry.key.toString(), entry.value),
-            ),
+      final List<PhoneBookModel> resultList = [];
+      for (final dynamic valueFromBox in _contactsBox.values) {
+        if (valueFromBox is Map) {
+          final Map<String, dynamic> correctlyTypedMap = valueFromBox.map(
+            (key, value) => MapEntry(key.toString(), value),
           );
-          return PhoneBookModel(
-            contactId: map['contactId'] as String? ?? '',
-            rawContactId: map['rawContactId'] as String?,
-            name: map['name'] as String? ?? '',
-            phoneNumber: map['phoneNumber'] as String? ?? '',
-            createdAt:
-                map['createdAt'] != null
-                    ? DateTime.parse(map['createdAt'] as String)
-                    : null,
-          );
+          // PhoneBookModel.fromJson이 Map<String, dynamic>을 올바르게 처리한다고 가정
+          resultList.add(PhoneBookModel.fromJson(correctlyTypedMap));
         } else {
           log(
-            '[HiveContactRepository] getAllContacts: Unexpected item type: ${e.runtimeType}',
+            '[HiveContactRepository] getAllContacts: Unexpected item type: ${valueFromBox.runtimeType}. Value: $valueFromBox',
           );
-          return PhoneBookModel(contactId: '', name: '', phoneNumber: '');
         }
-      }).toList();
-    } catch (e) {
-      log('[HiveContactRepository] Error getting all contacts: $e');
+      }
+      log(
+        '[HiveContactRepository] getAllContacts: Successfully fetched ${resultList.length} contacts from Hive.',
+      );
+      return resultList;
+    } catch (e, s) {
+      log(
+        '[HiveContactRepository] Error getting all contacts: $e',
+        stackTrace: s,
+      );
       return [];
     }
   }
@@ -59,24 +64,31 @@ class HiveContactRepository implements ContactRepository {
   @override
   Future<void> saveContacts(List<PhoneBookModel> contacts) async {
     try {
+      // Box를 clear하기 전에 현재 Box가 열려있는지, 유효한지 확인하는 것이 더 안전할 수 있음
+      if (!_contactsBox.isOpen) {
+        log('[HiveContactRepository] saveContacts: Box is not open!');
+        // 필요하다면 여기서 Box를 다시 열거나 예외 처리
+        return;
+      }
       await _contactsBox.clear();
       final Map<String, Map<String, dynamic>> entriesToPut = {};
       for (final contact in contacts) {
         final String key = contact.contactId;
-        entriesToPut[key] = {
-          'contactId': contact.contactId,
-          'rawContactId': contact.rawContactId,
-          'name': contact.name,
-          'phoneNumber': contact.phoneNumber,
-          'createdAt': contact.createdAt?.toIso8601String(),
-        };
+        // PhoneBookModel.toJson()을 사용하여 Map<String, dynamic>으로 변환
+        entriesToPut[key] = contact.toJson();
       }
       if (entriesToPut.isNotEmpty) {
         await _contactsBox.putAll(entriesToPut);
-        log('[HiveContactRepository] Saved ${entriesToPut.length} contacts.');
+        log(
+          '[HiveContactRepository] Saved ${entriesToPut.length} contacts to box: ${_contactsBox.name}',
+        );
+      } else {
+        log(
+          '[HiveContactRepository] No contacts to save to box: ${_contactsBox.name}',
+        );
       }
-    } catch (e) {
-      log('[HiveContactRepository] Error saving contacts: $e');
+    } catch (e, s) {
+      log('[HiveContactRepository] Error saving contacts: $e', stackTrace: s);
       rethrow;
     }
   }
@@ -84,12 +96,16 @@ class HiveContactRepository implements ContactRepository {
   @override
   Future<void> clearContacts() async {
     try {
+      if (!_contactsBox.isOpen) {
+        log('[HiveContactRepository] clearContacts: Box is not open!');
+        return;
+      }
       await _contactsBox.clear();
       log(
         '[HiveContactRepository] Cleared all contacts from box: ${_contactsBox.name}',
       );
-    } catch (e) {
-      log('[HiveContactRepository] Error clearing contacts: $e');
+    } catch (e, s) {
+      log('[HiveContactRepository] Error clearing contacts: $e', stackTrace: s);
     }
   }
 }

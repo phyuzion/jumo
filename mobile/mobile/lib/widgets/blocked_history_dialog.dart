@@ -4,6 +4,7 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/models/phone_book_model.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
+import 'dart:developer'; // log 사용을 위해 추가
 
 class BlockedHistoryDialog extends StatefulWidget {
   final List<BlockedHistory> history;
@@ -15,18 +16,41 @@ class BlockedHistoryDialog extends StatefulWidget {
 }
 
 class _BlockedHistoryDialogState extends State<BlockedHistoryDialog> {
-  late Future<Map<String, PhoneBookModel>> _contactsFuture;
+  // _contactsFuture는 이제 Map을 직접 들고 있도록 변경, 또는 FutureBuilder 제거 고려
+  Map<String, PhoneBookModel> _contactsMap = {};
+  bool _isLoadingContacts = true; // 로딩 상태 추가
 
   @override
   void initState() {
     super.initState();
-    _contactsFuture = _loadContacts();
+    _loadContactsMap();
   }
 
-  Future<Map<String, PhoneBookModel>> _loadContacts() async {
-    final contactsController = context.read<ContactsController>();
-    final contactsList = await contactsController.getLocalContacts();
-    return {for (var c in contactsList) c.phoneNumber: c};
+  Future<void> _loadContactsMap() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingContacts = true;
+    });
+    try {
+      final contactsController = context.read<ContactsController>();
+      // getLocalContacts 대신 contacts getter 사용
+      final contactsList = contactsController.contacts;
+      _contactsMap = {
+        for (var c in contactsList) normalizePhone(c.phoneNumber): c,
+      }; // phoneNumber도 normalize
+      log(
+        '[BlockedHistoryDialog] Loaded ${_contactsMap.length} contacts into map.',
+      );
+    } catch (e) {
+      log('[BlockedHistoryDialog] Error loading contacts: $e');
+      _contactsMap = {}; // 오류 시 빈 맵
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingContacts = false;
+        });
+      }
+    }
   }
 
   String _getTypeText(String type) {
@@ -58,7 +82,6 @@ class _BlockedHistoryDialogState extends State<BlockedHistoryDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 헤더
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               decoration: BoxDecoration(
@@ -80,113 +103,104 @@ class _BlockedHistoryDialogState extends State<BlockedHistoryDialog> {
                 ],
               ),
             ),
-            // 리스트 (FutureBuilder 사용)
             Expanded(
-              child: FutureBuilder<Map<String, PhoneBookModel>>(
-                future: _contactsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return const Center(child: Text('연락처 정보를 불러올 수 없습니다.'));
-                  }
+              child:
+                  _isLoadingContacts
+                      ? const Center(child: CircularProgressIndicator())
+                      : widget.history.isEmpty
+                      ? const Center(child: Text('차단 이력이 없습니다.'))
+                      : ListView.builder(
+                        itemCount: widget.history.length,
+                        itemBuilder: (context, index) {
+                          final item = widget.history[index];
+                          final normalizedNumber = normalizePhone(
+                            item.phoneNumber,
+                          );
+                          final contact = _contactsMap[normalizedNumber];
+                          final name = contact?.name;
 
-                  final contactsMap = snapshot.data ?? {};
-
-                  return ListView.builder(
-                    itemCount: widget.history.length,
-                    itemBuilder: (context, index) {
-                      final item = widget.history[index];
-                      final normalizedNumber = normalizePhone(item.phoneNumber);
-                      final contact = contactsMap[normalizedNumber];
-                      final name = contact?.name;
-
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(color: Colors.grey.shade200),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            // 전화번호와 이름
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    item.phoneNumber,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
-                                    ),
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border(
+                                bottom: BorderSide(color: Colors.grey.shade200),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.phoneNumber,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                      if (name != null &&
+                                          name.isNotEmpty) // 이름이 있을 때만 표시
+                                        Text(
+                                          name,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey.shade600,
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                  if (name != null)
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
                                     Text(
-                                      name,
-                                      style: TextStyle(
+                                      formatDateOnly(
+                                        item.blockedAt.toIso8601String(),
+                                      ),
+                                      style: const TextStyle(
                                         fontSize: 12,
+                                        color: Colors.black87,
+                                      ),
+                                    ),
+                                    Text(
+                                      formatTimeOnly(
+                                        item.blockedAt.toIso8601String(),
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 11,
                                         color: Colors.grey.shade600,
                                       ),
                                     ),
-                                ],
-                              ),
-                            ),
-                            // 일시
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  formatDateOnly(
-                                    item.blockedAt.toIso8601String(),
-                                  ),
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.black87,
-                                  ),
+                                  ],
                                 ),
-                                Text(
-                                  formatTimeOnly(
-                                    item.blockedAt.toIso8601String(),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    _getTypeText(item.type),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey.shade700,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
-                            const SizedBox(width: 8),
-                            // 타입
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade200,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                _getTypeText(item.type),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Colors.grey.shade700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  );
-                },
-              ),
+                          );
+                        },
+                      ),
             ),
           ],
         ),

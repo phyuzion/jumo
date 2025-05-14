@@ -41,7 +41,24 @@ class PhoneBookModel {
     this.createdAt,
   });
 
+  // Hive 저장 및 JSON 직렬화용 (createdAt을 int로 변환)
+  Map<String, dynamic> toJson() {
+    return {
+      'contactId': contactId,
+      'name': name,
+      'phoneNumber': phoneNumber,
+      'memo': memo,
+      'type': type,
+      'updatedAt': updatedAt, // 이 필드의 용도 확인 필요
+      'rawContactId': rawContactId,
+      // DateTime을 int (millisecondsSinceEpoch)로 저장
+      'createdAt': createdAt?.millisecondsSinceEpoch,
+    };
+  }
+
+  // Hive 로드 및 JSON 역직렬화용 (createdAt을 int로부터 복원)
   factory PhoneBookModel.fromJson(Map<String, dynamic> json) {
+    int? createdAtMillis = json['createdAt'] as int?;
     return PhoneBookModel(
       contactId: json['contactId'] as String? ?? '',
       name: json['name'] as String? ?? '',
@@ -50,30 +67,38 @@ class PhoneBookModel {
       type: json['type'] as int?,
       updatedAt: json['updatedAt'] as String?,
       rawContactId: json['rawContactId'] as String?,
+      // int (millisecondsSinceEpoch)로부터 DateTime 복원
       createdAt:
-          (() {
-            final v = json['createdAt'];
-            if (v == null) return null;
-            if (v is DateTime) return v;
-            if (v is int)
-              return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
-            if (v is String) return DateTime.tryParse(v);
-            return null;
-          })(),
+          createdAtMillis != null
+              ? DateTime.fromMillisecondsSinceEpoch(
+                createdAtMillis,
+                isUtc: true,
+              )
+              : null,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'contactId': contactId,
-      'name': name,
-      'phoneNumber': phoneNumber,
-      'memo': memo,
-      'type': type,
-      'updatedAt': updatedAt,
-      'rawContactId': rawContactId,
-      'createdAt': createdAt?.millisecondsSinceEpoch,
-    };
+  // 네이티브 데이터로부터 모델 생성 (네이티브의 lastUpdated는 int로 온다고 가정)
+  factory PhoneBookModel.fromMap(Map<String, dynamic> map) {
+    dynamic lastUpdatedValue = map['lastUpdated'];
+    DateTime? parsedCreatedAt;
+    if (lastUpdatedValue is int) {
+      parsedCreatedAt = DateTime.fromMillisecondsSinceEpoch(
+        lastUpdatedValue,
+        isUtc: true,
+      );
+    } else if (lastUpdatedValue is String) {
+      parsedCreatedAt = DateTime.tryParse(lastUpdatedValue);
+    } // 필요시 다른 타입 처리 추가
+
+    return PhoneBookModel(
+      contactId: map['id']?.toString() ?? '',
+      rawContactId: map['rawId']?.toString(),
+      name: map['displayName']?.toString() ?? '',
+      phoneNumber: map['phoneNumber']?.toString() ?? '',
+      createdAt: parsedCreatedAt,
+      // memo, type, updatedAt 등은 fromMap에서는 기본값 또는 null 처리
+    );
   }
 
   PhoneBookModel copyWith({
@@ -95,26 +120,6 @@ class PhoneBookModel {
       updatedAt: updatedAt ?? this.updatedAt,
       rawContactId: rawContactId ?? this.rawContactId,
       createdAt: createdAt ?? this.createdAt,
-    );
-  }
-
-  factory PhoneBookModel.fromMap(Map<String, dynamic> map) {
-    return PhoneBookModel(
-      contactId: map['id']?.toString() ?? '',
-      rawContactId: map['rawId']?.toString(),
-      name: map['displayName']?.toString() ?? '',
-      phoneNumber: map['phoneNumber']?.toString() ?? '',
-      createdAt:
-          (() {
-            final v = map['lastUpdated'];
-            if (v == null) return null;
-            if (v is DateTime) return v;
-            if (v is int) {
-              return DateTime.fromMillisecondsSinceEpoch(v, isUtc: true);
-            }
-            if (v is String) return DateTime.tryParse(v);
-            return null;
-          })(),
     );
   }
 }
