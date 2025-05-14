@@ -113,8 +113,8 @@ Future<void> initializeDependencies() async {
     }
     await tempCallBox.close();
 
-    final Box<Map<String, dynamic>> callLogsBox =
-        await Hive.openBox<Map<String, dynamic>>(callLogsBoxName);
+    final Box<Map<dynamic, dynamic>> callLogsBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(callLogsBoxName);
     final callLogRepository = HiveCallLogRepository(callLogsBox);
     if (!getIt.isRegistered<CallLogRepository>()) {
       getIt.registerSingleton<CallLogRepository>(callLogRepository);
@@ -140,8 +140,8 @@ Future<void> initializeDependencies() async {
     }
     await tempSmsBox.close();
 
-    final Box<Map<String, dynamic>> smsLogsBox =
-        await Hive.openBox<Map<String, dynamic>>(smsLogsBoxName);
+    final Box<Map<dynamic, dynamic>> smsLogsBox =
+        await Hive.openBox<Map<dynamic, dynamic>>(smsLogsBoxName);
     final smsLogRepository = HiveSmsLogRepository(smsLogsBox);
     if (!getIt.isRegistered<SmsLogRepository>()) {
       getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
@@ -215,7 +215,7 @@ Future<void> initializeDependencies() async {
   }
 
   try {
-    final contactsBox = await Hive.openBox<Map<String, dynamic>>('contacts');
+    final contactsBox = await Hive.openBox<Map<dynamic, dynamic>>('contacts');
     final contactRepository = HiveContactRepository(contactsBox);
     if (!getIt.isRegistered<ContactRepository>()) {
       getIt.registerSingleton<ContactRepository>(contactRepository);

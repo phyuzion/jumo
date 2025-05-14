@@ -20,7 +20,7 @@ abstract class SmsLogRepository {
 
 /// Hive를 사용하여 SmsLogRepository 인터페이스를 구현하는 클래스
 class HiveSmsLogRepository implements SmsLogRepository {
-  final Box<Map<String, dynamic>> _smsLogsBox;
+  final Box<Map<dynamic, dynamic>> _smsLogsBox;
 
   HiveSmsLogRepository(this._smsLogsBox);
 
@@ -43,15 +43,20 @@ class HiveSmsLogRepository implements SmsLogRepository {
   Future<List<Map<String, dynamic>>> getAllSmsLogs() async {
     try {
       final List<Map<String, dynamic>> resultList = [];
-      for (final dynamic valueFromBox in _smsLogsBox.values) {
-        if (valueFromBox is Map) {
-          final Map<String, dynamic> correctlyTypedMap = valueFromBox.map(
-            (key, value) => MapEntry(key.toString(), value),
-          );
-          resultList.add(correctlyTypedMap);
+      for (final dynamic valueFromBoxDynamic in _smsLogsBox.values) {
+        if (valueFromBoxDynamic is Map) {
+          try {
+            final Map<String, dynamic> correctlyTypedMap = valueFromBoxDynamic
+                .map((key, value) => MapEntry(key.toString(), value));
+            resultList.add(correctlyTypedMap);
+          } catch (conversionError) {
+            log(
+              '[HiveSmsLogRepository] Error converting map entry: $conversionError. Entry: $valueFromBoxDynamic',
+            );
+          }
         } else {
           log(
-            '[HiveSmsLogRepository] getAllSmsLogs: Unexpected item type: ${valueFromBox.runtimeType}. Value: $valueFromBox',
+            '[HiveSmsLogRepository] getAllSmsLogs: Unexpected item type: ${valueFromBoxDynamic.runtimeType}. Value: $valueFromBoxDynamic',
           );
         }
       }
@@ -82,7 +87,9 @@ class HiveSmsLogRepository implements SmsLogRepository {
         entriesToPut[key] = smsMap;
       }
       if (entriesToPut.isNotEmpty) {
-        await _smsLogsBox.putAll(entriesToPut);
+        await _smsLogsBox.putAll(
+          entriesToPut.cast<String, Map<dynamic, dynamic>>(),
+        );
         log(
           '[HiveSmsLogRepository] Saved ${entriesToPut.length} SMS logs (24시간 이내 전체 덮어쓰기).',
         );

@@ -20,7 +20,7 @@ abstract class CallLogRepository {
 
 /// Hive를 사용하여 CallLogRepository 인터페이스를 구현하는 클래스
 class HiveCallLogRepository implements CallLogRepository {
-  final Box<Map<String, dynamic>> _callLogsBox;
+  final Box<Map<dynamic, dynamic>> _callLogsBox;
 
   HiveCallLogRepository(this._callLogsBox);
 
@@ -42,15 +42,20 @@ class HiveCallLogRepository implements CallLogRepository {
   Future<List<Map<String, dynamic>>> getAllCallLogs() async {
     try {
       final List<Map<String, dynamic>> resultList = [];
-      for (final dynamic valueFromBox in _callLogsBox.values) {
-        if (valueFromBox is Map) {
-          final Map<String, dynamic> correctlyTypedMap = valueFromBox.map(
-            (key, value) => MapEntry(key.toString(), value),
-          );
-          resultList.add(correctlyTypedMap);
+      for (final dynamic valueFromBoxDynamic in _callLogsBox.values) {
+        if (valueFromBoxDynamic is Map) {
+          try {
+            final Map<String, dynamic> correctlyTypedMap = valueFromBoxDynamic
+                .map((key, value) => MapEntry(key.toString(), value));
+            resultList.add(correctlyTypedMap);
+          } catch (conversionError) {
+            log(
+              '[HiveCallLogRepository] Error converting map entry: $conversionError. Entry: $valueFromBoxDynamic',
+            );
+          }
         } else {
           log(
-            '[HiveCallLogRepository] getAllCallLogs: Unexpected item type: ${valueFromBox.runtimeType}. Value: $valueFromBox',
+            '[HiveCallLogRepository] getAllCallLogs: Unexpected item type: ${valueFromBoxDynamic.runtimeType}. Value: $valueFromBoxDynamic',
           );
         }
       }
@@ -81,7 +86,9 @@ class HiveCallLogRepository implements CallLogRepository {
         entriesToPut[key] = callLog;
       }
       if (entriesToPut.isNotEmpty) {
-        await _callLogsBox.putAll(entriesToPut);
+        await _callLogsBox.putAll(
+          entriesToPut.cast<String, Map<dynamic, dynamic>>(),
+        );
         log(
           '[HiveCallLogRepository] Saved ${entriesToPut.length} call logs (24시간 이내 전체 덮어쓰기).',
         );

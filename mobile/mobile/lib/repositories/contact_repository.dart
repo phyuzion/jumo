@@ -21,7 +21,7 @@ abstract class ContactRepository {
 
 /// Hive를 사용하여 ContactRepository 인터페이스를 구현하는 클래스
 class HiveContactRepository implements ContactRepository {
-  final Box<Map<String, dynamic>> _contactsBox;
+  final Box<Map<dynamic, dynamic>> _contactsBox;
 
   // Box 이름을 외부에서도 접근 가능하도록 static const 또는 getter로 제공
   static const String boxNameValue = _contactsBoxName;
@@ -35,16 +35,21 @@ class HiveContactRepository implements ContactRepository {
   Future<List<PhoneBookModel>> getAllContacts() async {
     try {
       final List<PhoneBookModel> resultList = [];
-      for (final dynamic valueFromBox in _contactsBox.values) {
-        if (valueFromBox is Map) {
-          final Map<String, dynamic> correctlyTypedMap = valueFromBox.map(
-            (key, value) => MapEntry(key.toString(), value),
-          );
-          // PhoneBookModel.fromJson이 Map<String, dynamic>을 올바르게 처리한다고 가정
-          resultList.add(PhoneBookModel.fromJson(correctlyTypedMap));
+      for (final dynamic valueFromBoxDynamic in _contactsBox.values) {
+        if (valueFromBoxDynamic is Map) {
+          try {
+            // Map<dynamic, dynamic>을 Map<String, dynamic>으로 변환
+            final Map<String, dynamic> correctlyTypedMap = valueFromBoxDynamic
+                .map((key, value) => MapEntry(key.toString(), value));
+            resultList.add(PhoneBookModel.fromJson(correctlyTypedMap));
+          } catch (conversionError) {
+            log(
+              '[HiveContactRepository] Error converting map to PhoneBookModel: $conversionError. Map: $valueFromBoxDynamic',
+            );
+          }
         } else {
           log(
-            '[HiveContactRepository] getAllContacts: Unexpected item type: ${valueFromBox.runtimeType}. Value: $valueFromBox',
+            '[HiveContactRepository] getAllContacts: Unexpected item type: ${valueFromBoxDynamic.runtimeType}. Value: $valueFromBoxDynamic',
           );
         }
       }
@@ -64,21 +69,25 @@ class HiveContactRepository implements ContactRepository {
   @override
   Future<void> saveContacts(List<PhoneBookModel> contacts) async {
     try {
-      // Box를 clear하기 전에 현재 Box가 열려있는지, 유효한지 확인하는 것이 더 안전할 수 있음
       if (!_contactsBox.isOpen) {
         log('[HiveContactRepository] saveContacts: Box is not open!');
-        // 필요하다면 여기서 Box를 다시 열거나 예외 처리
         return;
       }
       await _contactsBox.clear();
+      // 저장하는 값은 여전히 Map<String, dynamic>이지만, Box의 값 타입은 Map<dynamic, dynamic>으로 넓혀짐
       final Map<String, Map<String, dynamic>> entriesToPut = {};
       for (final contact in contacts) {
         final String key = contact.contactId;
-        // PhoneBookModel.toJson()을 사용하여 Map<String, dynamic>으로 변환
-        entriesToPut[key] = contact.toJson();
+        entriesToPut[key] =
+            contact.toJson(); // toJson()은 Map<String, dynamic> 반환
       }
       if (entriesToPut.isNotEmpty) {
-        await _contactsBox.putAll(entriesToPut);
+        // putAll의 값 타입이 Box의 값 타입과 일치하거나 호환되어야 함.
+        // Map<String, Map<String, dynamic>>을 Box<Map<dynamic, dynamic>>에 넣음.
+        // 각 Map<String, dynamic>은 Map<dynamic, dynamic>으로 암시적 변환 가능.
+        await _contactsBox.putAll(
+          entriesToPut.cast<String, Map<dynamic, dynamic>>(),
+        );
         log(
           '[HiveContactRepository] Saved ${entriesToPut.length} contacts to box: ${_contactsBox.name}',
         );
