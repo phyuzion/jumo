@@ -8,6 +8,7 @@ import 'package:mobile/repositories/contact_repository.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/graphql/phone_records_api.dart';
+import 'package:mobile/repositories/settings_repository.dart';
 
 // 네이티브 연락처 파싱 함수
 List<PhoneBookModel> _parseNativeContacts(
@@ -65,17 +66,17 @@ List<PhoneBookModel> _parseNativeContacts(
 
 class ContactsController with ChangeNotifier {
   final ContactRepository _contactRepository;
+  final SettingsRepository _settingsRepository;
   List<PhoneBookModel> _contacts = [];
   Map<String, PhoneBookModel> _contactCache = {};
   bool _isLoading = false;
   bool _isSyncing = false;
-  DateTime? _lastFullSyncTime;
   StreamSubscription<List<Map<String, dynamic>>>? _contactsStreamSubscription;
   bool _initialLoadAttempted = false; // 초기 로드 시도 여부 플래그
 
-  ContactsController(this._contactRepository) {
+  ContactsController(this._contactRepository, this._settingsRepository) {
     log(
-      '[ContactsController] Instance created. Initial load to be triggered externally.',
+      '[ContactsController] Instance created. Initial sync to be triggered externally.',
     );
   }
 
@@ -86,217 +87,176 @@ class ContactsController with ChangeNotifier {
   bool get isSyncing => _isSyncing;
   bool get initialLoadAttempted => _initialLoadAttempted; // 외부에서 확인 가능하도록
 
-  Future<void> loadInitialContacts() async {
-    log('[ContactsController] loadInitialContacts called.');
-    if (_isSyncing || _initialLoadAttempted) {
-      // 이미 동기화 중이거나, 초기 로드가 이미 시도되었다면 중복 실행 방지
-      log(
-        '[ContactsController] Already syncing or initial load attempted, skipping initial load. isSyncing: $_isSyncing, initialLoadAttempted: $_initialLoadAttempted',
-      );
-      return;
-    }
-    _initialLoadAttempted = true; // 로드 시도 플래그 설정
-    _isLoading = true;
-    notifyListeners();
-
-    List<PhoneBookModel> cachedContactsForDiff = [];
-    try {
-      cachedContactsForDiff = await _contactRepository.getAllContacts();
-      if (cachedContactsForDiff.isNotEmpty) {
-        _contacts = List.from(cachedContactsForDiff);
-        _updateContactCache();
-        log(
-          '[ContactsController] Loaded ${cachedContactsForDiff.length} contacts from Hive cache for initial display.',
-        );
-      }
-    } catch (e, s) {
-      log(
-        '[ContactsController] Error loading contacts from Hive for initial display: $e',
-        stackTrace: s,
-      );
-      _contacts = [];
-      _contactCache = {};
-    } finally {
-      // 이 시점에서는 UI가 캐시된 데이터로 먼저 그려질 수 있도록 isLoading을 false로 할 수 있으나,
-      // 전체 동기화가 아직 시작 전이므로, _startFullContactsSync에서 isLoading을 다시 관리.
-      // 여기서는 notifyListeners()만 호출하여 캐시 로드 결과를 반영.
-      notifyListeners();
-    }
-    // clearPreviousContacts는 항상 false로 전달 (캐시와 비교하여 diff 업로드 위함)
-    // 또는, 앱 첫 실행 시에는 서버에 데이터가 없을 수 있으므로 clearPreviousContacts:true (모두 업로드) 전략도 가능
-    await _startFullContactsSync(
-      clearPreviousContacts: _contacts.isEmpty,
-      originalContactsForDiff: cachedContactsForDiff,
-    );
-  }
-
-  Future<void> refreshContacts({bool force = false}) async {
-    log('[ContactsController] refreshContacts(force: $force) called');
-    if (!_initialLoadAttempted && !force) {
-      log(
-        '[ContactsController] Initial load not attempted yet. Calling loadInitialContacts instead of refresh(force:false).',
-      );
-      await loadInitialContacts(); // 초기 로드가 안됐으면 refresh(force:false)도 초기 로드처럼 동작
-      return;
-    }
-    if (!force && _isSyncing) {
-      log(
-        '[ContactsController] Already syncing and not a forced refresh, refresh skipped.',
-      );
-      return;
-    }
-    if (force || !_isSyncing) {
-      List<PhoneBookModel> currentContactsForDiff = List.from(_contacts);
-      await _startFullContactsSync(
-        clearPreviousContacts: force,
-        originalContactsForDiff: currentContactsForDiff,
-      );
-    } else {
-      log(
-        '[ContactsController] Syncing is already in progress, not starting new one unless forced.',
-      );
-    }
-  }
-
-  Future<void> _startFullContactsSync({
-    required bool clearPreviousContacts,
-    required List<PhoneBookModel> originalContactsForDiff,
-  }) async {
+  Future<void> syncContacts({bool forceFullSync = false}) async {
     if (_isSyncing) {
-      log(
-        '[ContactsController] _startFullContactsSync: Already syncing. Aborting this call.',
-      );
+      log('[ContactsController.syncContacts] Already syncing. Skipping.');
       return;
     }
+
     _isSyncing = true;
     _isLoading = true;
-    notifyListeners();
-
-    log(
-      '[ContactsController] _startFullContactsSync: Starting full sync (clearPrevious: $clearPreviousContacts).',
-    );
-
-    List<PhoneBookModel> newContactListForThisSync = [];
-    if (clearPreviousContacts) {
-      _contacts = [];
-      _contactCache = {};
+    if (!_initialLoadAttempted || forceFullSync) {
+      // 첫 로드 시도거나 강제 전체 동기화 시에만 UI 즉시 업데이트
       notifyListeners();
     }
+
+    // _contacts가 비어있고, 강제 전체 동기화가 아니며, 이전 동기화 시간이 있는 경우 (델타 동기화 시나리오),
+    // Hive에서 기존 연락처를 로드하여 originalContactsForDiff의 기준을 설정합니다.
+    // 이는 앱 재시작 후 컨트롤러가 새로 생성되었지만 Hive에는 데이터가 있는 경우를 처리합니다.
+    if (_contacts.isEmpty && !forceFullSync) {
+      final int? previousSyncTimestamp =
+          await _settingsRepository.getLastContactsSyncTimestamp();
+      if (previousSyncTimestamp != null && previousSyncTimestamp > 0) {
+        try {
+          final List<PhoneBookModel> existingContactsFromHive =
+              await _contactRepository.getAllContacts();
+          if (existingContactsFromHive.isNotEmpty) {
+            _contacts = List.from(existingContactsFromHive);
+            _updateContactCache(); // 캐시도 업데이트
+          } else {
+            log(
+              '[ContactsController.syncContacts] Hive was empty. Proceeding with delta sync against an empty baseline.',
+            );
+          }
+        } catch (e, s) {
+          log(
+            '[ContactsController.syncContacts] Error loading from Hive for baseline: $e',
+            stackTrace: s,
+          );
+          // 오류 발생 시 빈 _contacts로 진행 (기존 로직과 유사하게)
+        }
+      }
+    }
+
+    List<PhoneBookModel> originalContactsForDiff = List.from(
+      _contacts,
+    ); // 현재 메모리 상태 백업 (Hive에서 로드된 후의 상태일 수 있음)
+    bool performClearForFullSync = forceFullSync; // 강제 전체 동기화 시에는 기존 데이터를 지움
+    int? lastSyncTimestamp;
+
+    if (!forceFullSync) {
+      // 강제 전체 동기화가 아닐 경우에만 마지막 동기화 시간 조회
+      lastSyncTimestamp =
+          await _settingsRepository.getLastContactsSyncTimestamp();
+      if (lastSyncTimestamp == null || lastSyncTimestamp == 0) {
+        performClearForFullSync = true;
+        originalContactsForDiff = []; // 전체 동기화이므로 비교 대상 원본 없음
+      }
+    } else {
+      originalContactsForDiff = []; // 강제 전체 동기화 시 비교 대상 원본 없음
+    }
+
+    final int? timestampToSend =
+        performClearForFullSync ? 0 : lastSyncTimestamp;
+
+    List<PhoneBookModel> newContactListFromStream = [];
 
     await _contactsStreamSubscription?.cancel();
     _contactsStreamSubscription = null;
 
     try {
-      _contactsStreamSubscription = NativeMethods.getContactsStream().listen(
+      _contactsStreamSubscription = NativeMethods.getContactsStream(
+        lastSyncTimestampEpochMillis: timestampToSend,
+      ).listen(
         (List<Map<String, dynamic>> chunkData) {
-          if (chunkData.isEmpty && newContactListForThisSync.isEmpty) {
-            log('[ContactsController] Stream: Received initial empty chunk.');
-          }
-
           final List<PhoneBookModel> parsedChunk = _parseNativeContacts(
             chunkData,
           );
           if (parsedChunk.isNotEmpty) {
-            newContactListForThisSync.addAll(parsedChunk);
+            newContactListFromStream.addAll(parsedChunk);
             log(
-              '[ContactsController] Stream: Received and parsed chunk of ${parsedChunk.length}. Total for this sync: ${newContactListForThisSync.length}',
+              '[ContactsController.syncContacts] Stream: Received chunk ${parsedChunk.length}. Total for this stream: ${newContactListFromStream.length}',
             );
-            // 점진적 UI 업데이트 (clearPreviousContacts가 false일 때만 의미있음, 현재는 onDone에서 한번에 업데이트)
-            if (!clearPreviousContacts) {
-              // 기존 _contacts에 parsedChunk를 합치고, 중복 제거 및 정렬 후 _contacts 업데이트 및 notifyListeners()
-              // 이 부분은 UX를 위해 중요하지만, 지금은 onDone에서 전체 업데이트로 단순화.
-            }
           }
         },
         onError: (error, stackTrace) {
           log(
-            '[ContactsController] Error in contacts stream: $error',
+            '[ContactsController.syncContacts] Error in stream: $error',
             stackTrace: stackTrace,
           );
-          _finishSync(isSuccess: false);
+          _finishSyncInternal(isSuccess: false);
         },
         onDone: () async {
           log(
-            '[ContactsController] Contacts stream done. Total contacts received: ${newContactListForThisSync.length}.',
+            '[ContactsController.syncContacts] Stream done. Total from stream: ${newContactListFromStream.length}.',
           );
-          await _handleSyncCompletion(
-            newContactListForThisSync,
+          await _handleSyncCompletionInternal(
+            newContactListFromStream,
             originalContactsForDiff,
-            clearPreviousContacts,
+            performClearForFullSync,
           );
         },
       );
+      if (!_initialLoadAttempted) {
+        _initialLoadAttempted = true; // 스트림 구독 시작 = 로드 시도
+      }
     } catch (e, s) {
       log(
-        '[ContactsController] Error starting contacts stream: $e',
+        '[ContactsController.syncContacts] Error starting stream: $e',
         stackTrace: s,
       );
-      _finishSync(isSuccess: false);
+      _finishSyncInternal(isSuccess: false);
     }
   }
 
-  Future<void> _handleSyncCompletion(
-    List<PhoneBookModel> newContactsFromSync,
-    List<PhoneBookModel> originalContacts,
-    bool wasCleared,
+  Future<void> _handleSyncCompletionInternal(
+    List<PhoneBookModel>
+    newOrUpdatedContactsFromStream, // 스트림에서 받은 데이터 (전체 또는 델타)
+    List<PhoneBookModel> originalContactsAtSyncStart, // 동기화 시작 시점의 _contacts 상태
+    bool wasFullRefresh, // 이 동기화가 전체 새로고침이었는지 여부
   ) async {
-    _contacts = List.from(newContactsFromSync);
+    List<PhoneBookModel> finalContactsToSave;
+
+    if (wasFullRefresh) {
+      finalContactsToSave = List.from(newOrUpdatedContactsFromStream);
+    } else {
+      // 델타 업데이트: newOrUpdatedContactsFromStream은 변경/추가된 것들임
+      // 이미 onData에서 _contacts에 실시간으로 반영하려고 시도했으나, 최종적으로 여기서 한번 더 정리.
+      Map<String, PhoneBookModel> combinedContactsMap = {
+        for (var c in originalContactsAtSyncStart) c.contactId: c,
+      }; // 현재 _contacts를 기반으로 Map 생성
+      for (var updatedContact in newOrUpdatedContactsFromStream) {
+        combinedContactsMap[updatedContact.contactId] = updatedContact;
+      }
+      finalContactsToSave = combinedContactsMap.values.toList();
+      log(
+        '[ContactsController._handleSyncCompletionInternal] Delta refresh. Merged. Total finalContacts: ${finalContactsToSave.length}',
+      );
+    }
+    finalContactsToSave.sort(
+      (a, b) => (a.name.toLowerCase()).compareTo(b.name.toLowerCase()),
+    );
+    _contacts = List.from(finalContactsToSave);
     _updateContactCache();
-    _lastFullSyncTime = DateTime.now();
 
     log(
-      '[ContactsController] Saving ${_contacts.length} contacts to Hive (on main isolate)...',
+      '[ContactsController._handleSyncCompletionInternal] Saving ${finalContactsToSave.length} contacts to Hive...',
     );
     try {
       final saveStopwatch = Stopwatch()..start();
-      await _contactRepository.saveContacts(_contacts);
+      await _contactRepository.saveContacts(finalContactsToSave);
       saveStopwatch.stop();
       log(
-        '[ContactsController] Saved contacts to Hive (on main isolate) in ${saveStopwatch.elapsedMilliseconds}ms.',
+        '[ContactsController._handleSyncCompletionInternal] Saved contacts to Hive in ${saveStopwatch.elapsedMilliseconds}ms.',
       );
 
-      log('[ContactsController] Preparing contacts for server upload...');
-      List<PhoneBookModel> contactsToUpload = [];
+      await _settingsRepository.setLastContactsSyncTimestamp(
+        DateTime.now().millisecondsSinceEpoch,
+      );
 
-      if (wasCleared || originalContacts.isEmpty) {
-        contactsToUpload = List.from(newContactsFromSync);
-        log(
-          '[ContactsController] Uploading all ${contactsToUpload.length} contacts (wasCleared: $wasCleared, originalEmpty: ${originalContacts.isEmpty}).',
-        );
+      List<PhoneBookModel> contactsToUploadForServer;
+      if (wasFullRefresh || originalContactsAtSyncStart.isEmpty) {
+        contactsToUploadForServer = List.from(finalContactsToSave);
       } else {
-        final Map<String, PhoneBookModel> originalContactsMap = {
-          for (var c in originalContacts) c.contactId: c,
-        };
-        for (var newContact in newContactsFromSync) {
-          final PhoneBookModel? originalContact =
-              originalContactsMap[newContact.contactId];
-          bool changed = false;
-          if (originalContact == null) {
-            changed = true;
-          } else {
-            bool nameChanged = originalContact.name != newContact.name;
-            bool phoneChanged =
-                normalizePhone(originalContact.phoneNumber) !=
-                normalizePhone(newContact.phoneNumber);
-            bool timestampChanged =
-                (originalContact.createdAt?.millisecondsSinceEpoch ?? 0) !=
-                (newContact.createdAt?.millisecondsSinceEpoch ?? 0);
-            if (nameChanged || phoneChanged || timestampChanged) {
-              changed = true;
-            }
-          }
-          if (changed) {
-            contactsToUpload.add(newContact);
-          }
-        }
-        log(
-          '[ContactsController] Found ${contactsToUpload.length} changed/new contacts to upload based on diff.',
+        contactsToUploadForServer = _calculateDeltaForServer(
+          originalContactsAtSyncStart,
+          finalContactsToSave,
         );
       }
 
-      if (contactsToUpload.isNotEmpty) {
+      if (contactsToUploadForServer.isNotEmpty) {
         final recordsToUpsert =
-            contactsToUpload.map((contact) {
+            contactsToUploadForServer.map((contact) {
               Map<String, dynamic> serverMap = {
                 'phoneNumber': normalizePhone(contact.phoneNumber),
                 'name': contact.name,
@@ -308,36 +268,70 @@ class ContactsController with ChangeNotifier {
               return serverMap;
             }).toList();
 
-        log(
-          '[ContactsController] Uploading ${recordsToUpsert.length} records to server (createdAt as UTC ISO8601 string)...',
-        );
         try {
           await PhoneRecordsApi.upsertPhoneRecords(recordsToUpsert);
-          log('[ContactsController] Successfully uploaded contacts to server.');
         } catch (e, s) {
           log(
-            '[ContactsController] Error uploading contacts to server: $e',
+            '[ContactsController._handleSyncCompletionInternal] Error uploading contacts to server: $e',
             stackTrace: s,
           );
         }
       } else {
-        log('[ContactsController] No contacts to upload to server.');
+        log(
+          '[ContactsController._handleSyncCompletionInternal] No changes to upload to server.',
+        );
       }
     } catch (e, s) {
       log(
-        '[ContactsController] Error in _handleSyncCompletion (Hive save or server prep): $e',
+        '[ContactsController._handleSyncCompletionInternal] Error during Hive save or server upload: $e',
         stackTrace: s,
       );
     } finally {
-      _finishSync(isSuccess: true);
+      _finishSyncInternal(isSuccess: true);
     }
   }
 
-  void _finishSync({required bool isSuccess}) {
+  List<PhoneBookModel> _calculateDeltaForServer(
+    List<PhoneBookModel> original,
+    List<PhoneBookModel> current,
+  ) {
+    final List<PhoneBookModel> delta = [];
+    final Map<String, PhoneBookModel> originalMap = {
+      for (var c in original) c.contactId: c,
+    };
+
+    // 추가되거나 수정된 항목 찾기
+    for (var contactInCurrent in current) {
+      final originalContact = originalMap[contactInCurrent.contactId];
+      if (originalContact == null) {
+        // 새로 추가된 연락처
+        delta.add(contactInCurrent);
+      } else {
+        // 기존 연락처 -> 내용 비교하여 변경된 경우만 업로드
+        bool nameChanged = originalContact.name != contactInCurrent.name;
+        bool phoneChanged =
+            normalizePhone(originalContact.phoneNumber) !=
+            normalizePhone(contactInCurrent.phoneNumber);
+        bool timestampChanged =
+            (originalContact.createdAt?.millisecondsSinceEpoch ?? 0) !=
+            (contactInCurrent.createdAt?.millisecondsSinceEpoch ?? 0);
+        if (nameChanged || phoneChanged || timestampChanged) {
+          delta.add(contactInCurrent);
+        }
+      }
+    }
+    // 네이티브에서 삭제된 연락처를 서버에도 반영하려면, 여기서 originalMap에 있지만 currentMap에 없는 항목을 찾아
+    // 서버에 삭제 요청을 보내는 로직 추가 필요 (현재는 삭제 API 없음)
+    return delta;
+  }
+
+  void _finishSyncInternal({required bool isSuccess}) {
     _isSyncing = false;
     _isLoading = false;
     notifyListeners();
-    log('[ContactsController] Sync finished. Success: $isSuccess');
+    log(
+      '[ContactsController._finishSyncInternal] Sync finished. Success: $isSuccess',
+    );
   }
 
   void _updateContactCache() {

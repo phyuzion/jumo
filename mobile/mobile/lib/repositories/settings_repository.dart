@@ -1,4 +1,5 @@
 import 'package:hive_ce/hive.dart';
+import 'dart:developer'; // log 사용을 위해 추가
 
 // Hive 'settings' box 키 정의 (자주 사용될 것 같은 항목들)
 const String _screenWidthKey = 'screenWidth';
@@ -10,6 +11,8 @@ const String _isBombCallsBlockedKey = 'isBombCallsBlocked';
 const String _bombCallsCountKey = 'bombCallsCount';
 const String _lastSmsSyncTimestampKey = 'lastSmsUploadTimestamp';
 const String _lastCallLogSyncTimestampKey = 'lastCallLogSyncTimestamp';
+const String _lastContactsSyncTimestampKey =
+    'lastContactsSyncTimestamp'; // 연락처 동기화 타임스탬프 키 추가
 // ... 다른 설정 키들 필요 시 추가 ...
 
 /// 앱 설정 데이터 접근을 위한 추상 클래스 (인터페이스)
@@ -39,6 +42,10 @@ abstract class SettingsRepository {
   // --- 통화 기록 동기화 타임스탬프 --- (추가)
   Future<int> getLastCallLogSyncTimestamp();
   Future<void> setLastCallLogSyncTimestamp(int timestamp);
+
+  // 연락처 동기화 타임스탬프 메소드 추가
+  Future<int?> getLastContactsSyncTimestamp(); // null일 수 있음 (최초 실행 시)
+  Future<void> setLastContactsSyncTimestamp(int timestamp);
 
   // --- 일반 설정 값 접근 (Key 직접 사용) --- (선택적)
   // Future<T?> getSetting<T>(String key, {T? defaultValue});
@@ -159,6 +166,25 @@ class HiveSettingsRepository implements SettingsRepository {
   @override
   Future<void> setLastCallLogSyncTimestamp(int timestamp) async {
     await _settingsBox.put(_lastCallLogSyncTimestampKey, timestamp);
+  }
+
+  // 연락처 동기화 타임스탬프 구현 추가
+  @override
+  Future<int?> getLastContactsSyncTimestamp() async {
+    // 저장된 값이 없으면 null을 반환하도록 하여 최초 동기화 여부 판단 용이하게 함
+    final value = _settingsBox.get(_lastContactsSyncTimestampKey);
+    if (value is int) {
+      return value;
+    }
+    return null;
+  }
+
+  @override
+  Future<void> setLastContactsSyncTimestamp(int timestamp) async {
+    await _settingsBox.put(_lastContactsSyncTimestampKey, timestamp);
+    log(
+      '[HiveSettingsRepository] Last contacts sync timestamp set to: $timestamp',
+    );
   }
 
   // --- 일반 설정 값 접근 구현 (선택적) ---

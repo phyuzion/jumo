@@ -41,7 +41,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _refreshContacts() async {
-    await context.read<ContactsController>().refreshContacts(force: true);
+    await context.read<ContactsController>().syncContacts(forceFullSync: true);
   }
 
   @override
@@ -237,7 +237,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       ),
     );
     if (result == true) {
-      await context.read<ContactsController>().refreshContacts(force: true);
+      await context.read<ContactsController>().syncContacts();
       log('[ContactsScreen] Refreshed contacts after edit.');
     }
   }
@@ -248,7 +248,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
       MaterialPageRoute(builder: (_) => const EditContactScreen()),
     );
     if (result == true) {
-      await context.read<ContactsController>().refreshContacts(force: true);
+      await context.read<ContactsController>().syncContacts();
       log('[ContactsScreen] Refreshed contacts after add.');
     }
   }

@@ -80,8 +80,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _checkDefaultDialer();
       _searchFocusNode.unfocus();
       _loadNotificationCount();
-      context.read<ContactsController>().refreshContacts(force: false);
-      log('[HomeScreen] App resumed, called refreshContacts(force: false).');
+      context.read<ContactsController>().syncContacts();
+      log('[HomeScreen] App resumed, called syncContacts.');
     }
   }
 

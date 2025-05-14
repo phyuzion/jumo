@@ -142,11 +142,14 @@ class ContactsStreamHandler(private val context: Context, private val scope: Cor
             return
         }
 
-        Log.d("ContactsStreamHandler", "onListen called. Starting to stream contacts.")
+        val lastSyncTimestampEpochMillis = arguments as? Long
+
+        Log.d("ContactsStreamHandler", "onListen called. lastSyncTimestamp: $lastSyncTimestampEpochMillis. Starting to stream contacts.")
         scope.launch {
             try {
                 ContactManager.processContactsStreamed(
                     context = context,
+                    lastSyncTimestampEpochMillis = lastSyncTimestampEpochMillis,
                     chunkSize = 50,
                     onChunkProcessed = {
                         chunk -> 

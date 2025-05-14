@@ -403,14 +403,14 @@ class AppController {
       log(
         '[AppController] Contacts initial load was already attempted. Triggering a non-forced refresh for consistency.',
       );
-      await contactsController.refreshContacts(force: false);
+      await contactsController.syncContacts();
       return;
     }
 
     log(
       '[AppController] Triggering initial contacts load via ContactsController as conditions are assumed to be met.',
     );
-    await contactsController.loadInitialContacts();
+    await contactsController.syncContacts();
   }
 }
 

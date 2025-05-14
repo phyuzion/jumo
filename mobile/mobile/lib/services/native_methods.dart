@@ -73,22 +73,22 @@ class NativeMethods {
     }
   }
 
-  static Stream<List<Map<String, dynamic>>> getContactsStream() {
+  static Stream<List<Map<String, dynamic>>> getContactsStream({
+    int? lastSyncTimestampEpochMillis,
+  }) {
     log(
-      '[NativeMethods] getContactsStream: Creating new stream with StreamController.',
+      '[NativeMethods] getContactsStream called with lastSyncTimestamp: $lastSyncTimestampEpochMillis',
     );
 
     final StreamController<List<Map<String, dynamic>>> controller =
         StreamController<List<Map<String, dynamic>>>();
 
-    // 기존 구독이 있다면 취소 (한 번에 하나의 스트림만 활성화 가정)
     _nativeContactsStreamSubscription?.cancel();
 
     _nativeContactsStreamSubscription = _contactsEventChannel
-        .receiveBroadcastStream() // 이 스트림의 이벤트 타입은 dynamic
+        .receiveBroadcastStream(lastSyncTimestampEpochMillis)
         .listen(
           (dynamic event) {
-            // 네이티브에서 오는 이벤트
             if (controller.isClosed) return;
 
             if (event is List) {

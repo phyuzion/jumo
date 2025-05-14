@@ -12,12 +12,17 @@ object ContactManager {
     // 스트리밍 방식으로 연락처 정보를 처리하는 함수
     fun processContactsStreamed(
         context: Context,
+        lastSyncTimestampEpochMillis: Long?, // Long? 타입으로 변경, null 가능
         chunkSize: Int = 50, // 한 번에 처리할 청크 크기
         onChunkProcessed: (List<Map<String, Any?>>) -> Unit, // 각 청크 처리 후 호출될 콜백
         onFinished: () -> Unit, // 모든 데이터 처리 후 호출될 콜백
         onError: (Exception) -> Unit // 에러 발생 시 호출될 콜백
     ) {
-        Log.d("ContactManager", "processContactsStreamed: Starting to stream contacts with all name fields...")
+        if (lastSyncTimestampEpochMillis != null && lastSyncTimestampEpochMillis > 0) {
+            Log.d("ContactManager", "processContactsStreamed: Starting to stream UPDATED contacts since ${lastSyncTimestampEpochMillis}...")
+        } else {
+            Log.d("ContactManager", "processContactsStreamed: Starting to stream ALL contacts...")
+        }
         val contentResolver: ContentResolver = context.contentResolver
         
         // 필요한 모든 필드를 포함하는 프로젝션 정의
@@ -33,11 +38,16 @@ object ContactManager {
             ContactsContract.CommonDataKinds.Phone.NUMBER
         )
 
-        val selection = "${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ?"
-        val selectionArgs = arrayOf(
+        var selection = "(${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ?)"
+        val selectionArgsList = mutableListOf<String>(
             ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
             ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
         )
+
+        if (lastSyncTimestampEpochMillis != null && lastSyncTimestampEpochMillis > 0) {
+            selection += " AND ${ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP} > ?"
+            selectionArgsList.add(lastSyncTimestampEpochMillis.toString())
+        }
 
         val sortOrder = ContactsContract.Data.CONTACT_ID // CONTACT_ID로 정렬하여 그룹핑 용이하게
 
@@ -47,7 +57,7 @@ object ContactManager {
                 ContactsContract.Data.CONTENT_URI,
                 projection,
                 selection,
-                selectionArgs,
+                selectionArgsList.toTypedArray(),
                 sortOrder
             )
 

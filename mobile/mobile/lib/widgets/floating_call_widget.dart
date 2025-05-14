@@ -96,6 +96,7 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
       final phoneData = await SearchRecordsController.searchPhone(
         normalizedNumber,
       );
+      log('[FloatingCallWidget] Search result loaded: ${phoneData?.toJson()}');
       if (!mounted) return;
       setState(() {
         _searchResult = SearchResultModel(

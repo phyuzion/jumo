@@ -103,16 +103,7 @@ Future<void> initializeDependencies() async {
   }
 
   try {
-    String callLogsBoxName = 'call_logs';
-    var tempCallBox = await Hive.openBox(callLogsBoxName);
-    if (tempCallBox.containsKey('logs') && tempCallBox.get('logs') is String) {
-      log(
-        '[initializeDependencies] Old call_logs format (String) detected. Clearing box.',
-      );
-      await tempCallBox.clear();
-    }
-    await tempCallBox.close();
-
+    const String callLogsBoxName = 'call_logs';
     final Box<Map<dynamic, dynamic>> callLogsBox =
         await Hive.openBox<Map<dynamic, dynamic>>(callLogsBoxName);
     final callLogRepository = HiveCallLogRepository(callLogsBox);
@@ -120,7 +111,7 @@ Future<void> initializeDependencies() async {
       getIt.registerSingleton<CallLogRepository>(callLogRepository);
     }
     log(
-      '[initializeDependencies] CallLogRepository registered in GetIt (new format).',
+      '[initializeDependencies] CallLogRepository registered in GetIt (using Box<Map<dynamic, dynamic>>).',
     );
   } catch (e) {
     log(
@@ -130,16 +121,7 @@ Future<void> initializeDependencies() async {
   }
 
   try {
-    String smsLogsBoxName = 'sms_logs';
-    var tempSmsBox = await Hive.openBox(smsLogsBoxName);
-    if (tempSmsBox.containsKey('logs') && tempSmsBox.get('logs') is String) {
-      log(
-        '[initializeDependencies] Old sms_logs format (String) detected. Clearing box for migration.',
-      );
-      await tempSmsBox.clear();
-    }
-    await tempSmsBox.close();
-
+    const String smsLogsBoxName = 'sms_logs';
     final Box<Map<dynamic, dynamic>> smsLogsBox =
         await Hive.openBox<Map<dynamic, dynamic>>(smsLogsBoxName);
     final smsLogRepository = HiveSmsLogRepository(smsLogsBox);
@@ -147,7 +129,7 @@ Future<void> initializeDependencies() async {
       getIt.registerSingleton<SmsLogRepository>(smsLogRepository);
     }
     log(
-      '[initializeDependencies] SmsLogRepository registered in GetIt (new format).',
+      '[initializeDependencies] SmsLogRepository registered in GetIt (using Box<Map<dynamic, dynamic>>).',
     );
   } catch (e) {
     log(
@@ -270,7 +252,10 @@ Future<void> main() async {
   final blockedNumberRepository = getIt<BlockedNumberRepository>();
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
   final contactRepository = getIt<ContactRepository>();
-  final contactsController = ContactsController(contactRepository);
+  final contactsController = ContactsController(
+    contactRepository,
+    settingsRepository,
+  );
   final callLogContoller = CallLogController(callLogRepository);
   final smsController = SmsController(smsLogRepository);
   final blockedNumbersController = BlockedNumbersController(
@@ -518,7 +503,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
           if (isLoggedIn) {
             log('[MyAppStateful] User is logged in. Refreshing contacts...');
             final contactsCtrl = context.read<ContactsController>();
-            contactsCtrl.refreshContacts();
+            contactsCtrl.syncContacts(forceFullSync: false);
           } else {
             log(
               '[MyAppStateful] User is not logged in. Skipping contacts refresh.',

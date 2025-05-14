@@ -185,7 +185,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
   Future<void> _handleMainSaveAction() async {
     bool success = await _performSaveOperation();
     if (success && mounted) {
-      context.read<ContactsController>().refreshContacts();
+      context.read<ContactsController>().syncContacts();
       Fluttertoast.showToast(msg: "저장 완료");
       Navigator.pop(context, true);
     }
@@ -228,7 +228,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
         });
         bool success = await _performSaveOperation();
         if (success && mounted) {
-          context.read<ContactsController>().refreshContacts();
+          context.read<ContactsController>().syncContacts();
           Fluttertoast.showToast(msg: "차단해제 완료");
         }
       } else {
@@ -240,7 +240,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
         await blocknumbersController.addBlockedNumber(normalizedPhone);
         bool success = await _performSaveOperation();
         if (success && mounted) {
-          context.read<ContactsController>().refreshContacts();
+          context.read<ContactsController>().syncContacts();
           Fluttertoast.showToast(msg: "차단 완료");
         }
       }
