@@ -16,56 +16,130 @@ class CallLogController with ChangeNotifier {
   List<Map<String, dynamic>> _callLogs = [];
   bool _isLoading = false;
 
-  List<Map<String, dynamic>> get callLogs => _callLogs;
-  bool get isLoading => _isLoading;
+  List<Map<String, dynamic>> get callLogs {
+    log(
+      '[CallLogController.callLogs_getter] Called. Returning ${_callLogs.length} logs.',
+    );
+    return _callLogs;
+  }
+
+  bool get isLoading {
+    log('[CallLogController.isLoading_getter] Called. Returning $_isLoading.');
+    return _isLoading;
+  }
 
   // CallLogController(this._callLogRepository, this._settingsRepository) {
   CallLogController(this._callLogRepository) {
     // 생성자에서 SettingsRepository 제거
-    loadSavedCallLogs();
+    log(
+      '[CallLogController.constructor] Instance created.',
+      // '[CallLogController.constructor] Instance created. Calling loadSavedCallLogs...',
+    );
+    // loadSavedCallLogs(); // 생성 시 자동 로드 제거
   }
 
   Future<void> loadSavedCallLogs() async {
-    if (_isLoading) return;
+    log('[CallLogController.loadSavedCallLogs] Started.');
+    if (_isLoading) {
+      log('[CallLogController.loadSavedCallLogs] Already loading, skipping.');
+      return;
+    }
     _isLoading = true;
-    notifyListeners();
+    // notifyListeners(); // 시작 시점의 notify 제거 (finally에서 한번만)
+
+    // 변경 비교를 위해 현재 _callLogs 상태의 간단한 표현 (예: 길이와 해시코드 조합)을 저장
+    // 또는 각 Map을 ID화하여 Set으로 만들어 비교할 수도 있음
+    // 여기서는 더 확실한 비교를 위해 전체 리스트를 복사해둠 (메모리 주의)
+    List<Map<String, dynamic>> oldLogsSnapshot = List.from(_callLogs);
+    bool dataActuallyChanged = false;
+
     try {
-      _callLogs = await _callLogRepository.getAllCallLogs();
+      final loadedLogs = await _callLogRepository.getAllCallLogs();
+      log(
+        '[CallLogController.loadSavedCallLogs] Loaded ${loadedLogs.length} logs from repository.',
+      );
+
+      // 데이터 변경 여부 확인 (더 정교한 비교 로직 필요 시 수정)
+      // 여기서는 flutter/foundation.dart의 listEquals와 mapEquals를 활용하는 시도
+      // listEquals는 List<Map>에 대해 원하는 대로 동작하지 않을 수 있으므로, 각 요소를 비교해야 함
+      if (oldLogsSnapshot.length != loadedLogs.length) {
+        dataActuallyChanged = true;
+      } else {
+        // 길이가 같으면 각 요소 비교 (순서가 중요하다고 가정)
+        for (int i = 0; i < oldLogsSnapshot.length; i++) {
+          if (!mapEquals(oldLogsSnapshot[i], loadedLogs[i])) {
+            dataActuallyChanged = true;
+            break;
+          }
+        }
+      }
+
+      if (dataActuallyChanged) {
+        _callLogs = loadedLogs;
+        log(
+          '[CallLogController.loadSavedCallLogs] _callLogs updated as data changed.',
+        );
+      } else {
+        log(
+          '[CallLogController.loadSavedCallLogs] Loaded data is same as current _callLogs.',
+        );
+      }
     } catch (e) {
-      log('[CallLogController] Error loading saved call logs: $e');
-      _callLogs = [];
+      log(
+        '[CallLogController.loadSavedCallLogs] Error loading saved call logs: $e',
+      );
+      // 오류 발생 시 _isLoading은 finally에서 false가 되고, 데이터는 변경되지 않음
     } finally {
       _isLoading = false;
-      notifyListeners();
+      log(
+        '[CallLogController.loadSavedCallLogs] Before final notifyListeners (isLoading: false, logs: ${_callLogs.length}, dataActuallyChangedInThisRun: $dataActuallyChanged)',
+      );
+      notifyListeners(); // isLoading 상태 변경 및 데이터 변경(있었다면)을 한 번에 알림
+      log('[CallLogController.loadSavedCallLogs] Finished.');
     }
   }
 
   Future<void> refreshCallLogs() async {
+    log('[CallLogController.refreshCallLogs] Started.');
     if (_isLoading) {
-      log('[CallLogController] Already refreshing call logs, skipping.');
+      log('[CallLogController.refreshCallLogs] Already refreshing, skipping.');
       return;
     }
     _isLoading = true;
+    log(
+      '[CallLogController.refreshCallLogs] Before notifyListeners (isLoading: true)',
+    );
     notifyListeners();
 
-    List<Map<String, dynamic>> previouslySavedLogs = [];
-    try {
-      // 0. (선택적) UI 즉각 반응을 위해 먼저 저장된 로그를 한번 로드 (하지만 중복 호출될 수 있으므로 아래 로직과 통합 고려)
-      // 또는, 서버 업로드 비교용으로만 사용
-      previouslySavedLogs = await _callLogRepository.getAllCallLogs();
+    List<Map<String, dynamic>> oldCallLogsSnapshot = List.from(_callLogs);
+    bool dataHasChanged = false;
 
-      // 1. 최근 24시간 범위 설정
+    try {
+      log(
+        '[CallLogController.refreshCallLogs] Getting previously saved logs from repository (for diff)...',
+      );
+      List<Map<String, dynamic>> previouslySavedLogsForDiff =
+          await _callLogRepository.getAllCallLogs();
+      log(
+        '[CallLogController.refreshCallLogs] Got ${previouslySavedLogsForDiff.length} previously saved logs for diff.',
+      );
+
       final now = DateTime.now();
       final queryFromTimestamp =
           now.subtract(const Duration(hours: 24)).millisecondsSinceEpoch;
       final queryToTimestamp = now.millisecondsSinceEpoch;
 
+      log(
+        '[CallLogController.refreshCallLogs] Querying native CallLog from $queryFromTimestamp to $queryToTimestamp...',
+      );
       Iterable<CallLogEntry> callEntries = await CallLog.query(
         dateFrom: queryFromTimestamp,
         dateTo: queryToTimestamp,
       );
+      log(
+        '[CallLogController.refreshCallLogs] Fetched ${callEntries.length} entries from native.',
+      );
 
-      // 2. 가져온 최근 24시간 로그를 내부 리스트(_callLogs)로 즉시 업데이트 및 UI 갱신
       final List<Map<String, dynamic>> recentLogs = [];
       for (final e in callEntries) {
         if (e.number != null && e.number!.isNotEmpty && e.timestamp != null) {
@@ -81,56 +155,99 @@ class CallLogController with ChangeNotifier {
       recentLogs.sort(
         (a, b) => (b['timestamp'] as int).compareTo(a['timestamp'] as int),
       );
+      log(
+        '[CallLogController.refreshCallLogs] Processed ${recentLogs.length} recent logs from native.',
+      );
 
-      _callLogs = recentLogs; // UI에 먼저 반영
-      notifyListeners();
+      if (oldCallLogsSnapshot.length != recentLogs.length ||
+          (recentLogs.isNotEmpty &&
+              !mapEquals(
+                oldCallLogsSnapshot.safeElementAt(0),
+                recentLogs.safeElementAt(0),
+              )) ||
+          (recentLogs.length > 1 &&
+              !mapEquals(
+                oldCallLogsSnapshot.safeElementAt(
+                  oldCallLogsSnapshot.length - 1,
+                ),
+                recentLogs.safeElementAt(recentLogs.length - 1),
+              ))) {
+        _callLogs = recentLogs;
+        dataHasChanged = true;
+        log(
+          '[CallLogController.refreshCallLogs] _callLogs updated as data changed.',
+        );
+      } else {
+        log(
+          '[CallLogController.refreshCallLogs] Length is same, assuming no change for now. (For more precise check, implement deep list comparison)',
+        );
+      }
 
-      // 3. 이전 저장된 로그와 비교하여 새로 추가된 로그만 서버에 비동기 업로드
-      final Set<String> previouslySavedLogIds =
-          previouslySavedLogs.map((log) {
-            return "${log['timestamp']}_${log['number']}_${log['callType']}"; // 고유 ID 생성 방식 개선
+      final Set<String> previouslySavedLogIdsForDiff =
+          previouslySavedLogsForDiff.map((logEntry) {
+            return "${logEntry['timestamp']}_${logEntry['number']}_${logEntry['callType']}";
           }).toSet();
 
       final List<Map<String, dynamic>> newLogsToUpload =
-          recentLogs.where((log) {
+          recentLogs.where((logEntry) {
             final currentLogId =
-                "${log['timestamp']}_${log['number']}_${log['callType']}";
-            return !previouslySavedLogIds.contains(currentLogId);
+                "${logEntry['timestamp']}_${logEntry['number']}_${logEntry['callType']}";
+            return !previouslySavedLogIdsForDiff.contains(currentLogId);
           }).toList();
+      log(
+        '[CallLogController.refreshCallLogs] Found ${newLogsToUpload.length} new logs to upload to server (based on diff with previously saved state).',
+      );
 
       if (newLogsToUpload.isNotEmpty) {
         final logsForServer = CallLogController.prepareLogsForServer(
           newLogsToUpload,
         );
+        log(
+          '[CallLogController.refreshCallLogs] Prepared ${logsForServer.length} logs for server.',
+        );
         if (logsForServer.isNotEmpty) {
-          // 서버 업로드는 비동기로 처리하고 결과에 따라 UI를 직접 변경하지 않음 (오류 로깅만)
+          log(
+            '[CallLogController.refreshCallLogs] Uploading logs to server (async)...',
+          );
           LogApi.updateCallLog(logsForServer)
               .then((uploadSuccess) {
                 if (!uploadSuccess) {
                   log(
-                    '[CallLogController] Call log upload failed (API returned false) for new logs.',
+                    '[CallLogController.refreshCallLogs] Call log upload failed (API returned false) for new logs.',
+                  );
+                } else {
+                  log(
+                    '[CallLogController.refreshCallLogs] Call log upload successful for new logs.',
                   );
                 }
               })
               .catchError((apiError, stackTrace) {
                 log(
-                  '[CallLogController] Error uploading new call logs (async): $apiError\n$stackTrace',
+                  '[CallLogController.refreshCallLogs] Error uploading new call logs (async): $apiError\n$stackTrace',
                 );
               });
         }
       }
 
-      // 4. 최근 24시간 로그 전체를 저장소에 덮어쓰기
+      log(
+        '[CallLogController.refreshCallLogs] Saving ${recentLogs.length} recent logs to repository (full overwrite)...',
+      );
       await _callLogRepository.saveCallLogs(recentLogs);
+      log(
+        '[CallLogController.refreshCallLogs] Saved recent logs to repository.',
+      );
     } catch (e, st) {
-      log('[CallLogController] Error in refreshCallLogs: $e\n$st');
+      log('[CallLogController.refreshCallLogs] Error: $e\n$st');
     } finally {
       _isLoading = false;
-      notifyListeners(); // 로딩 종료 및 최종 상태 반영
+      log(
+        '[CallLogController.refreshCallLogs] Before final notifyListeners (isLoading: false, logs: ${_callLogs.length}, dataActuallyChangedInThisRun: $dataHasChanged)',
+      );
+      notifyListeners();
+      log('[CallLogController.refreshCallLogs] Finished.');
     }
   }
 
-  // prepareLogsForServer 함수는 동일하게 유지 (필요시 내용 수정)
   static List<Map<String, dynamic>> prepareLogsForServer(
     List<Map<String, dynamic>> localList,
   ) {
@@ -166,7 +283,16 @@ class CallLogController with ChangeNotifier {
             'callType': serverType,
           };
         })
-        .where((log) => !log['callType'].startsWith('UNKNOWN'))
+        .where((logEntry) => !logEntry['callType'].startsWith('UNKNOWN'))
         .toList();
+  }
+}
+
+extension SafeList<E> on List<E> {
+  E? safeElementAt(int index) {
+    if (index < 0 || index >= length) {
+      return null;
+    }
+    return elementAt(index);
   }
 }

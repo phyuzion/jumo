@@ -10,7 +10,12 @@ class SmsController with ChangeNotifier {
   final SmsLogRepository _smsLogRepository;
 
   List<Map<String, dynamic>> _smsLogs = [];
-  List<Map<String, dynamic>> get smsLogs => _smsLogs;
+  List<Map<String, dynamic>> get smsLogs {
+    log(
+      '[SmsController.smsLogs_getter] Called. Returning ${_smsLogs.length} logs.',
+    );
+    return _smsLogs;
+  }
 
   static const MethodChannel _methodChannel = MethodChannel(
     'com.jumo.mobile/sms_query',
@@ -20,78 +25,105 @@ class SmsController with ChangeNotifier {
   );
   StreamSubscription? _smsEventSubscription;
 
-  SmsController(this._smsLogRepository);
+  SmsController(this._smsLogRepository) {
+    log('[SmsController.constructor] Instance created.');
+  }
 
   Future<void> initializeSmsFeatures() async {
-    log('[SmsController] Initializing SMS features...');
+    log('[SmsController.initializeSmsFeatures] Started.');
     await startSmsObservation();
     listenToSmsEvents();
     await refreshSms();
+    log('[SmsController.initializeSmsFeatures] Finished.');
   }
 
   Future<void> startSmsObservation() async {
+    log('[SmsController.startSmsObservation] Started.');
     try {
       await _methodChannel.invokeMethod('startSmsObservation');
       log(
-        '[SmsController] Requested to start SMS observation via MethodChannel.',
+        '[SmsController.startSmsObservation] Requested to start SMS observation via MethodChannel.',
       );
     } on PlatformException catch (e) {
-      log("[SmsController] Failed to start SMS observation: '${e.message}'.");
+      log(
+        "[SmsController.startSmsObservation] Failed to start SMS observation: '${e.message}'.",
+      );
     }
+    log('[SmsController.startSmsObservation] Finished.');
   }
 
   void listenToSmsEvents() {
+    log('[SmsController.listenToSmsEvents] Started.');
     _smsEventSubscription?.cancel();
     _smsEventSubscription = _eventChannel.receiveBroadcastStream().listen(
       (event) {
-        log('[SmsController] Received SMS event from native: $event');
+        log(
+          '[SmsController.listenToSmsEvents] Received SMS event from native: $event',
+        );
         if (event == "sms_changed_event") {
           log(
-            '[SmsController] Triggering refreshSms due to sms_changed_event.',
+            '[SmsController.listenToSmsEvents] Triggering refreshSms due to sms_changed_event.',
           );
           refreshSms();
         }
       },
       onError: (error) {
-        log('[SmsController] Error in SMS event channel: $error');
+        log(
+          '[SmsController.listenToSmsEvents] Error in SMS event channel: $error',
+        );
       },
       onDone: () {
-        log('[SmsController] SMS event channel closed.');
+        log('[SmsController.listenToSmsEvents] SMS event channel closed.');
       },
       cancelOnError: true,
     );
-    log('[SmsController] Listening to SMS events from native.');
+    log(
+      '[SmsController.listenToSmsEvents] Listening to SMS events from native. Finished.',
+    );
   }
 
   Future<void> stopSmsObservationAndDispose() async {
-    log('[SmsController] Stopping SMS observation and disposing listener...');
+    log('[SmsController.stopSmsObservationAndDispose] Started.');
     _smsEventSubscription?.cancel();
     _smsEventSubscription = null;
     try {
       await _methodChannel.invokeMethod('stopSmsObservation');
       log(
-        '[SmsController] Requested to stop SMS observation via MethodChannel.',
+        '[SmsController.stopSmsObservationAndDispose] Requested to stop SMS observation via MethodChannel.',
       );
     } on PlatformException catch (e) {
-      log("[SmsController] Failed to stop SMS observation: '${e.message}'.");
+      log(
+        "[SmsController.stopSmsObservationAndDispose] Failed to stop SMS observation: '${e.message}'.",
+      );
     }
+    log('[SmsController.stopSmsObservationAndDispose] Finished.');
   }
 
   Future<void> refreshSms() async {
-    log('[SmsController] refreshSms called.');
-    try {
-      // 1. 로컬 저장소에서 24시간 이내 문자 리스트를 먼저 가져온다.
-      final List<Map<String, dynamic>> localList =
-          await _smsLogRepository.getAllSmsLogs();
-      final Set<String> localKeys =
-          localList.map((e) => _generateSmsKey(e)).toSet();
+    log('[SmsController.refreshSms] Started.');
+    List<Map<String, dynamic>> oldSmsLogsSnapshot = List.from(_smsLogs);
+    bool dataActuallyChanged = false;
 
-      // 2. 네이티브에서 24시간 이내 문자 리스트를 받아온다.
+    try {
+      log(
+        '[SmsController.refreshSms] Getting local SMS logs from repository (for diffing new)...',
+      );
+      final List<Map<String, dynamic>> localStoredSmsForDiff =
+          await _smsLogRepository.getAllSmsLogs();
+      final Set<String> localStoredKeysForDiff =
+          localStoredSmsForDiff.map((e) => _generateSmsKey(e)).toSet();
+      log(
+        '[SmsController.refreshSms] Got ${localStoredSmsForDiff.length} local SMS logs for diffing new uploads, ${localStoredKeysForDiff.length} unique keys.',
+      );
+
       final now = DateTime.now();
       final int queryFromTimestamp =
           now.subtract(const Duration(days: 1)).millisecondsSinceEpoch;
       final int queryUntilTimestamp = now.millisecondsSinceEpoch;
 
+      log(
+        '[SmsController.refreshSms] Querying native SMS from $queryFromTimestamp to $queryUntilTimestamp...',
+      );
       List<dynamic>? nativeSmsListDyn;
       try {
         nativeSmsListDyn = await _methodChannel
@@ -100,82 +132,132 @@ class SmsController with ChangeNotifier {
               'toTimestamp': queryUntilTimestamp,
             });
       } on PlatformException catch (e) {
-        log("[SmsController] Failed to get SMS from native: '${e.message}'.");
+        log(
+          "[SmsController.refreshSms] Failed to get SMS from native: '${e.message}'.",
+        );
         return;
       }
 
-      if (nativeSmsListDyn == null || nativeSmsListDyn.isEmpty) {
-        log('[SmsController] No SMS found from native for last 24 hours.');
-        await _smsLogRepository.clearSmsLogs();
-        return;
+      List<Map<String, dynamic>> nativeSmsList = [];
+      if (nativeSmsListDyn != null && nativeSmsListDyn.isNotEmpty) {
+        nativeSmsList =
+            nativeSmsListDyn.map((item) {
+              final map = Map<String, dynamic>.from(item as Map);
+              final typeRaw = map['type'];
+              String typeStr;
+              if (typeRaw is int) {
+                typeStr = mapSmsTypeIntToStringWithAllTypes(typeRaw);
+              } else if (typeRaw is String) {
+                typeStr = typeRaw;
+              } else {
+                typeStr = 'UNKNOWN';
+              }
+              map['type'] = typeStr;
+              return map;
+            }).toList();
       }
-
-      List<Map<String, dynamic>> nativeSmsList =
-          nativeSmsListDyn.map((item) {
-            final map = Map<String, dynamic>.from(item as Map);
-            // type이 int면 String으로 변환, String이면 그대로, 아니면 'UNKNOWN'
-            final typeRaw = map['type'];
-            String typeStr;
-            if (typeRaw is int) {
-              typeStr = mapSmsTypeIntToStringWithAllTypes(typeRaw);
-            } else if (typeRaw is String) {
-              typeStr = typeRaw;
-            } else {
-              typeStr = 'UNKNOWN';
-            }
-            map['type'] = typeStr;
-            return map;
-          }).toList();
       log(
-        '[SmsController] Fetched ${nativeSmsList.length} SMS from native (24시간 이내).',
+        '[SmsController.refreshSms] Fetched and processed ${nativeSmsList.length} SMS from native (24시간 이내).',
       );
 
-      // 3. 두 리스트를 비교해서, 로컬에 없는(새로 들어온) 문자만 추출한다.
-      final List<Map<String, dynamic>> newSmsList =
-          nativeSmsList
-              .where((sms) => !localKeys.contains(_generateSmsKey(sms)))
-              .toList();
+      if (oldSmsLogsSnapshot.length != nativeSmsList.length) {
+        dataActuallyChanged = true;
+      } else {
+        for (int i = 0; i < oldSmsLogsSnapshot.length; i++) {
+          if (!mapEquals(oldSmsLogsSnapshot[i], nativeSmsList[i])) {
+            dataActuallyChanged = true;
+            break;
+          }
+        }
+      }
 
-      // 4. 로컬 저장소는 네이티브에서 받아온 전체 리스트로 즉시 덮어쓴다.
+      if (dataActuallyChanged) {
+        _smsLogs = nativeSmsList;
+        log(
+          '[SmsController.refreshSms] _smsLogs updated as data changed (${_smsLogs.length} items).',
+        );
+      } else {
+        log(
+          '[SmsController.refreshSms] Loaded data from native is same as current _smsLogs.',
+        );
+      }
+
       await _smsLogRepository.saveSmsLogs(nativeSmsList);
-      _smsLogs = nativeSmsList;
-      notifyListeners();
       log(
-        '[SmsController] Local SMS log updated with ${nativeSmsList.length} SMS (24시간 이내 전체 덮어쓰기).',
+        '[SmsController.refreshSms] Local SMS storage updated with ${nativeSmsList.length} SMS (full overwrite of last 24h).',
       );
 
-      // 5. 새 문자만 서버에 업로드한다.
-      final List<Map<String, dynamic>> smsToUpload =
-          newSmsList.where((sms) {
+      final List<Map<String, dynamic>> newSmsToUploadToServer =
+          nativeSmsList
+              .where(
+                (sms) => !localStoredKeysForDiff.contains(_generateSmsKey(sms)),
+              )
+              .toList();
+      log(
+        '[SmsController.refreshSms] Found ${newSmsToUploadToServer.length} new SMS messages for server upload.',
+      );
+
+      final List<Map<String, dynamic>> smsToUploadFilteredType =
+          newSmsToUploadToServer.where((sms) {
             final typeStr = sms['type'] as String;
             return typeStr == 'INBOX' || typeStr == 'SENT';
           }).toList();
 
-      if (smsToUpload.isNotEmpty) {
-        smsToUpload.sort(
+      if (smsToUploadFilteredType.isNotEmpty) {
+        smsToUploadFilteredType.sort(
           (a, b) => (a['date'] as int).compareTo(b['date'] as int),
         );
-        final smsForServer = prepareSmsForServer(smsToUpload);
+        final smsForServer = prepareSmsForServer(smsToUploadFilteredType);
+        log(
+          '[SmsController.refreshSms] Prepared ${smsForServer.length} INBOX/SENT SMS for server upload.',
+        );
         if (smsForServer.isNotEmpty) {
           try {
             log(
-              '[SmsController] Uploading ${smsForServer.length} new INBOX/SENT SMS to server.',
+              '[SmsController.refreshSms] Uploading ${smsForServer.length} SMS to server...',
             );
-            bool uploadSuccess = await LogApi.updateSMSLog(smsForServer);
-            if (uploadSuccess) {
-              log('[SmsController] SMS upload successful.');
-            } else {
-              log('[SmsController] SMS upload failed (API returned false).');
-            }
-          } catch (uploadError) {
-            log('[SmsController] LogApi.updateSMSLog FAILED: $uploadError');
+            LogApi.updateSMSLog(smsForServer)
+                .then((uploadSuccess) {
+                  if (uploadSuccess) {
+                    log(
+                      '[SmsController.refreshSms] SMS upload successful (async).',
+                    );
+                  } else {
+                    log(
+                      '[SmsController.refreshSms] SMS upload failed (API returned false) (async).',
+                    );
+                  }
+                })
+                .catchError((uploadError) {
+                  log(
+                    '[SmsController.refreshSms] LogApi.updateSMSLog FAILED (async): $uploadError',
+                  );
+                });
+          } catch (e) {
+            log(
+              '[SmsController.refreshSms] Synchronous error during LogApi.updateSMSLog call (should be rare): $e',
+            );
           }
         }
       } else {
-        log('[SmsController] No new INBOX/SENT SMS to upload after filtering.');
+        log(
+          '[SmsController.refreshSms] No new INBOX/SENT SMS to upload after filtering.',
+        );
       }
     } catch (e, st) {
-      log('[SmsController] refreshSms error: $e\n$st');
+      log('[SmsController.refreshSms] Error: $e\n$st');
+    } finally {
+      if (dataActuallyChanged) {
+        log(
+          '[SmsController.refreshSms] Data changed, calling notifyListeners.',
+        );
+        notifyListeners();
+      } else {
+        log(
+          '[SmsController.refreshSms] No data change, skipping notifyListeners in finally.',
+        );
+      }
+      log('[SmsController.refreshSms] Finished.');
     }
   }
 
@@ -237,17 +319,16 @@ class SmsController with ChangeNotifier {
     }).toList();
   }
 
-  // 기존 _generateSmsKey를 SmsController에도 복사(혹은 static으로 이동) 필요
   String _generateSmsKey(Map<String, dynamic> smsMap) {
     final nativeId = smsMap['native_id'];
     final date = smsMap['date'];
     final address = smsMap['address'];
     if (nativeId != null && nativeId != 0) {
-      return 'sms_nid_[${nativeId}]';
+      return 'sms_nid_ [$nativeId]';
     }
     if (date != null && address != null) {
-      return 'sms_dateaddr_[${date}_${address.hashCode}]';
+      return 'sms_dateaddr_ [${date}_${address.hashCode}]';
     }
-    return 'sms_fallback_[${DateTime.now().millisecondsSinceEpoch}_${smsMap.hashCode}]';
+    return 'sms_fallback_ [${DateTime.now().millisecondsSinceEpoch}_${smsMap.hashCode}]';
   }
 }
