@@ -175,15 +175,6 @@ Future<void> initializeDependencies() async {
     rethrow;
   }
 
-  try {
-    await Future.wait([
-      // Hive.openBox('last_sync_state'),
-    ]);
-  } catch (e) {
-    log(
-      '[initializeDependencies] Warning: Error opening some other Hive boxes: $e',
-    );
-  }
   log('[initializeDependencies] Finished.');
 }
 

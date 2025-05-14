@@ -164,9 +164,6 @@ class ContactsController with ChangeNotifier {
           );
           if (parsedChunk.isNotEmpty) {
             newContactListFromStream.addAll(parsedChunk);
-            log(
-              '[ContactsController.syncContacts] Stream: Received chunk ${parsedChunk.length}. Total for this stream: ${newContactListFromStream.length}',
-            );
           }
         },
         onError: (error, stackTrace) {
@@ -209,17 +206,7 @@ class ContactsController with ChangeNotifier {
 
     if (wasFullRefresh) {
       finalContactsToSave = List.from(newOrUpdatedContactsFromStream);
-      log(
-        '[ContactsController._handleSyncCompletionInternal] Full refresh. newOrUpdatedContactsFromStream count: ${newOrUpdatedContactsFromStream.length}. finalContactsToSave set to ${finalContactsToSave.length} items.',
-      );
-      // 전체 동기화 시 originalContactsAtSyncStart는 사용되지 않아야 함
-      log(
-        '[ContactsController._handleSyncCompletionInternal] originalContactsAtSyncStart count (should be ignored for full refresh): ${originalContactsAtSyncStart.length}',
-      );
     } else {
-      log(
-        '[ContactsController._handleSyncCompletionInternal] Delta refresh. Original contacts count: ${originalContactsAtSyncStart.length}',
-      );
       Map<String, PhoneBookModel> combinedContactsMap = {
         for (var c in originalContactsAtSyncStart) c.contactId: c,
       };
@@ -231,9 +218,6 @@ class ContactsController with ChangeNotifier {
 
       List<PhoneBookModel> contactsFromStream = List.from(
         newOrUpdatedContactsFromStream,
-      );
-      log(
-        '[ContactsController._handleSyncCompletionInternal] Received ${contactsFromStream.length} contacts from stream for delta.',
       );
 
       for (var streamedContact in contactsFromStream) {
@@ -247,26 +231,19 @@ class ContactsController with ChangeNotifier {
 
         if (existingContactById != null) {
           // ID가 일치하는 경우: 가장 확실한 업데이트 대상
-          log(
-            '[ContactsController._handleSyncCompletionInternal] Updating existing contact by ID: ${streamedContact.contactId} - ${streamedContact.name}',
-          );
+
           combinedContactsMap[streamedContact.contactId] = streamedContact;
           // 만약 이전에 전화번호로 매칭되었던 다른 ID의 연락처가 있고, 그 ID가 현재 업데이트하는 ID와 다르다면,
           // 그 이전 전화번호 매칭 항목을 combinedContactsMap에서 제거 (ID 기반 업데이트 우선)
           if (existingContactByPhone != null &&
               existingContactByPhone.contactId != streamedContact.contactId) {
-            log(
-              '[ContactsController._handleSyncCompletionInternal] Contact ID ${streamedContact.contactId} (name: ${streamedContact.name}) updated. Found another contact ID ${existingContactByPhone.contactId} (name: ${existingContactByPhone.name}) with the same phone ${normalizedStreamedPhone}. Removing the latter one (${existingContactByPhone.contactId}) from combined map if it exists by ID.',
-            );
             combinedContactsMap.remove(existingContactByPhone.contactId);
           }
           phoneToOriginalContactMap[normalizedStreamedPhone] =
               streamedContact; // 전화번호 맵도 최신 정보로 업데이트
         } else if (existingContactByPhone != null) {
           // ID는 다르지만 전화번호가 일치하는 경우: "수정"으로 간주하고 기존 항목을 새 ID의 항목으로 대체
-          log(
-            '[ContactsController._handleSyncCompletionInternal] Updating existing contact by PHONE: Old ID ${existingContactByPhone.contactId} (name: ${existingContactByPhone.name}) will be replaced by New ID ${streamedContact.contactId} (name: ${streamedContact.name}) for phone ${normalizedStreamedPhone}.',
-          );
+
           combinedContactsMap.remove(
             existingContactByPhone.contactId,
           ); // 이전 ID 항목 제거
@@ -276,26 +253,19 @@ class ContactsController with ChangeNotifier {
               streamedContact; // 전화번호 맵 업데이트
         } else {
           // ID도 전화번호도 일치하는 기존 항목 없음: 새 연락처로 추가
-          log(
-            '[ContactsController._handleSyncCompletionInternal] Adding new contact: ${streamedContact.contactId} - ${streamedContact.name}',
-          );
+
           combinedContactsMap[streamedContact.contactId] = streamedContact;
           phoneToOriginalContactMap[normalizedStreamedPhone] = streamedContact;
         }
       }
       finalContactsToSave = combinedContactsMap.values.toList();
-      log(
-        '[ContactsController._handleSyncCompletionInternal] Delta refresh. Merged. Total finalContacts: ${finalContactsToSave.length}',
-      );
     }
     finalContactsToSave.sort(
       (a, b) => (a.name.toLowerCase()).compareTo(b.name.toLowerCase()),
     );
     _contacts = List.from(finalContactsToSave);
     // _contacts 할당 직후 상태 로깅 추가
-    log(
-      '[ContactsController._handleSyncCompletionInternal] _contacts list ASSIGNED. New count: ${_contacts.length}. First 3 IDs (if exist): ${_contacts.take(3).map((c) => c.contactId).toList()}, Last 3 IDs (if exist): ${_contacts.skip(_contacts.length > 3 ? _contacts.length - 3 : 0).map((c) => c.contactId).toList()}',
-    );
+
     _updateContactCache();
 
     try {

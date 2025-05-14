@@ -76,10 +76,6 @@ class NativeMethods {
   static Stream<List<Map<String, dynamic>>> getContactsStream({
     int? lastSyncTimestampEpochMillis,
   }) {
-    log(
-      '[NativeMethods] getContactsStream called with lastSyncTimestamp: $lastSyncTimestampEpochMillis',
-    );
-
     final StreamController<List<Map<String, dynamic>>> controller =
         StreamController<List<Map<String, dynamic>>>();
 
@@ -114,20 +110,11 @@ class NativeMethods {
               }
 
               if (chunk.isNotEmpty) {
-                log(
-                  '[NativeMethods] getContactsStream: Adding chunk of ${chunk.length} contacts to controller.',
-                );
                 controller.add(chunk);
               } else {
-                log(
-                  '[NativeMethods] getContactsStream: Chunk is empty after processing, adding empty list to controller.',
-                );
                 controller.add([]);
               }
             } else {
-              log(
-                '[NativeMethods] getContactsStream: Received non-List event: $event. Adding empty list to controller.',
-              );
               controller.add([]);
             }
           },

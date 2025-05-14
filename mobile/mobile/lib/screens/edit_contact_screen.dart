@@ -45,9 +45,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
   @override
   void initState() {
     super.initState();
-    log(
-      '[EditContactScreen] initState: initialContactId=${widget.initialContactId}, initialRawContactId=${widget.initialRawContactId}, initialName=${widget.initialName}, initialPhone=${widget.initialPhone}',
-    );
+
     _nameCtrl.text = widget.initialName ?? '';
     _phoneCtrl.text = widget.initialPhone ?? '';
     _checkBlockedStatus();
@@ -130,9 +128,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
             widget.initialRawContactId!.isEmpty) {
           throw Exception('연락처 ID가 없어 업데이트할 수 없습니다.');
         }
-        log(
-          '[EditContactScreen] Updating contact with rawContactId: ${widget.initialRawContactId}',
-        );
         deviceContactId = await NativeMethods.upsertContact(
           rawContactId: widget.initialRawContactId,
           displayName: displayName,
@@ -143,7 +138,6 @@ class _EditContactScreenState extends State<EditContactScreen> {
         );
       } else {
         // 신규: id 없이 upsertContact 호출
-        log('[EditContactScreen] Creating new contact');
         deviceContactId = await NativeMethods.upsertContact(
           displayName: displayName,
           firstName: firstName,

@@ -221,9 +221,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
   }
 
   Future<void> _onTapEdit(PhoneBookModel model) async {
-    log(
-      '[ContactsScreen] EditContactScreen 진입: contactId=${model.contactId}, rawContactId=${model.rawContactId}, name=${model.name}, phone=${model.phoneNumber}',
-    );
+    
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
@@ -239,7 +237,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
     );
     if (result == true) {
       await context.read<ContactsController>().syncContacts();
-      log('[ContactsScreen] Refreshed contacts after edit.');
     }
   }
 

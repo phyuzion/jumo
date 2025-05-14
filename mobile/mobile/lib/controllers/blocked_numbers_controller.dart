@@ -206,9 +206,6 @@ class BlockedNumbersController {
   }) async {
     String? blockType;
     final normalizedPhoneNumber = normalizePhone(phoneNumber);
-    log(
-      '[isNumberBlockedAsync] Checking number: $normalizedPhoneNumber (Original: $phoneNumber)',
-    );
 
     final isTodayBlockedSetting = await _settingsRepository.isTodayBlocked();
     if (isTodayBlockedSetting /* && _isTodayBlockStillValid() */ ) {
@@ -238,17 +235,12 @@ class BlockedNumbersController {
     if (blockType == null) {
       final userBlockedList =
           await _blockedNumberRepository.getAllUserBlockedNumbers();
-      log(
-        '[isNumberBlockedAsync] Checking user block: Normalized incoming = $normalizedPhoneNumber, Blocked List = $userBlockedList',
-      );
+
       if (userBlockedList.any(
         (blockedNum) =>
             normalizedPhoneNumber.contains(normalizePhone(blockedNum)),
       )) {
         blockType = 'user';
-        log(
-          '[isNumberBlockedAsync] Matched user block list! (incoming contains blocked)',
-        );
       }
     }
 
@@ -278,18 +270,12 @@ class BlockedNumbersController {
     }
 
     if (blockType != null) {
-      log(
-        '[isNumberBlockedAsync] Final Block Type: $blockType for $normalizedPhoneNumber',
-      );
       if (addHistory) {
         await _addBlockedHistory(normalizedPhoneNumber, blockType);
       }
       return true;
     }
 
-    log(
-      '[isNumberBlockedAsync] Final Result: $normalizedPhoneNumber NOT BLOCKED',
-    );
     return false;
   }
 

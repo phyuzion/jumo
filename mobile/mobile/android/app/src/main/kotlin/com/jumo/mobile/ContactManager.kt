@@ -38,14 +38,25 @@ object ContactManager {
             ContactsContract.CommonDataKinds.Phone.NUMBER
         )
 
+        // 기본 selection: 이름 또는 전화번호 데이터 타입
         var selection = "(${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ?)"
+        
+        // 추가 필터링 조건
+        selection += " AND ${ContactsContract.Data.IN_VISIBLE_GROUP} = 1" // 사용자에게 보이는 연락처만
+        // Data 테이블에는 HAS_PHONE_NUMBER 컬럼이 직접적으로 없을 수 있으므로, 
+        // MIMETYPE이 Phone인 것을 가져오는 것으로 이미 전화번호 유무는 어느정도 필터링 됩니다.
+        // 좀 더 확실히 하려면, Contacts 테이블을 join하거나, Contact ID 리스트를 먼저 뽑고 Data를 가져와야 합니다.
+        // 일단 IN_VISIBLE_GROUP만 먼저 적용해봅니다.
+        // selection += " AND ${ContactsContract.Contacts.HAS_PHONE_NUMBER} = 1" // 필요시 주석 해제 (Data 테이블 구조 확인 필요)
+
         val selectionArgsList = mutableListOf<String>(
             ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
             ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
         )
 
         if (lastSyncTimestampEpochMillis != null && lastSyncTimestampEpochMillis > 0) {
-            selection += " AND ${ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP} > ?"
+            // CONTACT_LAST_UPDATED_TIMESTAMP는 Contacts 테이블의 컬럼이지만, Data 테이블에서도 접근 가능 (내부적으로 Join됨)
+            selection += " AND ${ContactsContract.Data.CONTACT_LAST_UPDATED_TIMESTAMP} > ?" 
             selectionArgsList.add(lastSyncTimestampEpochMillis.toString())
         }
 
