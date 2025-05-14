@@ -137,26 +137,13 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
-        // 1. 자동 생성된 플러그인 등록 (외부 플러그인 용)
-        // GeneratedPluginRegistrant.registerWith(flutterEngine)는 보통 자동으로 프로젝트에 포함되어 있거나,
-        // FlutterActivity에서 내부적으로 처리될 수 있습니다. 만약 중복 호출 오류가 나면 이 줄을 주석처리하거나 삭제하세요.
-        // 명시적으로 호출해야 한다면 아래와 같이 합니다.
-        try {
-            GeneratedPluginRegistrant.registerWith(flutterEngine)    
-        } catch (e: Exception) {
-            Log.e(TAG, "GeneratedPluginRegistrant 등록 중 오류: ", e)
-        }
-
-        // 2. NativeBridge 채널 설정 (기존 방식 유지)
         NativeBridge.setupChannel(flutterEngine)
-        // 3. SmsPlugin 수동 등록
         try {
             flutterEngine.plugins.add(SmsPlugin()) 
         } catch (e: Exception) {
             Log.e(TAG, "SmsPlugin 등록 중 오류 발생.", e)
         }
         
-        // 4. 기존 ACTIVITY_CHANNEL_NAME 채널 설정 (유지)
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
             ACTIVITY_CHANNEL_NAME
@@ -164,12 +151,8 @@ class MainActivity : FlutterFragmentActivity() {
             when (call.method) {
                 "requestDefaultDialerManually" -> {
                     methodResultForDialer = result
-                    // CALL_PHONE 권한 확인 및 요청은 여기서 하는 것이 적절
-                    if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED) {
-                        requestSetDefaultDialer()
-                    } else {
-                        callPermissionLauncher.launch(android.Manifest.permission.CALL_PHONE)
-                    }
+                    requestSetDefaultDialer()
+                    
                 }
                 "isDefaultDialer" -> {
                     result.success(isDefaultDialer())

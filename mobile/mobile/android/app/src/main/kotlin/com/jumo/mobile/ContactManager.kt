@@ -8,102 +8,90 @@ import android.util.Log
 
 object ContactManager {
     fun getContacts(context: Context): List<Map<String, Any?>> {
-        val contacts = mutableListOf<Map<String, Any?>>()
+        Log.d("ContactManager", "getContacts: Fetching contacts with all required name fields...")
+        val contactsDataMap = mutableMapOf<String, MutableMap<String, Any?>>()
         val contentResolver: ContentResolver = context.contentResolver
+
         val projection = arrayOf(
-            ContactsContract.Contacts._ID,
-            ContactsContract.Contacts.DISPLAY_NAME,
-            ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP
+            ContactsContract.Data.CONTACT_ID,
+            ContactsContract.Data.RAW_CONTACT_ID,
+            ContactsContract.Data.MIMETYPE,
+            ContactsContract.Data.DISPLAY_NAME, // 기본 DISPLAY_NAME
+            ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP, // Data 테이블에도 이 컬럼이 있음
+            ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME,
+            ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME,
+            ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME,
+            ContactsContract.CommonDataKinds.Phone.NUMBER
+            // ContactsContract.CommonDataKinds.Phone.TYPE // 필요시 대표번호 선정을 위해 사용 가능
         )
+
+        val selection = "${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ?"
+        val selectionArgs = arrayOf(
+            ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
+        )
+
+        val sortOrder = ContactsContract.Data.CONTACT_ID
+
         val cursor = contentResolver.query(
-            ContactsContract.Contacts.CONTENT_URI,
+            ContactsContract.Data.CONTENT_URI,
             projection,
-            null,
-            null,
-            null
+            selection,
+            selectionArgs,
+            sortOrder
         )
+
         cursor?.use {
+            val contactIdCol = it.getColumnIndexOrThrow(ContactsContract.Data.CONTACT_ID)
+            val rawContactIdCol = it.getColumnIndexOrThrow(ContactsContract.Data.RAW_CONTACT_ID)
+            val mimeTypeCol = it.getColumnIndexOrThrow(ContactsContract.Data.MIMETYPE)
+            val displayNameCol = it.getColumnIndexOrThrow(ContactsContract.Data.DISPLAY_NAME)
+            val lastUpdatedCol = it.getColumnIndexOrThrow(ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP)
+            val givenNameCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME)
+            val middleNameCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME)
+            val familyNameCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME)
+            val phoneNumberCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+
             while (it.moveToNext()) {
-                val id = it.getString(it.getColumnIndexOrThrow(ContactsContract.Contacts._ID))
-                val displayName = it.getString(it.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME)) ?: ""
-                val lastUpdated = it.getLong(it.getColumnIndexOrThrow(ContactsContract.Contacts.CONTACT_LAST_UPDATED_TIMESTAMP))
+                val contactId = it.getString(contactIdCol)
+                val rawContactId = it.getString(rawContactIdCol)
+                val mimeType = it.getString(mimeTypeCol)
 
-                // raw_contact_id 쿼리
-                var rawId: String? = null
-                val rawCursor = contentResolver.query(
-                    ContactsContract.RawContacts.CONTENT_URI,
-                    arrayOf(ContactsContract.RawContacts._ID),
-                    ContactsContract.RawContacts.CONTACT_ID + "=?",
-                    arrayOf(id),
-                    null
-                )
-                rawCursor?.use { rc ->
-                    if (rc.moveToFirst()) {
-                        rawId = rc.getString(rc.getColumnIndexOrThrow(ContactsContract.RawContacts._ID))
-                    }
-                }
-
-                // 전화번호 가져오기 (대표 1개)
-                var phoneNumber = ""
-                val phoneCursor = contentResolver.query(
-                    ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-                    arrayOf(ContactsContract.CommonDataKinds.Phone.NUMBER),
-                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID + "=?",
-                    arrayOf(id),
-                    null
-                )
-                phoneCursor?.use { pc ->
-                    if (pc.moveToFirst()) {
-                        phoneNumber = pc.getString(pc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)) ?: ""
-                    }
-                }
-
-                // 이름 필드(퍼스트/미들/라스트/디스플레이네임) StructuredName 쿼리
-                var firstName = ""
-                var middleName = ""
-                var lastName = ""
-                var structuredDisplayName = ""
-                val nameCursor = contentResolver.query(
-                    ContactsContract.Data.CONTENT_URI,
-                    arrayOf(
-                        ContactsContract.Data.CONTACT_ID,
-                        ContactsContract.Data.MIMETYPE,
-                        ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME,
-                        ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME,
-                        ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME,
-                        ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME
-                    ),
-                    ContactsContract.Data.CONTACT_ID + "=? AND " +
-                            ContactsContract.Data.MIMETYPE + "=?",
-                    arrayOf(id, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE),
-                    null
-                )
-                nameCursor?.use { nc ->
-                    if (nc.moveToFirst()) {
-                        firstName = nc.getString(nc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME)) ?: ""
-                        middleName = nc.getString(nc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME)) ?: ""
-                        lastName = nc.getString(nc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME)) ?: ""
-                        structuredDisplayName = nc.getString(nc.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME)) ?: ""
-                    }
-                }
-
-                contacts.add(
-                    mapOf(
-                        "id" to id,
-                        "rawId" to rawId,
-                        "displayName" to displayName,
-                        "firstName" to firstName,
-                        "middleName" to middleName,
-                        "lastName" to lastName,
-                        "structuredDisplayName" to structuredDisplayName,
-                        "phoneNumber" to phoneNumber,
-                        "lastUpdated" to lastUpdated
+                val contactEntry = contactsDataMap.getOrPut(contactId) {
+                    mutableMapOf(
+                        "id" to contactId,
+                        "rawId" to rawContactId,
+                        "displayName" to (it.getString(displayNameCol) ?: ""), // Data 테이블의 DISPLAY_NAME
+                        "firstName" to "",
+                        "middleName" to "",
+                        "lastName" to "",
+                        "phoneNumber" to "",
+                        "lastUpdated" to it.getLong(lastUpdatedCol)
                     )
-                )
+                }
+
+                when (mimeType) {
+                    ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE -> {
+                        contactEntry["firstName"] = it.getString(givenNameCol) ?: ""
+                        contactEntry["middleName"] = it.getString(middleNameCol) ?: ""
+                        contactEntry["lastName"] = it.getString(familyNameCol) ?: ""
+                        // StructuredName의 DISPLAY_NAME이 Data.DISPLAY_NAME보다 우선순위가 높다면 여기서 덮어쓸 수 있음
+                        // val structuredDisplayName = it.getString(displayNameCol) // StructuredName 행의 DISPLAY_NAME
+                        // if (!structuredDisplayName.isNullOrEmpty()) {
+                        //    contactEntry["displayName"] = structuredDisplayName
+                        // }
+                    }
+                    ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE -> {
+                        val number = it.getString(phoneNumberCol) ?: ""
+                        if (contactEntry["phoneNumber"] == "" && number.isNotEmpty()) { // 첫 번째 번호만 저장
+                            contactEntry["phoneNumber"] = number
+                        }
+                    }
+                }
             }
         }
-        Log.d("ContactManager", "getContacts: found ${contacts.size} contacts")
-        return contacts
+        Log.d("ContactManager", "getContacts: Processed ${contactsDataMap.size} contacts.")
+        return contactsDataMap.values.toList()
     }
 
     fun upsertContact(
@@ -116,86 +104,95 @@ object ContactManager {
         phoneNumber: String
     ): String {
         val contentResolver: ContentResolver = context.contentResolver
-        val values = ContentValues().apply {
-            put(ContactsContract.Contacts.DISPLAY_NAME, displayName)
-        }
 
-        val contactId = if (rawContactId != null) {
-            // 기존 연락처 업데이트
-            contentResolver.update(
-                ContactsContract.RawContacts.CONTENT_URI,
-                values,
-                "${ContactsContract.RawContacts._ID} = ?",
-                arrayOf(rawContactId)
-            )
-            // rawContactId로부터 contactId 가져오기
-            var contactId: String? = null
-            val cursor = contentResolver.query(
+        lateinit var contactIdToUse: String
+        lateinit var currentRawContactId : String
+
+        if (rawContactId != null && rawContactId.isNotEmpty()) {
+            currentRawContactId = rawContactId
+            var resolvedContactIdLocal: String? = null
+            val rawCursor = contentResolver.query(
                 ContactsContract.RawContacts.CONTENT_URI,
                 arrayOf(ContactsContract.RawContacts.CONTACT_ID),
                 "${ContactsContract.RawContacts._ID} = ?",
                 arrayOf(rawContactId),
                 null
             )
-            cursor?.use {
+            rawCursor?.use {
                 if (it.moveToFirst()) {
-                    contactId = it.getString(it.getColumnIndexOrThrow(ContactsContract.RawContacts.CONTACT_ID))
+                    resolvedContactIdLocal = it.getString(it.getColumnIndexOrThrow(ContactsContract.RawContacts.CONTACT_ID))
                 }
             }
-            contactId ?: throw Exception("Failed to get contact ID")
+            if (resolvedContactIdLocal == null) {
+                 throw Exception("Failed to resolve contact_id from rawContactId: $rawContactId for update")
+            }
+            contactIdToUse = resolvedContactIdLocal!!
         } else {
-            // 새 연락처 생성
-            val uri = contentResolver.insert(ContactsContract.Contacts.CONTENT_URI, values)
-            uri?.lastPathSegment ?: throw Exception("Failed to create contact")
+            val rawContactValues = ContentValues()
+            val rawContactUri = contentResolver.insert(ContactsContract.RawContacts.CONTENT_URI, rawContactValues)
+            currentRawContactId = rawContactUri?.lastPathSegment ?: throw Exception("Failed to create raw contact")
+            var resolvedContactIdLocal: String? = null
+            val rawCursor = contentResolver.query(
+                ContactsContract.RawContacts.CONTENT_URI,
+                arrayOf(ContactsContract.RawContacts.CONTACT_ID),
+                "${ContactsContract.RawContacts._ID} = ?",
+                arrayOf(currentRawContactId),
+                null
+            )
+            rawCursor?.use {
+                if (it.moveToFirst()) {
+                    resolvedContactIdLocal = it.getString(it.getColumnIndexOrThrow(ContactsContract.RawContacts.CONTACT_ID))
+                }
+            }
+            if (resolvedContactIdLocal == null) {
+                 throw Exception("Failed to get contact_id for new raw_contact_id: $currentRawContactId")
+            }
+            contactIdToUse = resolvedContactIdLocal!!
         }
-
-        // 이름 정보 업데이트
+        
         val nameValues = ContentValues().apply {
-            put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId ?: contactId)
+            put(ContactsContract.Data.RAW_CONTACT_ID, currentRawContactId)
             put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
             put(ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME, firstName)
             put(ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME, middleName)
             put(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME, lastName)
             put(ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME, displayName)
         }
-
-        // 기존 이름 데이터 삭제
-        contentResolver.delete(
+        var updatedRows = contentResolver.update(
             ContactsContract.Data.CONTENT_URI,
+            nameValues,
             "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-            arrayOf(rawContactId ?: contactId, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
+            arrayOf(currentRawContactId, ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)
         )
+        if (updatedRows == 0) { 
+            contentResolver.insert(ContactsContract.Data.CONTENT_URI, nameValues)
+        }
 
-        // 새 이름 데이터 삽입
-        contentResolver.insert(ContactsContract.Data.CONTENT_URI, nameValues)
-
-        // 전화번호 업데이트
         val phoneValues = ContentValues().apply {
-            put(ContactsContract.Data.RAW_CONTACT_ID, rawContactId ?: contactId)
+            put(ContactsContract.Data.RAW_CONTACT_ID, currentRawContactId) 
             put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
             put(ContactsContract.CommonDataKinds.Phone.NUMBER, phoneNumber)
             put(ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.Phone.TYPE_MOBILE)
         }
-
-        // 기존 전화번호 데이터 삭제
-        contentResolver.delete(
+        updatedRows = contentResolver.update(
             ContactsContract.Data.CONTENT_URI,
-            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
-            arrayOf(rawContactId ?: contactId, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
+            phoneValues,
+            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ? AND ${ContactsContract.CommonDataKinds.Phone.NUMBER} = ?", 
+            arrayOf(currentRawContactId, ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE, phoneNumber)
         )
-
-        // 새 전화번호 데이터 삽입
-        contentResolver.insert(ContactsContract.Data.CONTENT_URI, phoneValues)
-
-        return contactId
+        if (updatedRows == 0) { 
+            contentResolver.insert(ContactsContract.Data.CONTENT_URI, phoneValues)
+        }
+        
+        return contactIdToUse
     }
 
     fun deleteContact(context: Context, id: String): Boolean {
         val contentResolver: ContentResolver = context.contentResolver
         val deleted = contentResolver.delete(
-            ContactsContract.Contacts.CONTENT_URI,
-            "${ContactsContract.Contacts._ID} = ?",
-            arrayOf(id)
+            ContactsContract.Contacts.CONTENT_URI, 
+            "${ContactsContract.Contacts._ID} = ?", 
+            arrayOf(id) 
         )
         return deleted > 0
     }
