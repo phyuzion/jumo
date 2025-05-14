@@ -1,13 +1,21 @@
 import 'package:flutter/foundation.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
+import 'package:mobile/controllers/app_controller.dart';
 import 'dart:developer';
+import 'dart:async';
+import 'package:mobile/utils/app_event_bus.dart';
 
 class RecentHistoryProvider with ChangeNotifier {
+  final AppController appController;
   final CallLogController callLogController;
   final SmsController smsController;
 
   List<Map<String, dynamic>> _recentHistoryList = [];
+  bool _wasAppLoadingUserData = false;
+  StreamSubscription? _callLogUpdatedSubscription;
+  StreamSubscription? _smsUpdatedSubscription;
+
   List<Map<String, dynamic>> get recentHistoryList {
     log(
       '[RecentHistoryProvider.recentHistoryList_getter] Called. Returning ${_recentHistoryList.length} items.',
@@ -16,33 +24,66 @@ class RecentHistoryProvider with ChangeNotifier {
   }
 
   RecentHistoryProvider({
+    required this.appController,
     required this.callLogController,
     required this.smsController,
   }) {
     log(
-      '[RecentHistoryProvider.constructor] Instance created. Adding listeners and calling _updateRecentHistoryList.',
+      '[RecentHistoryProvider.constructor] Instance created. Listening to AppController and EventBus.',
     );
-    callLogController.addListener(_onSourceChanged);
-    smsController.addListener(_onSourceChanged);
-    _updateRecentHistoryList(); // 초기 데이터 구성
+    appController.addListener(_onAppControllerUpdate);
+    _wasAppLoadingUserData = appController.isInitialUserDataLoading;
+
+    _callLogUpdatedSubscription = appEventBus.on<CallLogUpdatedEvent>().listen((
+      event,
+    ) {
+      log(
+        '[RecentHistoryProvider] Received CallLogUpdatedEvent from EventBus. Updating history.',
+      );
+      _updateRecentHistoryList();
+      notifyListeners();
+    });
+
+    _updateRecentHistoryList();
     log('[RecentHistoryProvider.constructor] Finished.');
   }
 
-  void _onSourceChanged() {
+  void _onAppControllerUpdate() {
     log(
-      '[RecentHistoryProvider._onSourceChanged] Called due to source controller change.',
+      '[RecentHistoryProvider._onAppControllerUpdate] AppController notified.',
     );
-    _updateRecentHistoryList();
-    log('[RecentHistoryProvider._onSourceChanged] Before notifyListeners.');
-    notifyListeners();
-    // _uploadNewItemsToServer(); // UI 갱신 후 서버 업로드(비동기) - 현재 구현 안됨
-    log('[RecentHistoryProvider._onSourceChanged] Finished.');
+    final currentAppLoadingState = appController.isInitialUserDataLoading;
+
+    if (_wasAppLoadingUserData && !currentAppLoadingState) {
+      log(
+        '[RecentHistoryProvider._onAppControllerUpdate] Initial user data loading finished. Updating recent history.',
+      );
+      _updateRecentHistoryList();
+      notifyListeners();
+    } else if (!currentAppLoadingState && !_wasAppLoadingUserData) {
+      log(
+        '[RecentHistoryProvider._onAppControllerUpdate] AppController requested UI update (e.g., from SMS event). Updating recent history.',
+      );
+      _updateRecentHistoryList();
+      notifyListeners();
+    } else if (currentAppLoadingState && !_wasAppLoadingUserData) {
+      log(
+        '[RecentHistoryProvider._onAppControllerUpdate] Initial user data loading started.',
+      );
+    }
+    _wasAppLoadingUserData = currentAppLoadingState;
   }
 
   void _updateRecentHistoryList() {
     log('[RecentHistoryProvider._updateRecentHistoryList] Started.');
-    final callLogs = callLogController.callLogs; // Getter 호출
-    final smsLogs = smsController.smsLogs; // Getter 호출
+    if (appController.isInitialUserDataLoading && _recentHistoryList.isEmpty) {
+      log(
+        '[RecentHistoryProvider._updateRecentHistoryList] AppController is loading initial user data and list is empty, skipping update for now to prevent stale data view.',
+      );
+      return;
+    }
+    final callLogs = callLogController.callLogs;
+    final smsLogs = smsController.smsLogs;
     log(
       '[RecentHistoryProvider._updateRecentHistoryList] Fetched ${callLogs.length} call logs and ${smsLogs.length} SMS logs.',
     );
@@ -51,9 +92,6 @@ class RecentHistoryProvider with ChangeNotifier {
       ...callLogs.map((e) => {...e, 'historyType': 'call'}),
       ...smsLogs.map((e) => {...e, 'historyType': 'sms'}),
     ];
-    log(
-      '[RecentHistoryProvider._updateRecentHistoryList] Combined list has ${_recentHistoryList.length} items before sort.',
-    );
     _recentHistoryList.sort(
       (a, b) => (b['date'] ?? b['timestamp'] ?? 0).compareTo(
         a['date'] ?? a['timestamp'] ?? 0,
@@ -66,30 +104,23 @@ class RecentHistoryProvider with ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    log('[RecentHistoryProvider.refresh] Started.');
-    // 각 컨트롤러의 refresh 메소드 호출 시, 해당 컨트롤러 내부에서 이미 로그가 찍힘
-    await Future.wait([
-      callLogController.refreshCallLogs(),
-      smsController.refreshSms(),
-    ]);
-    // _onSourceChanged는 각 컨트롤러의 notifyListeners에 의해 자동으로 호출됨.
-    // 따라서 여기서 _updateRecentHistoryList나 notifyListeners를 직접 호출할 필요 없음.
-    log('[RecentHistoryProvider.refresh] Finished.');
-  }
-
-  void _uploadNewItemsToServer() {
     log(
-      '[RecentHistoryProvider._uploadNewItemsToServer] Called (Not Implemented).',
+      '[RecentHistoryProvider.refresh] Started. Triggering AppController.triggerContactsLoadIfReady.',
     );
-    // TODO: 신규 항목만 서버에 업로드하는 로직 구현 (콜로그/SMS 구분)
-    // 이 부분은 각 컨트롤러의 업로드 정책에 맞게 구현 필요
+    await appController.triggerContactsLoadIfReady();
+    log(
+      '[RecentHistoryProvider.refresh] Finished (AppController was triggered).',
+    );
   }
 
   @override
   void dispose() {
-    log('[RecentHistoryProvider.dispose] Called. Removing listeners.');
-    callLogController.removeListener(_onSourceChanged);
-    smsController.removeListener(_onSourceChanged);
+    log(
+      '[RecentHistoryProvider.dispose] Called. Removing listeners and subscriptions.',
+    );
+    appController.removeListener(_onAppControllerUpdate);
+    _callLogUpdatedSubscription?.cancel();
+    _smsUpdatedSubscription?.cancel();
     super.dispose();
     log('[RecentHistoryProvider.dispose] Finished.');
   }

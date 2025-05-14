@@ -10,20 +10,25 @@ import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/utils/app_event_bus.dart';
 
 class PhoneStateController with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> navigatorKey;
   final CallLogController callLogController;
   final ContactsController contactsController;
   final BlockedNumbersController _blockedNumbersController;
+  final AppController appController;
 
   PhoneStateController(
     this.navigatorKey,
     this.callLogController,
     this.contactsController,
     this._blockedNumbersController,
+    this.appController,
   ) {
     WidgetsBinding.instance.addObserver(this);
+    log('[PhoneStateController.constructor] Instance created.');
   }
 
   StreamSubscription<PhoneState>? _phoneStateSubscription;
@@ -48,6 +53,9 @@ class PhoneStateController with WidgetsBindingObserver {
         );
       }
     });
+    log(
+      '[PhoneStateController.startListening] Listening to phone state stream.',
+    );
   }
 
   void stopListening() {
@@ -145,7 +153,10 @@ class PhoneStateController with WidgetsBindingObserver {
       '[_handlePhoneStateEvent] Processing event. Number: $number, Status: $status',
     );
 
-    if (number == null || number.isEmpty) {
+    String? normalizedNumber;
+    if (number != null && number.isNotEmpty) {
+      normalizedNumber = normalizePhone(number);
+    } else {
       if (status == PhoneStateStatus.CALL_ENDED && _rejectedNumber != null) {
         log(
           '[_handlePhoneStateEvent] Ignoring CALL_ENDED event with null number, possibly after rejection.',
@@ -153,13 +164,31 @@ class PhoneStateController with WidgetsBindingObserver {
         _rejectedNumber = null;
         return;
       }
-      if (status == PhoneStateStatus.NOTHING) {
+      if (status == PhoneStateStatus.NOTHING ||
+          status == PhoneStateStatus.CALL_ENDED) {
+        log(
+          '[_handlePhoneStateEvent] Number is null or empty for status $status, processing as general state change.',
+        );
+        if (status == PhoneStateStatus.CALL_ENDED) {
+          log(
+            '[_handlePhoneStateEvent] Call ended (null number). Adding 1.5s delay before refreshing call logs.',
+          );
+          await Future.delayed(const Duration(milliseconds: 1500));
+          bool callLogChanged = await callLogController.refreshCallLogs();
+          if (callLogChanged) {
+            log(
+              '[_handlePhoneStateEvent] Call logs changed (null number end), firing CallLogUpdatedEvent.',
+            );
+            appEventBus.fire(CallLogUpdatedEvent());
+          }
+        }
         return;
       }
+      log(
+        '[_handlePhoneStateEvent] Number is null for critical state $status. Ignoring.',
+      );
       return;
     }
-
-    final normalizedNumber = normalizePhone(number);
 
     if (status == PhoneStateStatus.CALL_ENDED &&
         _rejectedNumber == normalizedNumber) {
@@ -180,7 +209,7 @@ class PhoneStateController with WidgetsBindingObserver {
       bool isBlocked = false;
       try {
         isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
-          normalizedNumber,
+          normalizedNumber!,
           addHistory: true,
         );
       } catch (e) {
@@ -229,11 +258,25 @@ class PhoneStateController with WidgetsBindingObserver {
     if (stateMethod.isNotEmpty) {
       notifyServiceCallState(
         stateMethod,
-        normalizedNumber,
+        normalizedNumber!,
         callerName,
         connected: isConnected,
         reason: reason ?? (newState == CallState.ended ? 'missed' : ''),
       );
+    }
+
+    if (status == PhoneStateStatus.CALL_ENDED) {
+      log(
+        '[_handlePhoneStateEvent] Call ended. Adding 1.5s delay before refreshing call logs.',
+      );
+      await Future.delayed(const Duration(milliseconds: 1500));
+      bool callLogChanged = await callLogController.refreshCallLogs();
+      if (callLogChanged) {
+        log(
+          '[_handlePhoneStateEvent] Call logs changed, firing CallLogUpdatedEvent.',
+        );
+        appEventBus.fire(CallLogUpdatedEvent());
+      }
     }
   }
 
@@ -245,7 +288,7 @@ class PhoneStateController with WidgetsBindingObserver {
     String? reason,
   }) {
     log(
-      '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected',
+      '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected, reason=$reason',
     );
 
     final service = FlutterBackgroundService();
@@ -299,6 +342,7 @@ class PhoneStateController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    log('[PhoneStateController.didChangeAppLifecycleState] State: $state');
     if (state == AppLifecycleState.resumed) {
       // _syncInitialCallState();
     }

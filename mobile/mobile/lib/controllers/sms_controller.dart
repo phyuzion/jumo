@@ -5,9 +5,11 @@ import 'package:mobile/graphql/log_api.dart';
 import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:flutter/foundation.dart';
+import 'package:mobile/controllers/app_controller.dart';
 
 class SmsController with ChangeNotifier {
   final SmsLogRepository _smsLogRepository;
+  final AppController appController;
 
   List<Map<String, dynamic>> _smsLogs = [];
   List<Map<String, dynamic>> get smsLogs {
@@ -25,7 +27,7 @@ class SmsController with ChangeNotifier {
   );
   StreamSubscription? _smsEventSubscription;
 
-  SmsController(this._smsLogRepository) {
+  SmsController(this._smsLogRepository, this.appController) {
     log('[SmsController.constructor] Instance created.');
   }
 
@@ -33,8 +35,9 @@ class SmsController with ChangeNotifier {
     log('[SmsController.initializeSmsFeatures] Started.');
     await startSmsObservation();
     listenToSmsEvents();
-    await refreshSms();
-    log('[SmsController.initializeSmsFeatures] Finished.');
+    log(
+      '[SmsController.initializeSmsFeatures] Finished (observation and listener setup).',
+    );
   }
 
   Future<void> startSmsObservation() async {
@@ -64,7 +67,14 @@ class SmsController with ChangeNotifier {
           log(
             '[SmsController.listenToSmsEvents] Triggering refreshSms due to sms_changed_event.',
           );
-          refreshSms();
+          refreshSms().then((changed) {
+            if (changed) {
+              log(
+                '[SmsController.listenToSmsEvents] SMS data changed by event, requesting UI update via AppController.',
+              );
+              appController.requestUiUpdate(source: 'SmsEvent');
+            }
+          });
         }
       },
       onError: (error) {
@@ -99,7 +109,7 @@ class SmsController with ChangeNotifier {
     log('[SmsController.stopSmsObservationAndDispose] Finished.');
   }
 
-  Future<void> refreshSms() async {
+  Future<bool> refreshSms() async {
     log('[SmsController.refreshSms] Started.');
     List<Map<String, dynamic>> oldSmsLogsSnapshot = List.from(_smsLogs);
     bool dataActuallyChanged = false;
@@ -135,7 +145,8 @@ class SmsController with ChangeNotifier {
         log(
           "[SmsController.refreshSms] Failed to get SMS from native: '${e.message}'.",
         );
-        return;
+        dataActuallyChanged = false;
+        return dataActuallyChanged;
       }
 
       List<Map<String, dynamic>> nativeSmsList = [];
@@ -246,19 +257,13 @@ class SmsController with ChangeNotifier {
       }
     } catch (e, st) {
       log('[SmsController.refreshSms] Error: $e\n$st');
+      dataActuallyChanged = false;
     } finally {
-      if (dataActuallyChanged) {
-        log(
-          '[SmsController.refreshSms] Data changed, calling notifyListeners.',
-        );
-        notifyListeners();
-      } else {
-        log(
-          '[SmsController.refreshSms] No data change, skipping notifyListeners in finally.',
-        );
-      }
-      log('[SmsController.refreshSms] Finished.');
+      log(
+        '[SmsController.refreshSms] Finished. Returning dataActuallyChanged: $dataActuallyChanged',
+      );
     }
+    return dataActuallyChanged;
   }
 
   String? mapSmsTypeIntToStringForUpload(

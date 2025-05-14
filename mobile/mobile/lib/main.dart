@@ -252,33 +252,37 @@ Future<void> main() async {
   final blockedNumberRepository = getIt<BlockedNumberRepository>();
   final blockedHistoryRepository = getIt<BlockedHistoryRepository>();
   final contactRepository = getIt<ContactRepository>();
+  final callLogContoller = CallLogController(callLogRepository);
   final contactsController = ContactsController(
     contactRepository,
     settingsRepository,
   );
-  final callLogContoller = CallLogController(callLogRepository);
-  final smsController = SmsController(smsLogRepository);
   final blockedNumbersController = BlockedNumbersController(
     contactsController,
     settingsRepository,
     blockedNumberRepository,
     blockedHistoryRepository,
   );
+  final appController = AppController(
+    null,
+    contactsController,
+    callLogContoller,
+    null,
+    blockedNumbersController,
+    notificationRepository,
+  );
+  final smsController = SmsController(smsLogRepository, appController);
+  appController.setSmsController(smsController);
+
   final phoneStateController = PhoneStateController(
     NavigationController.navKey,
     callLogContoller,
     contactsController,
     blockedNumbersController,
+    appController,
   );
+
   await NavigationController.init(phoneStateController, contactsController);
-  final appController = AppController(
-    phoneStateController,
-    contactsController,
-    callLogContoller,
-    smsController,
-    blockedNumbersController,
-    notificationRepository,
-  );
 
   runApp(
     MultiProvider(
@@ -287,7 +291,7 @@ Future<void> main() async {
         Provider<SettingsRepository>.value(value: settingsRepository),
         Provider<NotificationRepository>.value(value: notificationRepository),
         Provider<PhoneStateController>.value(value: phoneStateController),
-        Provider<AppController>.value(value: appController),
+        ChangeNotifierProvider<AppController>.value(value: appController),
         ChangeNotifierProvider<SmsController>.value(value: smsController),
         Provider<BlockedNumbersController>.value(
           value: blockedNumbersController,
@@ -313,6 +317,7 @@ Future<void> main() async {
         ChangeNotifierProvider<RecentHistoryProvider>(
           create:
               (context) => RecentHistoryProvider(
+                appController: appController,
                 callLogController: callLogContoller,
                 smsController: smsController,
               ),

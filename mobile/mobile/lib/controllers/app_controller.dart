@@ -24,11 +24,11 @@ import 'package:permission_handler/permission_handler.dart';
 // <<< 포그라운드 서비스 알림 ID 상수 추가 >>>
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
 
-class AppController {
-  final PhoneStateController phoneStateController;
+class AppController with ChangeNotifier {
+  PhoneStateController? _phoneStateController;
   final ContactsController contactsController;
   final CallLogController callLogController;
-  final SmsController smsController;
+  SmsController? _smsController;
   final BlockedNumbersController blockedNumbersController;
   final NotificationRepository _notificationRepository;
 
@@ -48,14 +48,24 @@ class AppController {
   String _coreInitMessage = '';
   String get coreInitMessage => _coreInitMessage;
 
+  // 초기 사용자 데이터 로딩 상태를 위한 ValueNotifier 추가
+  final ValueNotifier<bool> _isInitialUserDataLoading = ValueNotifier(false);
+  ValueNotifier<bool> get isInitialUserDataLoadingNotifier =>
+      _isInitialUserDataLoading;
+  bool get isInitialUserDataLoading => _isInitialUserDataLoading.value;
+
+  SmsController? get smsController => _smsController;
+  PhoneStateController? get phoneStateController => _phoneStateController;
+
   AppController(
-    this.phoneStateController,
+    PhoneStateController? phoneStateController,
     this.contactsController,
     this.callLogController,
-    this.smsController,
+    SmsController? smsController,
     this.blockedNumbersController,
     this._notificationRepository,
-  ) {
+  ) : _phoneStateController = phoneStateController,
+      _smsController = smsController {
     log('[AppController.constructor] Instance created.');
   }
 
@@ -75,8 +85,14 @@ class AppController {
     try {
       _initializationMessage = '전화 상태 감지 서비스 시작 중...';
       log('[AppController.initializeApp] Starting phone state listening...');
-      phoneStateController.startListening();
-      log('[AppController.initializeApp] Phone state listening started.');
+      if (_phoneStateController != null) {
+        _phoneStateController!.startListening();
+        log('[AppController.initializeApp] Phone state listening started.');
+      } else {
+        log(
+          '[AppController.initializeApp] PhoneStateController is null, cannot start listening.',
+        );
+      }
 
       _initializationMessage = '알림 서비스 초기화 중...';
       log('[AppController.initializeApp] Initializing local notifications...');
@@ -126,12 +142,20 @@ class AppController {
   Future<void> cleanupOnLogout() async {
     log('[AppController.cleanupOnLogout] Started.');
     await stopBackgroundService();
-    phoneStateController.stopListening();
+    if (_phoneStateController != null) {
+      _phoneStateController!.stopListening();
+    }
     await LocalNotificationService.cancelAllNotifications();
-    await smsController.stopSmsObservationAndDispose();
-    log(
-      '[AppController.cleanupOnLogout] SMS observation stopped and listener disposed.',
-    );
+    if (_smsController != null) {
+      await _smsController!.stopSmsObservationAndDispose();
+      log(
+        '[AppController.cleanupOnLogout] SMS observation stopped and listener disposed.',
+      );
+    } else {
+      log(
+        '[AppController.cleanupOnLogout] SmsController was null, skipping its cleanup.',
+      );
+    }
     log('[AppController.cleanupOnLogout] Finished.');
   }
 
@@ -356,6 +380,7 @@ class AppController {
     log('[AppController.performCoreInitialization] Started.');
     final stopwatch = Stopwatch()..start();
     _isCoreInitializing.value = true;
+    notifyListeners();
     _coreInitMessage = '초기 설정 로딩 중...';
 
     try {
@@ -363,7 +388,7 @@ class AppController {
       log(
         '[AppController.performCoreInitialization] Step 1 (was 2): Initializing blocked numbers (local)...',
       );
-      await blockedNumbersController.initialize(); // 로컬 초기화
+      await blockedNumbersController.initialize();
       log(
         '[AppController.performCoreInitialization] Step 1 (was 2): Blocked numbers initialized.',
       );
@@ -372,7 +397,7 @@ class AppController {
       log(
         '[AppController.performCoreInitialization] Step 2 (was 3): Starting background service...',
       );
-      await startBackgroundService(); // 내부에서 isRunning 체크 함
+      await startBackgroundService();
       log(
         '[AppController.performCoreInitialization] Step 2 (was 3): Background service start requested.',
       );
@@ -382,7 +407,7 @@ class AppController {
         '[AppController.performCoreInitialization] Step 3 (was 4): Requesting initial background tasks (delay 2s)...',
       );
       final service = FlutterBackgroundService();
-      await Future.delayed(const Duration(seconds: 2)); // 서비스 시작 대기
+      await Future.delayed(const Duration(seconds: 2));
       if (await service.isRunning()) {
         log(
           '[AppController.performCoreInitialization] Step 3.1 (was 4.1): Service is running. Invoking tasks: syncBlockedListsNow...',
@@ -417,6 +442,7 @@ class AppController {
       );
     } finally {
       _isCoreInitializing.value = false;
+      notifyListeners();
       stopwatch.stop();
       log(
         '[AppController.performCoreInitialization] Finished. Total time: ${stopwatch.elapsedMilliseconds}ms',
@@ -424,76 +450,107 @@ class AppController {
     }
   }
 
-  // 함수 이름 원복 및 로직 통합
   Future<void> triggerContactsLoadIfReady() async {
     log('[AppController.triggerContactsLoadIfReady] Started.');
-
-    // 1. 연락처 로드 (기존 로직)
-    log(
-      '[AppController.triggerContactsLoadIfReady] Step 1: Loading contacts...',
-    );
-    if (contactsController.isSyncing) {
+    if (_isInitialUserDataLoading.value) {
       log(
-        '[AppController.triggerContactsLoadIfReady] Contacts are already syncing. Skipping contact load trigger.',
+        '[AppController.triggerContactsLoadIfReady] Already loading initial user data. Skipping.',
       );
-    } else if (contactsController.initialLoadAttempted) {
-      log(
-        '[AppController.triggerContactsLoadIfReady] Contacts initial load was already attempted. Triggering a non-forced refresh for contacts.',
-      );
-      await contactsController.syncContacts(); // 내부 로그 있음
-    } else {
-      log(
-        '[AppController.triggerContactsLoadIfReady] Triggering initial contacts load via ContactsController.',
-      );
-      await contactsController.syncContacts(); // 내부 로그 있음
+      return;
     }
-    log(
-      '[AppController.triggerContactsLoadIfReady] Step 1: Contacts loading process finished.',
-    );
+    _isInitialUserDataLoading.value = true;
+    notifyListeners();
 
-    // 2. 통화 기록 로드 (performCoreInitialization에서 이동)
-    log(
-      '[AppController.triggerContactsLoadIfReady] Step 2: Loading call logs...',
-    );
-    try {
-      await callLogController.refreshCallLogs(); // 내부 로그 있음
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 2: Call logs loaded/refreshed successfully.',
-      );
-    } catch (e, st) {
-      log(
-        '[AppController.triggerContactsLoadIfReady] Step 2: Error loading call logs: $e\n$st',
-      );
-    }
+    bool contactsChanged = false;
+    bool callLogChanged = false;
+    bool smsLogChanged = false;
 
-    // 3. SMS 기능 초기화 및 기록 로드 (performCoreInitialization에서 이동)
-    log(
-      '[AppController.triggerContactsLoadIfReady] Step 3: Initializing SMS features and loading SMS logs...',
-    );
     try {
-      final smsPermissionStatus = await Permission.sms.status;
-      if (smsPermissionStatus.isGranted) {
+      log(
+        '[AppController.triggerContactsLoadIfReady] Step 1: Loading contacts...',
+      );
+      if (contactsController.isSyncing) {
         log(
-          '[AppController.triggerContactsLoadIfReady] SMS permission granted. Initializing SMS features...',
+          '[AppController.triggerContactsLoadIfReady] Contacts are already syncing. Skipping contact load trigger.',
         );
-        await smsController.initializeSmsFeatures(); // 내부 로그 있음 (refreshSms 포함)
+      } else if (contactsController.initialLoadAttempted) {
         log(
-          '[AppController.triggerContactsLoadIfReady] Step 3: SMS features initialized and logs loaded/refreshed.',
+          '[AppController.triggerContactsLoadIfReady] Contacts initial load was already attempted. Triggering a non-forced refresh for contacts.',
         );
+        await contactsController.syncContacts();
       } else {
         log(
-          '[AppController.triggerContactsLoadIfReady] SMS permission not granted. SMS features will not be initialized.',
+          '[AppController.triggerContactsLoadIfReady] Triggering initial contacts load via ContactsController.',
         );
+        await contactsController.syncContacts();
+      }
+      log(
+        '[AppController.triggerContactsLoadIfReady] Step 1: Contacts loading process finished.',
+      );
+
+      log(
+        '[AppController.triggerContactsLoadIfReady] Step 2: Loading call logs...',
+      );
+      callLogChanged = await callLogController.refreshCallLogs();
+      log(
+        '[AppController.triggerContactsLoadIfReady] Step 2: Call logs loaded/refreshed. Changed: $callLogChanged',
+      );
+
+      log(
+        '[AppController.triggerContactsLoadIfReady] Step 3: Initializing SMS features and loading SMS logs...',
+      );
+      if (_smsController == null) {
+        log(
+          '[AppController.triggerContactsLoadIfReady] SmsController is null, skipping SMS features.',
+        );
+      } else {
+        final smsPermissionStatus = await Permission.sms.status;
+        if (smsPermissionStatus.isGranted) {
+          log(
+            '[AppController.triggerContactsLoadIfReady] SMS permission granted. Initializing SMS features...',
+          );
+          await _smsController!.startSmsObservation();
+          _smsController!.listenToSmsEvents();
+          smsLogChanged = await _smsController!.refreshSms();
+          log(
+            '[AppController.triggerContactsLoadIfReady] Step 3: SMS features initialized and logs loaded/refreshed. Changed: $smsLogChanged',
+          );
+        } else {
+          log(
+            '[AppController.triggerContactsLoadIfReady] SMS permission not granted. SMS features will not be initialized.',
+          );
+        }
       }
     } catch (e, st) {
       log(
-        '[AppController.triggerContactsLoadIfReady] Step 3: Error initializing SMS features: $e\n$st',
+        '[AppController.triggerContactsLoadIfReady] Error loading initial user data: $e\n$st',
       );
+    } finally {
+      _isInitialUserDataLoading.value = false;
+      log(
+        '[AppController.triggerContactsLoadIfReady] Finished loading all initial user data. ContactsChanged (assumed): N/A, CallLogChanged: $callLogChanged, SmsLogChanged: $smsLogChanged',
+      );
+      notifyListeners();
     }
+  }
 
+  // UI 업데이트 요청을 위한 메소드
+  void requestUiUpdate({String source = 'Unknown'}) {
+    log('[AppController.requestUiUpdate] UI update requested from: $source');
+    notifyListeners();
+  }
+
+  // SmsController를 나중에 설정하기 위한 메소드
+  void setSmsController(SmsController controller) {
+    log('[AppController.setSmsController] SmsController has been set.');
+    _smsController = controller;
+  }
+
+  void setPhoneStateController(PhoneStateController controller) {
     log(
-      '[AppController.triggerContactsLoadIfReady] Finished loading all initial user data (contacts, call logs, SMS).',
+      '[AppController.setPhoneStateController] PhoneStateController has been set.',
     );
+    _phoneStateController = controller;
   }
 }
 
