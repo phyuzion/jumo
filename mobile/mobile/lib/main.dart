@@ -464,6 +464,8 @@ class _MyAppStatefulState extends State<MyAppStateful>
             log('[MyAppStateful] User is logged in. Refreshing contacts...');
             final contactsCtrl = context.read<ContactsController>();
             contactsCtrl.syncContacts(forceFullSync: false);
+            log('[MyAppStateful] Refreshing recent history...');
+            context.read<RecentHistoryProvider>().refresh();
           } else {
             log(
               '[MyAppStateful] User is not logged in. Skipping contacts refresh.',

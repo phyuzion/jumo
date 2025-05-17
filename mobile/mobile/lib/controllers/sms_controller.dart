@@ -50,7 +50,12 @@ class SmsController with ChangeNotifier {
   }
 
   void listenToSmsEvents() {
-    _smsEventSubscription?.cancel();
+    // 기존 구독이 이미 있는 경우 새로 구독하지 않음
+    if (_smsEventSubscription != null) {
+      log('[SmsController.listenToSmsEvents] 기존 이벤트 구독이 있음. 메시지 동기화만 시작.');
+      syncMessages();
+      return;
+    }
 
     _smsEventSubscription = _eventChannel.receiveBroadcastStream().listen(
       (event) {
@@ -68,9 +73,15 @@ class SmsController with ChangeNotifier {
       },
       onDone: () {
         log('[SmsController.listenToSmsEvents] Event channel closed.');
+        // 이벤트 채널이 닫히면 구독 참조 제거 (다시 구독할 수 있도록)
+        _smsEventSubscription = null;
       },
       cancelOnError: false,
     );
+
+    // 구독이 새로 시작될 때 자동으로 메시지 동기화 시작
+    log('[SmsController.listenToSmsEvents] 이벤트 채널 구독 시작됨. 메시지 동기화 시작.');
+    syncMessages();
   }
 
   Future<void> stopSmsObservationAndDispose() async {
