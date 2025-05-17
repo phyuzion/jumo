@@ -370,7 +370,6 @@ class AppController with ChangeNotifier {
     notifyListeners();
 
     bool callLogChanged = false;
-    bool smsLogChanged = false;
 
     try {
       // 1. 연락처 로드 (이전 Step 1)
@@ -395,7 +394,10 @@ class AppController with ChangeNotifier {
         if (smsPermissionStatus.isGranted) {
           await _smsController!.startSmsObservation();
           _smsController!.listenToSmsEvents();
-          smsLogChanged = await _smsController!.refreshSms();
+          // 백그라운드로 실행하며 결과를 기다리지 않음 (void 반환 타입)
+          _smsController!.refreshSms();
+
+          // UI 업데이트는 SMS 컨트롤러가 내부적으로 처리하므로 여기서는 기다리지 않음
         } else {
           log(
             '[AppController.triggerContactsLoadIfReady] SMS permission not granted.',

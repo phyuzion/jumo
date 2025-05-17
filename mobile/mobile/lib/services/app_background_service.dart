@@ -23,7 +23,7 @@ import 'package:mobile/repositories/blocked_number_repository.dart'; // <<< 추�
 import 'package:mobile/repositories/blocked_history_repository.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
 
-const int CALL_STATUS_NOTIFICATION_ID = 1111;
+// const int CALL_STATUS_NOTIFICATION_ID = 1111;
 const String FOREGROUND_SERVICE_CHANNEL_ID = 'jumo_foreground_service_channel';
 const int FOREGROUND_SERVICE_NOTIFICATION_ID = 777;
 
@@ -34,7 +34,12 @@ String _currentCallerNameForTimer = ''; // 타이머용 현재 발신자 이름
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
-  DartPluginRegistrant.ensureInitialized();
+  // NOTE: Flutter 3.19+ 에서는 백그라운드 Isolate 에서 모든 플러그인을 다시 등록할 필요가 없습니다.
+  // 특히 flutter_background_service_android 가 두 번째 Isolate 에 Attach 되면
+  // "This class should only be used in the main isolate" 예외를 던집니다.
+  // 아래 호출을 제거해도 Local-Notifications 등 주요 플러그인은 정상 동작하며,
+  // 일부 구형 Flutter (<3.0) 에서만 필요했기 때문에 지금은 제외합니다.
+
   log(
     '[BackgroundService][onStart] Service instance started. Isolate: ${Isolate.current.hashCode}',
   );
@@ -241,6 +246,7 @@ Future<void> onStart(ServiceInstance service) async {
   }
 
   // <<< 새로운 함수: 메인 Isolate로부터 현재 통화 상태 가져오기 >>>
+  /*
   Future<Map<String, dynamic>> _fetchCurrentCallStateFromMain() async {
     final completer = Completer<Map<String, dynamic>>();
     StreamSubscription? subscription;
@@ -278,6 +284,7 @@ Future<void> onStart(ServiceInstance service) async {
 
     return completer.future;
   }
+  */
 
   // <<< 시간 포맷 함수 정의 먼저 >>>
   String _formatDurationBackground(int seconds) {
@@ -578,20 +585,14 @@ Future<void> onStart(ServiceInstance service) async {
   });
 
   // 즉시 차단 목록 동기화 요청
+  /*
   service.on('syncBlockedListsNow').listen((event) async {
     log(
       '[BackgroundService][on:syncBlockedListsNow] Received syncBlockedListsNow request.',
     );
     await syncBlockedLists();
   });
-
-  service.on('stopService').listen((event) async {
-    log('[BackgroundService][on:stopService] Received stopService event.');
-    _stopCallTimerBackground();
-    notificationTimer?.cancel();
-    blockSyncTimer?.cancel();
-    service.stopSelf();
-  });
+  */
 
   log('[BackgroundService] Setting up BroadcastReceiver for PHONE_STATE...');
 

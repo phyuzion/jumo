@@ -25,18 +25,14 @@ class HiveSmsLogRepository implements SmsLogRepository {
   HiveSmsLogRepository(this._smsLogsBox);
 
   // SMS를 위한 고유 키 생성.
-  // SmsController에서 nativeSmsMap을 만들 때 'native_id' 필드에 네이티브 SMS ID를 넣어준다고 가정합니다.
   String _generateSmsKey(Map<String, dynamic> smsMap) {
-    final nativeId = smsMap['native_id'];
     final date = smsMap['date'];
     final address = smsMap['address'];
-    if (nativeId != null && nativeId != 0 && nativeId.toString().isNotEmpty) {
-      return 'sms_nid_${nativeId}';
-    }
+
     if (date != null && address != null) {
-      return 'sms_dateaddr_${date}_${address.hashCode}';
+      return "msg_key_${date}_${address.hashCode}";
     }
-    return 'sms_fallback_${DateTime.now().millisecondsSinceEpoch}_${smsMap.hashCode}';
+    return "msg_fallback_${DateTime.now().millisecondsSinceEpoch}_${smsMap.hashCode}";
   }
 
   @override
@@ -80,18 +76,62 @@ class HiveSmsLogRepository implements SmsLogRepository {
         log('[HiveSmsLogRepository] saveSmsLogs: Box is not open!');
         return;
       }
-      await _smsLogsBox.clear();
+
+      // 기존 데이터를 모두 지우지 않고, 개별 항목 업데이트 방식으로 변경
+      // Hive에 데이터 저장시 키-값 쌍으로 개별 업데이트
       final Map<String, Map<String, dynamic>> entriesToPut = {};
+      int addCount = 0;
+      int updateCount = 0;
+
+      // 새 메시지 항목 처리
       for (final smsMap in newSmsLogs) {
         final String key = _generateSmsKey(smsMap);
+
+        // 이미 존재하는 키인지 확인
+        if (_smsLogsBox.containsKey(key)) {
+          updateCount++;
+        } else {
+          addCount++;
+        }
+
         entriesToPut[key] = smsMap;
       }
+
+      // 개별 항목 저장
       if (entriesToPut.isNotEmpty) {
         await _smsLogsBox.putAll(
           entriesToPut.cast<String, Map<dynamic, dynamic>>(),
         );
         log(
-          '[HiveSmsLogRepository] Saved ${entriesToPut.length} SMS logs (24시간 이내 전체 덮어쓰기).',
+          '[HiveSmsLogRepository] Saved ${entriesToPut.length} SMS logs (새 항목: $addCount, 업데이트: $updateCount).',
+        );
+      }
+
+      // 필요한 경우 오래된 데이터 정리
+      final DateTime oneDayAgo = DateTime.now().subtract(
+        const Duration(days: 1),
+      );
+      final keysToDelete = <String>[];
+
+      _smsLogsBox.keys.forEach((key) {
+        if (key is String) {
+          final value = _smsLogsBox.get(key);
+          if (value != null && value is Map) {
+            final date = value['date'];
+            if (date != null && date is int) {
+              final msgDateTime = DateTime.fromMillisecondsSinceEpoch(date);
+              if (msgDateTime.isBefore(oneDayAgo)) {
+                keysToDelete.add(key);
+              }
+            }
+          }
+        }
+      });
+
+      if (keysToDelete.isNotEmpty) {
+        await _smsLogsBox.deleteAll(keysToDelete);
+        log(
+          '[HiveSmsLogRepository] Cleaned up ${keysToDelete.length} old SMS logs (1일 이전).',
         );
       }
     } catch (e, s) {

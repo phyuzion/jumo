@@ -200,13 +200,9 @@ class _SettingsScreenState extends State<SettingsScreen>
   void _calculateDaysUntilExpiry() {
     if (_rawValidUntil.isEmpty) {
       _daysUntilExpiry = null;
-      log('[_SettingsScreenState][Expiry] Raw validUntil is empty.');
       return;
     }
     try {
-      log(
-        '[_SettingsScreenState][Expiry] Raw validUntil (epoch ms): $_rawValidUntil',
-      );
       // <<< 수정: int.tryParse 및 fromMillisecondsSinceEpoch 사용 >>>
       final epochMs = int.tryParse(_rawValidUntil);
       if (epochMs == null) {
@@ -434,11 +430,6 @@ class _SettingsScreenState extends State<SettingsScreen>
 
   @override
   Widget build(BuildContext context) {
-    // <<< 로그 추가: build 시점의 _daysUntilExpiry 값 >>>
-    log(
-      '[_SettingsScreenState][Build] _daysUntilExpiry value: $_daysUntilExpiry',
-    );
-
     // <<< 만료 알림 위젯 생성 로직 >>>
     Widget? expiryWarningWidget;
     if (_daysUntilExpiry != null) {
@@ -450,9 +441,6 @@ class _SettingsScreenState extends State<SettingsScreen>
       } else if (_daysUntilExpiry! <= 3) {
         warningMessage = '계정 만료일이 ${_daysUntilExpiry}일 남았습니다.';
       }
-      log(
-        '[_SettingsScreenState][Build] Calculated warning message: "$warningMessage"',
-      );
 
       if (warningMessage.isNotEmpty) {
         expiryWarningWidget = Container(
