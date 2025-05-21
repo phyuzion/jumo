@@ -27,9 +27,9 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
   for (const r of existingRecords) {
     let key;
     if (isAdmin) {
-      // 어드민일 때는 전화번호와 시간을 기준으로 키 생성
+      // 어드민일 때는 전화번호, 유저네임, 시간을 기준으로 키 생성
       const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
-      key = `${r.phoneNumber}#${createdAt.toISOString()}`;
+      key = `${r.phoneNumber}#${r.userName || ''}#${createdAt.toISOString()}`;
     } else {
       // 일반 유저일 때는 userId만으로 키 생성
       const uid = r.userId ? String(r.userId) : '';
@@ -58,9 +58,9 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
 
     let key;
     if (isAdmin) {
-      // 어드민일 때는 전화번호와 시간을 기준으로 키 생성
+      // 어드민일 때는 전화번호, 유저네임, 시간을 기준으로 키 생성
       const createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
-      key = `${nr.phoneNumber}#${createdAt.toISOString()}`;
+      key = `${nr.phoneNumber}#${finalUserName || ''}#${createdAt.toISOString()}`;
     } else {
       // 일반 유저일 때는 userId만으로 키 생성
       key = String(finalUserId);
@@ -107,6 +107,13 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
   return Object.values(map);
 }
 
+// 외부 테스트용으로 mergeRecords 함수 별도 내보내기
+// GraphQL resolver가 아닌 다른 모듈에서 사용 가능하게 함
+exports.testUtils = {
+  mergeRecords
+};
+
+// GraphQL resolver는 객체 형태여야 함
 module.exports = {
   Mutation: {
     /**
@@ -137,6 +144,7 @@ module.exports = {
         // createdAt은 String으로 받음 (mergeRecords에서 Date로 변환)
         mapByPhone[phone].push(rec);
       }
+      
       const phoneNumbers = Object.keys(mapByPhone);
       if (phoneNumbers.length === 0) {
         return true;
@@ -223,7 +231,7 @@ module.exports = {
         });
       }
 
-      console.log('[Phone.Resolvers] upsertPhoneRecords bulkWrite done. ops=', bulkOps.length);
+      console.log('[Phone.Resolvers] upsertPhoneRecords bulkWrite 완료. ops=', bulkOps.length);
       return true;
     },
   },
@@ -235,8 +243,6 @@ module.exports = {
       if (!normalizedPhoneNumber) {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
-      // <<< 로그 추가: 입력된 번호 확인 >>>
-      console.log(`[getPhoneNumber] Received request for phone: ${normalizedPhoneNumber}`);
 
       // --- 검색 횟수 체크 로직 (KST 기준) ---
       if (isRequested && tokenData.userId) {
@@ -272,18 +278,13 @@ module.exports = {
       }
       // --- 검색 횟수 체크 로직 끝 ---
 
-      // <<< 사용자 정보, PhoneNumber 정보, TodayRecord 정보를 병렬로 조회 (복원) >>>
-      // <<< 로그 추가: 사용자 검색 조건 확인 >>>
-      console.log(`[getPhoneNumber] Searching for user with phoneNumber: ${normalizedPhoneNumber}`);
       const [registeredUser, phoneDoc, todayDocs] = await Promise.all([
         User.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
         PhoneNumber.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
         TodayRecord.find({ phoneNumber: normalizedPhoneNumber }).sort({ createdAt: -1 }).lean(),
       ]);
-      // <<< 로그 추가: 사용자 검색 결과 확인 >>>
-      console.log(`[getPhoneNumber] Found user result: ${registeredUser ? registeredUser.loginId : 'null'}`);
 
-      // TodayRecord 포맷팅 (항상 수행) (복원)
+      // TodayRecord 포맷팅 (항상 수행)
       const formattedTodayRecords = todayDocs.map(record => ({
         id: record._id.toString(),
         phoneNumber: record.phoneNumber,
@@ -293,11 +294,8 @@ module.exports = {
         createdAt: record.createdAt.toISOString(),
       }));
 
-      // <<< 최종 결과 조합 (복원 및 수정) >>>
       if (registeredUser) {
         // 사용자를 찾은 경우
-        console.log('[getPhoneNumber] Constructing response for REGISTERED USER:', registeredUser.loginId);
-        // <<< phoneDoc이 null일 경우에도 기본값 제공 및 필드 이름 확인 >>>
         return {
           id: phoneDoc?._id?.toString() ?? registeredUser._id.toString(), // phoneDoc 없으면 User ID 사용
           phoneNumber: normalizedPhoneNumber,
@@ -308,16 +306,15 @@ module.exports = {
             createdAt: r.createdAt?.toISOString()
           })),
           todayRecords: formattedTodayRecords,
-          isRegisteredUser: true, // <<< 확실히 true 설정
-          registeredUserInfo: { // <<< 확실히 객체 생성 및 값 할당
+          isRegisteredUser: true,
+          registeredUserInfo: {
             userName: registeredUser.name || '',
-            userRegion: registeredUser.region, // 스키마에서 Nullable이므로 그대로 전달
+            userRegion: registeredUser.region,
             userType: registeredUser.userType || '일반',
           },
         };
       } else {
         // 사용자를 찾지 못한 경우
-        console.log('[getPhoneNumber] Constructing response for NON-registered number.');
         if (!phoneDoc) {
           // PhoneNumber 정보도 없으면
           return {
