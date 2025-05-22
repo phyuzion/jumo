@@ -22,7 +22,7 @@ const todayRecordSchema = new mongoose.Schema(
     createdAt: {
       type: Date,
       required: true,
-      expires: 86400, // 24시간 후 자동 삭제
+      // expires: 86400 - TTL 인덱스 제거함 (자동 삭제 방지)
     },
   },
   {
