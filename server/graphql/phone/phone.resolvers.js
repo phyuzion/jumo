@@ -22,88 +22,50 @@ const { checkUserOrAdmin } = require('../auth/utils');
  *    기존 레코드를 찾아 업데이트, 없으면 push
  */
 function mergeRecords(existingRecords, newRecords, isAdmin, user) {
-  // 1) existingRecords => map by key
+  // 1) 기존 레코드: key별로 map
   const map = {};
   for (const r of existingRecords) {
     let key;
     if (isAdmin) {
-      // 어드민일 때는 전화번호, 유저네임, 시간을 기준으로 키 생성
       const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
-      key = `${r.phoneNumber}#${r.userName || ''}#${createdAt.toISOString()}`;
+      key = `admin#${r.userName || ''}#${createdAt.toISOString()}`;
     } else {
-      // 일반 유저일 때는 userId만으로 키 생성
       const uid = r.userId ? String(r.userId) : '';
-      key = uid;
+      const name = r.name || '';
+      const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
+      key = `${uid}#${name}#${createdAt.toISOString()}`;
     }
     map[key] = r;
   }
 
-  // 2) newRecords => 병합
+  // 2) 새 레코드: key가 겹치면 업데이트, 없으면 추가
   for (const nr of newRecords) {
-    // 최종 userId, userName, userType 결정
-    let finalUserId = null;
-    let finalUserName = '';
-    let finalUserType = '일반';
-
-    if (isAdmin) {
-      // 어드민의 경우 입력값 사용 (없으면 기본값)
-      finalUserName = nr.userName?.trim() || 'Admin';
-      finalUserType = nr.userType || '일반';
-    } else {
-      // 일반 유저의 경우 현재 로그인한 유저 정보 사용
-      finalUserId = user._id;
-      finalUserName = user.name || '';
-      finalUserType = user.userType || '일반';
-    }
-
     let key;
+    let finalUserId = isAdmin ? nr.userId : user._id;
+    let finalUserName = isAdmin ? (nr.userName || '') : (user.name || '');
+    let finalUserType = isAdmin ? (nr.userType || '일반') : (user.userType || '일반');
+    let createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
+
     if (isAdmin) {
-      // 어드민일 때는 전화번호, 유저네임, 시간을 기준으로 키 생성
-      const createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
-      key = `${nr.phoneNumber}#${finalUserName || ''}#${createdAt.toISOString()}`;
+      key = `admin#${finalUserName || ''}#${createdAt.toISOString()}`;
     } else {
-      // 일반 유저일 때는 userId만으로 키 생성
-      key = String(finalUserId);
+      const uid = finalUserId ? String(finalUserId) : '';
+      const name = nr.name || '';
+      key = `${uid}#${name}#${createdAt.toISOString()}`;
     }
 
-    let exist = map[key];
-    
-    if (!exist) {
-      // 새 레코드 생성
-      exist = {
-        userId: finalUserId,
-        userName: finalUserName,
-        userType: finalUserType,
-        name: nr.name || '',
-        memo: nr.memo || '',
-        type: nr.type || 0,
-        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date(),
-      };
-      map[key] = exist;
-    } else {
-      // 기존 레코드 업데이트
-      if (isAdmin) {
-        // 어드민의 경우 모든 필드 업데이트 가능
-        if (nr.name !== undefined) exist.name = nr.name;
-        if (nr.memo !== undefined) exist.memo = nr.memo;
-        if (nr.type !== undefined) exist.type = nr.type;
-        if (nr.userType !== undefined) exist.userType = nr.userType;
-        if (nr.userName !== undefined) exist.userName = nr.userName;
-      } else {
-        // 일반 유저의 경우 name, memo, type만 업데이트 가능
-        // userId, userName, userType은 현재 로그인한 유저 정보로 고정
-        if (nr.name !== undefined) exist.name = nr.name;
-        if (nr.memo !== undefined) exist.memo = nr.memo;
-        if (nr.type !== undefined) exist.type = nr.type;
-        exist.userId = finalUserId;
-        exist.userName = finalUserName;
-        exist.userType = finalUserType;
-      }
-      // createdAt은 항상 업데이트
-      exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
-    }
+    // 기존에 있으면 업데이트, 없으면 추가
+    map[key] = {
+      ...map[key], // 기존 값이 있으면 그걸 기본으로
+      ...nr,       // 새 값으로 덮어쓰기
+      userId: finalUserId,
+      userName: finalUserName,
+      userType: finalUserType,
+      createdAt,
+    };
   }
 
+  // 3) 결과 반환: 기존+업데이트+추가 모두 포함, 삭제 없음
   return Object.values(map);
 }
 
@@ -151,25 +113,7 @@ module.exports = {
       }
 
       const existingDocs = await PhoneNumber.find(
-        { phoneNumber: { $in: phoneNumbers } },
-        { 
-          phoneNumber: 1, 
-          records: {
-            $map: {
-              input: "$records",
-              as: "record",
-              in: {
-                $mergeObjects: [
-                  "$$record",
-                  { phoneNumber: "$phoneNumber" }
-                ]
-              }
-            }
-          },
-          type: 1, 
-          blockCount: 1, 
-          _id: 1 
-        }
+        { phoneNumber: { $in: phoneNumbers } }
       ).lean();
 
       const phoneDocMap = {};
@@ -192,6 +136,11 @@ module.exports = {
 
         // 병합 (mergeRecords는 name, memo, type 업데이트)
         const merged = mergeRecords(currentRecords, mapByPhone[phone], isAdmin, user);
+
+        // 데이터 무결성 체크 로그
+        if (currentRecords.length > 0 && merged.length < currentRecords.length) {
+          console.error(`[WARNING] Records lost during merge for ${phone}! Before: ${currentRecords.length}, After: ${merged.length}`);
+        }
 
         // 위험 번호 로직 유지
         const countDanger = merged.filter(r => r.type === 99).length;
