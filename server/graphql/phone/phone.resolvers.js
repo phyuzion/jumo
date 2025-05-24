@@ -18,54 +18,35 @@ const { checkUserOrAdmin } = require('../auth/utils');
  *  - 기존 records[]: [{ userId, userName, userType, name, memo, type, createdAt }, ...]
  *  - 새로 들어온 newRecords[]: 같은 phoneNumber에 대한 여러 레코드
  *    (admin: userName,userType 직접 지정, 일반유저: userName=유저.name, userType=유저.type, userId=유저._id)
- *  - userId + userName + userType 를 사실상 "등록자 식별" 키로 삼고,
- *    기존 레코드를 찾아 업데이트, 없으면 push
  */
 function mergeRecords(existingRecords, newRecords, isAdmin, user) {
-  // 1) existingRecords => map by key
-  const map = {};
-  for (const r of existingRecords) {
-    let key;
-    if (isAdmin) {
-      // 어드민일 때는 전화번호와 유저네임으로 키 생성
-      key = `${r.phoneNumber}#${r.userName || ''}`;
-    } else {
-      // 일반 유저일 때는 userId와 phoneNumber로 키 생성
-      const uid = r.userId ? String(r.userId) : '';
-      key = `${uid}#${r.phoneNumber}`;
-    }
-    map[key] = r;
-  }
+  // 1) 기존 레코드는 그대로 유지
+  let resultRecords = [...existingRecords];
 
-  // 2) newRecords => 병합
+  // 2) 새 레코드 처리
   for (const nr of newRecords) {
     let finalUserId = isAdmin ? nr.userId : user._id;
     let finalUserName = isAdmin ? (nr.userName?.trim() || 'Admin') : (user.name || '');
     let finalUserType = isAdmin ? (nr.userType || '일반') : (user.userType || '일반');
 
-    let key;
+    // 기존 레코드 중 매칭되는 것 찾기
+    let existingIndex = -1;
     if (isAdmin) {
-      key = `${nr.phoneNumber}#${finalUserName}`;
+      // 어드민은 phoneNumber와 userName으로 매칭
+      existingIndex = resultRecords.findIndex(r => 
+        r.phoneNumber === nr.phoneNumber && r.userName === finalUserName
+      );
     } else {
-      key = `${finalUserId}#${nr.phoneNumber}`;
+      // 일반 유저는 자신의 userId와 phoneNumber로 매칭
+      existingIndex = resultRecords.findIndex(r => 
+        r.userId && String(r.userId) === String(finalUserId) && 
+        r.phoneNumber === nr.phoneNumber
+      );
     }
 
-    let exist = map[key];
-    
-    if (!exist) {
-      // 새 레코드 생성
-      exist = {
-        userId: finalUserId,
-        userName: finalUserName,
-        userType: finalUserType,
-        name: nr.name || '',
-        memo: nr.memo || '',
-        type: nr.type || 0,
-        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date(),
-      };
-      map[key] = exist;
-    } else {
+    if (existingIndex >= 0) {
       // 기존 레코드 업데이트
+      let exist = resultRecords[existingIndex];
       if (isAdmin) {
         if (nr.name !== undefined) exist.name = nr.name;
         if (nr.memo !== undefined) exist.memo = nr.memo;
@@ -76,18 +57,27 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         if (nr.name !== undefined) exist.name = nr.name;
         if (nr.memo !== undefined) exist.memo = nr.memo;
         if (nr.type !== undefined) exist.type = nr.type;
-        exist.userId = finalUserId;
-        exist.userName = finalUserName;
-        exist.userType = finalUserType;
       }
-      // createdAt도 업데이트 (클라이언트에서 전달된 시간 사용)
+      // createdAt 업데이트
       if (nr.createdAt) {
         exist.createdAt = new Date(nr.createdAt);
       }
+    } else {
+      // 새 레코드 추가
+      resultRecords.push({
+        userId: finalUserId,
+        userName: finalUserName,
+        userType: finalUserType,
+        phoneNumber: nr.phoneNumber,
+        name: nr.name || '',
+        memo: nr.memo || '',
+        type: nr.type || 0,
+        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date()
+      });
     }
   }
 
-  return Object.values(map);
+  return resultRecords;
 }
 
 // 외부 테스트용으로 mergeRecords 함수 별도 내보내기
