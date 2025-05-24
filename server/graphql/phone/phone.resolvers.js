@@ -32,15 +32,14 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     // 기존 레코드 중 매칭되는 것 찾기
     let existingIndex = -1;
     if (isAdmin) {
-      // 어드민은 phoneNumber와 userName으로 매칭
+      // 어드민은 userName으로만 매칭
       existingIndex = resultRecords.findIndex(r => 
-        r.phoneNumber === nr.phoneNumber && r.userName === finalUserName
+        r.userName === finalUserName
       );
     } else {
-      // 일반 유저는 자신의 userId와 phoneNumber로 매칭
+      // 일반 유저는 자신의 userId로만 매칭
       existingIndex = resultRecords.findIndex(r => 
-        r.userId && String(r.userId) === String(finalUserId) && 
-        r.phoneNumber === nr.phoneNumber
+        r.userId && String(r.userId) === String(finalUserId)
       );
     }
 
@@ -54,21 +53,22 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         if (nr.userType !== undefined) exist.userType = nr.userType;
         if (nr.userName !== undefined) exist.userName = nr.userName;
       } else {
-        if (nr.name !== undefined) exist.name = nr.name;
-        if (nr.memo !== undefined) exist.memo = nr.memo;
-        if (nr.type !== undefined) exist.type = nr.type;
+        // 일반 유저는 모든 정보 업데이트
+        exist.name = nr.name || '';
+        exist.memo = nr.memo || '';
+        exist.type = nr.type || 0;
+        exist.userId = finalUserId;
+        exist.userName = finalUserName;
+        exist.userType = finalUserType;
       }
-      // createdAt 업데이트
-      if (nr.createdAt) {
-        exist.createdAt = new Date(nr.createdAt);
-      }
+      // 시간도 항상 업데이트
+      exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
     } else {
       // 새 레코드 추가
       resultRecords.push({
         userId: finalUserId,
         userName: finalUserName,
         userType: finalUserType,
-        phoneNumber: nr.phoneNumber,
         name: nr.name || '',
         memo: nr.memo || '',
         type: nr.type || 0,
