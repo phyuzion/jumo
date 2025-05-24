@@ -28,12 +28,16 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     let key;
     if (isAdmin) {
       const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
-      key = `admin#${r.userName || ''}#${createdAt.toISOString()}`;
+      const createdAtSecond = new Date(createdAt);
+      createdAtSecond.setMilliseconds(0); // 초 단위로 정규화
+      key = `admin#${r.userName || ''}#${createdAtSecond.toISOString()}`;
     } else {
       const uid = r.userId ? String(r.userId) : '';
       const name = r.name || '';
       const createdAt = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
-      key = `${uid}#${name}#${createdAt.toISOString()}`;
+      const createdAtSecond = new Date(createdAt);
+      createdAtSecond.setMilliseconds(0); // 초 단위로 정규화
+      key = `${uid}#${name}#${createdAtSecond.toISOString()}`;
     }
     map[key] = r;
   }
@@ -45,24 +49,36 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     let finalUserName = isAdmin ? (nr.userName || '') : (user.name || '');
     let finalUserType = isAdmin ? (nr.userType || '일반') : (user.userType || '일반');
     let createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
+    let createdAtSecond = new Date(createdAt);
+    createdAtSecond.setMilliseconds(0); // 초 단위로 정규화
 
     if (isAdmin) {
-      key = `admin#${finalUserName || ''}#${createdAt.toISOString()}`;
+      key = `admin#${finalUserName || ''}#${createdAtSecond.toISOString()}`;
     } else {
       const uid = finalUserId ? String(finalUserId) : '';
       const name = nr.name || '';
-      key = `${uid}#${name}#${createdAt.toISOString()}`;
+      key = `${uid}#${name}#${createdAtSecond.toISOString()}`;
     }
 
     // 기존에 있으면 업데이트, 없으면 추가
-    map[key] = {
-      ...map[key], // 기존 값이 있으면 그걸 기본으로
-      ...nr,       // 새 값으로 덮어쓰기
-      userId: finalUserId,
-      userName: finalUserName,
-      userType: finalUserType,
-      createdAt,
-    };
+    // 1초 이내 중복은 기존 값 유지 (첫 번째 것이 유효한 것으로 간주)
+    if (map[key]) {
+      // 이미 같은 초에 데이터가 있으면, type/memo 등 필수 값만 업데이트
+      if (nr.type !== undefined) map[key].type = nr.type;
+      if (nr.memo !== undefined) map[key].memo = nr.memo;
+      // createdAt은 기존 값 유지 (첫 번째 것이 더 정확)
+    } else {
+      // 새로운 레코드 추가
+      map[key] = {
+        userId: finalUserId,
+        userName: finalUserName,
+        userType: finalUserType,
+        name: nr.name || '',
+        memo: nr.memo || '',
+        type: nr.type !== undefined ? nr.type : 0,
+        createdAt: createdAt, // 원본 시간 유지 (밀리초 포함)
+      };
+    }
   }
 
   // 3) 결과 반환: 기존+업데이트+추가 모두 포함, 삭제 없음
