@@ -20,22 +20,27 @@ const { checkUserOrAdmin } = require('../auth/utils');
  *    (admin: userName,userType 직접 지정, 일반유저: userName=유저.name, userType=유저.type, userId=유저._id)
  */
 function mergeRecords(existingRecords, newRecords, isAdmin, user) {
+
   // 1) 기존 레코드는 그대로 유지
   let resultRecords = [...existingRecords];
 
   // 2) 새 레코드 처리
   for (const nr of newRecords) {
+    
     let finalUserId = isAdmin ? nr.userId : user._id;
     let finalUserName = isAdmin ? (nr.userName?.trim() || 'Admin') : (user.name || '');
     let finalUserType = isAdmin ? (nr.userType || '일반') : (user.userType || '일반');
+    let createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
 
     // 기존 레코드 중 매칭되는 것 찾기
     let existingIndex = -1;
     if (isAdmin) {
-      // 어드민은 userName으로만 매칭
-      existingIndex = resultRecords.findIndex(r => 
-        r.userName === finalUserName
-      );
+      // 어드민은 userName과 시간으로 매칭 (같은 시간대의 같은 userName이면 같은 데이터로 처리)
+      existingIndex = resultRecords.findIndex(r => {
+        const match = r.userName === finalUserName && 
+                     r.createdAt && new Date(r.createdAt).getTime() === createdAt.getTime();
+        return match;
+      });
     } else {
       // 일반 유저는 자신의 userId로만 매칭
       existingIndex = resultRecords.findIndex(r => 
@@ -53,16 +58,14 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         if (nr.userType !== undefined) exist.userType = nr.userType;
         if (nr.userName !== undefined) exist.userName = nr.userName;
       } else {
-        // 일반 유저는 모든 정보 업데이트
         exist.name = nr.name || '';
         exist.memo = nr.memo || '';
         exist.type = nr.type || 0;
         exist.userId = finalUserId;
         exist.userName = finalUserName;
         exist.userType = finalUserType;
+        exist.createdAt = createdAt;
       }
-      // 시간도 항상 업데이트
-      exist.createdAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
     } else {
       // 새 레코드 추가
       resultRecords.push({
@@ -72,7 +75,7 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         name: nr.name || '',
         memo: nr.memo || '',
         type: nr.type || 0,
-        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date()
+        createdAt: createdAt
       });
     }
   }
@@ -106,6 +109,10 @@ module.exports = {
         throw new UserInputError('records 배열이 비어 있습니다.');
       }
       console.log('[Phone.Resolvers] upsertPhoneRecords received, count=', records.length);
+      console.log('[Phone.Resolvers] 실행 유저:', {
+        name: user?.name || 'Admin',
+        phoneNumber: user?.phoneNumber || 'N/A'
+      });
 
       const mapByPhone = {};
       for (const rec of records) {
@@ -205,6 +212,12 @@ module.exports = {
         if (!user) {
           throw new UserInputError('유저를 찾을 수 없습니다.');
         }
+        console.log('[Phone.Resolvers] getPhoneNumber 검색:', {
+          name: user?.name || 'Admin',
+          phoneNumber: user?.phoneNumber || 'N/A',
+          searchNumber: phoneNumber
+        });
+  
 
         // KST 기준으로 오늘 날짜 계산 (UTC+9)
         const now = new Date();
