@@ -35,22 +35,35 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
     // 기존 레코드 중 매칭되는 것 찾기
     let existingIndex = -1;
     if (isAdmin) {
-      // 어드민은 userName과 시간으로 매칭 (같은 시간대의 같은 userName이면 같은 데이터로 처리)
-      existingIndex = resultRecords.findIndex(r => {
-        const match = r.userName === finalUserName && 
-                     r.createdAt && new Date(r.createdAt).getTime() === createdAt.getTime();
-        return match;
-      });
-    } else {
-      // 일반 유저는 자신의 userId로만 매칭
+      // 어드민은 userName과 name으로 매칭
       existingIndex = resultRecords.findIndex(r => 
-        r.userId && String(r.userId) === String(finalUserId)
+        r.userName === finalUserName && r.name === nr.name
+      );
+    } else {
+      // 일반 유저는 userId와 name으로 매칭
+      existingIndex = resultRecords.findIndex(r => 
+        r.userId && String(r.userId) === String(finalUserId) &&
+        r.name === nr.name
       );
     }
 
     if (existingIndex >= 0) {
       // 기존 레코드 업데이트
       let exist = resultRecords[existingIndex];
+      let newCreatedAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
+      
+      
+      // 시간은 더 과거 기록이 있으면 그걸 유지 (유저의 경우만)
+      if (!isAdmin) {
+        if (!exist.createdAt || newCreatedAt < new Date(exist.createdAt)) { 
+          exist.createdAt = newCreatedAt;
+        }
+      } else {
+        
+        exist.createdAt = newCreatedAt;
+      }
+
+      // 나머지 필드들은 새로운 값으로 업데이트
       if (isAdmin) {
         if (nr.name !== undefined) exist.name = nr.name;
         if (nr.memo !== undefined) exist.memo = nr.memo;
@@ -64,19 +77,19 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         exist.userId = finalUserId;
         exist.userName = finalUserName;
         exist.userType = finalUserType;
-        exist.createdAt = createdAt;
       }
     } else {
       // 새 레코드 추가
-      resultRecords.push({
+      const newRecord = {
         userId: finalUserId,
         userName: finalUserName,
         userType: finalUserType,
         name: nr.name || '',
         memo: nr.memo || '',
         type: nr.type || 0,
-        createdAt: createdAt
-      });
+        createdAt: nr.createdAt ? new Date(nr.createdAt) : new Date()
+      };
+      resultRecords.push(newRecord);
     }
   }
 
@@ -113,6 +126,9 @@ module.exports = {
         name: user?.name || 'Admin',
         phoneNumber: user?.phoneNumber || 'N/A'
       });
+      if (records.length === 1) {
+        console.log('[Phone.Resolvers] 업데이트 번호:', records[0].phoneNumber);
+      }
 
       const mapByPhone = {};
       for (const rec of records) {
