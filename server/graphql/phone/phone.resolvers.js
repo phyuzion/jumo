@@ -40,10 +40,9 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
         r.userName === finalUserName && r.name === nr.name
       );
     } else {
-      // 일반 유저는 userId와 name으로 매칭
+      // 일반 유저는 phoneNumber로만 매칭
       existingIndex = resultRecords.findIndex(r => 
-        r.userId && String(r.userId) === String(finalUserId) &&
-        r.name === nr.name
+        r.userId && String(r.userId) === String(finalUserId)
       );
     }
 
@@ -52,31 +51,26 @@ function mergeRecords(existingRecords, newRecords, isAdmin, user) {
       let exist = resultRecords[existingIndex];
       let newCreatedAt = nr.createdAt ? new Date(nr.createdAt) : new Date();
       
-      
-      // 시간은 더 과거 기록이 있으면 그걸 유지 (유저의 경우만)
       if (!isAdmin) {
-        if (!exist.createdAt || newCreatedAt < new Date(exist.createdAt)) { 
+        if (exist.name !== nr.name) {
+          // 다른 name이면 name과 시간 모두 업데이트
+          exist.name = nr.name;
           exist.createdAt = newCreatedAt;
         }
-      } else {
-        
-        exist.createdAt = newCreatedAt;
-      }
-
-      // 나머지 필드들은 새로운 값으로 업데이트
-      if (isAdmin) {
-        if (nr.name !== undefined) exist.name = nr.name;
-        if (nr.memo !== undefined) exist.memo = nr.memo;
-        if (nr.type !== undefined) exist.type = nr.type;
-        if (nr.userType !== undefined) exist.userType = nr.userType;
-        if (nr.userName !== undefined) exist.userName = nr.userName;
-      } else {
-        exist.name = nr.name || '';
+        // 나머지 필드들은 항상 업데이트
         exist.memo = nr.memo || '';
         exist.type = nr.type || 0;
         exist.userId = finalUserId;
         exist.userName = finalUserName;
         exist.userType = finalUserType;
+      } else {
+        // 어드민은 기존과 동일
+        exist.createdAt = newCreatedAt;
+        if (nr.name !== undefined) exist.name = nr.name;
+        if (nr.memo !== undefined) exist.memo = nr.memo;
+        if (nr.type !== undefined) exist.type = nr.type;
+        if (nr.userType !== undefined) exist.userType = nr.userType;
+        if (nr.userName !== undefined) exist.userName = nr.userName;
       }
     } else {
       // 새 레코드 추가
