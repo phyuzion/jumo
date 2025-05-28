@@ -392,8 +392,12 @@ class AppController with ChangeNotifier {
       } else {
         final smsPermissionStatus = await Permission.sms.status;
         if (smsPermissionStatus.isGranted) {
-          await _smsController!.startSmsObservation();
-          _smsController!.listenToSmsEvents();
+          // ContentObserver 상태 확인 및 복구 로직 추가
+          log(
+            '[AppController.triggerContactsLoadIfReady] Checking SMS observer status...',
+          );
+          await _smsController!.ensureObserverActive();
+
           // 백그라운드로 실행하며 결과를 기다리지 않음 (void 반환 타입)
           _smsController!.refreshSms();
 

@@ -10,8 +10,8 @@ import io
 
 # 📌 설정값
 CSV_FILE_PATH = "./db 5.csv"  # CSV 파일 경로
-BATCH_SIZE = 2000  # 한 번에 보낼 레코드 개수 (조절 가능)
-GRAPHQL_ENDPOINT = "http://localhost:4000/graphql"
+BATCH_SIZE = 1000  # 한 번에 보낼 레코드 개수 (조절 가능)
+GRAPHQL_ENDPOINT = "https://jumo-vs8e.onrender.com/graphql"
 ADMIN_CREDENTIALS = {
     "username": "admin",
     "password": "1234"

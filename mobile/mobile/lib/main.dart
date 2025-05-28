@@ -464,6 +464,16 @@ class _MyAppStatefulState extends State<MyAppStateful>
             log('[MyAppStateful] User is logged in. Refreshing contacts...');
             final contactsCtrl = context.read<ContactsController>();
             contactsCtrl.syncContacts(forceFullSync: false);
+
+            // SMS Observer 상태 확인 및 복구 추가
+            log('[MyAppStateful] Checking SMS observer status...');
+            try {
+              final smsController = context.read<SmsController>();
+              smsController.ensureObserverActive();
+            } catch (e) {
+              log('[MyAppStateful] Error checking SMS observer: $e');
+            }
+
             log('[MyAppStateful] Refreshing recent history...');
             context.read<RecentHistoryProvider>().refresh();
           } else {

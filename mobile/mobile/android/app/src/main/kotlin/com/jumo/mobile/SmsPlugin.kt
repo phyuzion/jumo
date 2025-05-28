@@ -80,6 +80,7 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         private const val SMS_EVENT_CHANNEL_NAME = "com.jumo.mobile/sms_events"
         private const val SMS_METHOD_CHANNEL_NAME = "com.jumo.mobile/sms_query"
         private const val DEBOUNCE_TIMEOUT_MS = 1000L
+        private const val DEBUG = true // 디버그 모드 활성화
         
         // 성능 최적화: SMS/MMS 쿼리용 프로젝션 필드 정의
         private val SMS_PROJECTION = arrayOf(
@@ -99,7 +100,11 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         )
         
         // 최대 쿼리 결과 수 제한
-        private const val MAX_QUERY_RESULTS = 100
+        private const val MAX_QUERY_RESULTS = 300
+        
+        private fun logDebug(message: String) {
+            if (DEBUG) Log.d(TAG, message)
+        }
     }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -177,6 +182,15 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
                 stopObservation()
                 result.success(null)
             }
+            "checkObserverStatus" -> {
+                val isActive = isObserverActive()
+                logDebug("[Method] checkObserverStatus called, returning: $isActive")
+                result.success(isActive)
+            }
+            "ensureObserverRegistered" -> {
+                ensureObserverRegistered()
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
@@ -247,16 +261,33 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         if (smsContentObserver == null) {
             smsContentObserver = createContentObserver("SMS")
             try {
+                logDebug("[Observer] SmsContentObserver 등록 시도")
                 applicationContext.contentResolver.registerContentObserver(
                     Telephony.Sms.CONTENT_URI, true, smsContentObserver!!
                 )
                 Log.d(TAG, "[Observer] SmsContentObserver registered successfully.")
+                logDebug("[Observer] SmsContentObserver 등록 성공")
             } catch (e: SecurityException) {
                 Log.e(TAG, "[Observer] SecurityException registering SMS observer. Check READ_SMS permission.", e)
                 eventSink?.error("PERMISSION_ERROR", "READ_SMS permission denied.", e.toString())
             } catch (e: Exception) {
                 Log.e(TAG, "[Observer] Exception registering SmsContentObserver.", e)
                 eventSink?.error("REGISTRATION_ERROR", "Failed to register SMS observer.", e.toString())
+                // 자동 재시도 로직 (1초 후)
+                handler.postDelayed({
+                    logDebug("[Observer] SmsContentObserver 재등록 시도")
+                    try {
+                        if (smsContentObserver == null) {
+                            smsContentObserver = createContentObserver("SMS")
+                        }
+                        applicationContext.contentResolver.registerContentObserver(
+                            Telephony.Sms.CONTENT_URI, true, smsContentObserver!!
+                        )
+                        logDebug("[Observer] SmsContentObserver 재등록 성공")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[Observer] SmsContentObserver 재등록 실패: ${e.message}")
+                    }
+                }, 1000)
             }
         }
         
@@ -264,16 +295,33 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         if (mmsContentObserver == null) {
             mmsContentObserver = createContentObserver("MMS")
             try {
+                logDebug("[Observer] MmsContentObserver 등록 시도")
                 applicationContext.contentResolver.registerContentObserver(
                     Telephony.Mms.CONTENT_URI, true, mmsContentObserver!!
                 )
                 Log.d(TAG, "[Observer] MmsContentObserver registered successfully.")
+                logDebug("[Observer] MmsContentObserver 등록 성공")
             } catch (e: SecurityException) {
                 Log.e(TAG, "[Observer] SecurityException registering MMS observer. Check READ_SMS permission.", e)
                 eventSink?.error("PERMISSION_ERROR", "READ_SMS permission denied for MMS.", e.toString())
             } catch (e: Exception) {
                 Log.e(TAG, "[Observer] Exception registering MmsContentObserver.", e)
                 eventSink?.error("REGISTRATION_ERROR", "Failed to register MMS observer.", e.toString())
+                // 자동 재시도 로직 (1초 후)
+                handler.postDelayed({
+                    logDebug("[Observer] MmsContentObserver 재등록 시도")
+                    try {
+                        if (mmsContentObserver == null) {
+                            mmsContentObserver = createContentObserver("MMS")
+                        }
+                        applicationContext.contentResolver.registerContentObserver(
+                            Telephony.Mms.CONTENT_URI, true, mmsContentObserver!!
+                        )
+                        logDebug("[Observer] MmsContentObserver 재등록 성공")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "[Observer] MmsContentObserver 재등록 실패: ${e.message}")
+                    }
+                }, 1000)
             }
         }
     }
@@ -313,6 +361,25 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         debounceRunnable = null
     }
 
+    // ContentObserver 상태 확인 메소드 추가
+    fun isObserverActive(): Boolean {
+        val smsActive = smsContentObserver != null
+        val mmsActive = mmsContentObserver != null
+        logDebug("[Observer] isObserverActive check - SMS: $smsActive, MMS: $mmsActive")
+        return smsActive && mmsActive
+    }
+    
+    // ContentObserver 재등록 확인 메소드
+    private fun ensureObserverRegistered() {
+        if (smsContentObserver == null || mmsContentObserver == null) {
+            logDebug("[Observer] ContentObserver 재등록 시도 시작")
+            startObservation()
+            Log.d(TAG, "ContentObserver 재등록 시도 완료")
+        } else {
+            logDebug("[Observer] ContentObserver가 이미 등록되어 있음")
+        }
+    }
+
     // --- SMS Query Logic (단순화된 데이터 모델 버전) ---
     private fun querySmsUnified(fromTimestampMillis: Long, toTimestampMillis: Long? = null): List<UnifiedMessage> {
         Log.d(TAG, "Querying SMS database for unified model from: $fromTimestampMillis to: $toTimestampMillis")
@@ -323,8 +390,8 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         val selectionArgs = buildSmsSelectionArgs(fromTimestampMillis, toTimestampMillis)
         
         try {
-            // ORDER BY 절을 사용하여 정렬된 결과 가져오기
-            val sortOrder = "${Telephony.Sms.DATE} ASC"
+            // ORDER BY 절을 사용하여 정렬된 결과 가져오기 - 최신 메시지 우선
+            val sortOrder = "${Telephony.Sms.DATE} DESC"
             
             // 성능 최적화: 최대 결과 수 제한
             val limitClause = " LIMIT $MAX_QUERY_RESULTS"
@@ -422,8 +489,8 @@ class SmsPlugin : FlutterPlugin, MethodChannel.MethodCallHandler, EventChannel.S
         val selectionArgs = buildMmsSelectionArgs(fromTimestampSecs, toTimestampSecs)
         
         try {
-            // ORDER BY 절을 사용하여 정렬된 결과 가져오기
-            val sortOrder = "${Telephony.Mms.DATE} ASC"
+            // ORDER BY 절을 사용하여 정렬된 결과 가져오기 - 최신 메시지 우선
+            val sortOrder = "${Telephony.Mms.DATE} DESC"
             
             // 성능 최적화: 최대 결과 수 제한
             val limitClause = " LIMIT $MAX_QUERY_RESULTS"

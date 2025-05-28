@@ -23,6 +23,7 @@ class SmsController with ChangeNotifier {
 
   bool _isSyncing = false;
   static const Duration _messageLookbackPeriod = Duration(days: 1);
+  int _lastMessageTimestamp = 0;
 
   SmsController(this._smsLogRepository, this.appController) {
     log('[SmsController.constructor] Instance created.');
@@ -38,6 +39,37 @@ class SmsController with ChangeNotifier {
     }
   }
 
+  Future<bool> isObserverActive() async {
+    try {
+      final bool? isActive = await _methodChannel.invokeMethod<bool>(
+        'checkObserverStatus',
+      );
+      log('[SmsController.isObserverActive] Status: ${isActive ?? false}');
+      return isActive ?? false;
+    } on PlatformException catch (e) {
+      log('[SmsController.isObserverActive] Error: ${e.message}');
+      return false;
+    }
+  }
+
+  Future<void> ensureObserverActive() async {
+    try {
+      if (!await isObserverActive()) {
+        log(
+          '[SmsController.ensureObserverActive] Observer is not active, restarting...',
+        );
+        await startSmsObservation();
+        listenToSmsEvents();
+      } else {
+        log(
+          '[SmsController.ensureObserverActive] Observer is active, no action needed',
+        );
+      }
+    } catch (e) {
+      log('[SmsController.ensureObserverActive] Error: $e');
+    }
+  }
+
   Future<void> startSmsObservation() async {
     try {
       await _methodChannel.invokeMethod('startSmsObservation');
@@ -50,7 +82,6 @@ class SmsController with ChangeNotifier {
   }
 
   void listenToSmsEvents() {
-    // 기존 구독이 이미 있는 경우 새로 구독하지 않음
     if (_smsEventSubscription != null) {
       log('[SmsController.listenToSmsEvents] 기존 이벤트 구독이 있음. 메시지 동기화만 시작.');
       syncMessages();
@@ -73,13 +104,11 @@ class SmsController with ChangeNotifier {
       },
       onDone: () {
         log('[SmsController.listenToSmsEvents] Event channel closed.');
-        // 이벤트 채널이 닫히면 구독 참조 제거 (다시 구독할 수 있도록)
         _smsEventSubscription = null;
       },
       cancelOnError: false,
     );
 
-    // 구독이 새로 시작될 때 자동으로 메시지 동기화 시작
     log('[SmsController.listenToSmsEvents] 이벤트 채널 구독 시작됨. 메시지 동기화 시작.');
     syncMessages();
   }
@@ -115,6 +144,18 @@ class SmsController with ChangeNotifier {
     _processSyncMessagesAsync();
   }
 
+  void _updateLastMessageTimestamp() {
+    if (_smsLogs.isNotEmpty) {
+      final int latestTimestamp = _smsLogs.first['date'] as int? ?? 0;
+      if (latestTimestamp > _lastMessageTimestamp) {
+        _lastMessageTimestamp = latestTimestamp;
+        log(
+          '[SmsController._updateLastMessageTimestamp] Updated to: ${DateTime.fromMillisecondsSinceEpoch(_lastMessageTimestamp)}',
+        );
+      }
+    }
+  }
+
   Future<void> _processSyncMessagesAsync() async {
     bool dataChanged = false;
 
@@ -130,11 +171,16 @@ class SmsController with ChangeNotifier {
         for (var msg in currentStoredLogs) _generateSmsKey(msg): msg,
       };
 
+      // 항상 하루치 데이터 가져오기 (더 안전하고 신뢰성 높음)
       final DateTime now = DateTime.now();
       final DateTime oneDayAgo = now.subtract(_messageLookbackPeriod);
 
+      log(
+        '[SmsController.syncMessages] 하루치 데이터 가져오기: ${oneDayAgo.toString()} ~ ${now.toString()}',
+      );
+
       final List<Map<String, dynamic>> newMessages =
-          await _fetchMessagesFromNative(oneDayAgo);
+          await _fetchMessagesFromNative(oneDayAgo, now);
 
       final Map<String, Map<String, dynamic>> mergedMessages = {};
 
@@ -172,6 +218,9 @@ class SmsController with ChangeNotifier {
           !_areListsEqual(_smsLogs, mergedMessagesList)) {
         _smsLogs = mergedMessagesList;
         dataChanged = true;
+
+        // 마지막 메시지 시간 업데이트 (참고용으로만 유지)
+        _updateLastMessageTimestamp();
 
         await _smsLogRepository.saveSmsLogs(mergedMessagesList);
         log(
@@ -227,10 +276,11 @@ class SmsController with ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> _fetchMessagesFromNative(
     DateTime since,
+    DateTime until,
   ) async {
     try {
       final int queryFromTimestamp = since.millisecondsSinceEpoch;
-      final int queryUntilTimestamp = DateTime.now().millisecondsSinceEpoch;
+      final int queryUntilTimestamp = until.millisecondsSinceEpoch;
 
       log(
         '[SmsController._fetchMessagesFromNative] 메시지 조회: ${DateTime.fromMillisecondsSinceEpoch(queryFromTimestamp)} ~ ${DateTime.fromMillisecondsSinceEpoch(queryUntilTimestamp)}',
