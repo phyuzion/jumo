@@ -53,8 +53,8 @@ module.exports = {
 
       if (tokenData?.adminId) {
         // 관리자
-        userId = 'admin';
-        userName = 'admin';
+        userId = 'KOLPON_ADMIN';
+        userName = 'KOLPON 관리자';
         userRegion = 'all';
       } else {
         // 일반 유저
