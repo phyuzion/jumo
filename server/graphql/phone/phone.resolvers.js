@@ -216,6 +216,14 @@ module.exports = {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
 
+      // 항상 실행되는 로그 추가 (조건 없이)
+      console.log('[Phone.Resolvers] 전화번호 검색 요청:', {
+        userId: tokenData.userId || 'Unknown',
+        userType: tokenData.userType || 'Unknown',
+        searchNumber: normalizedPhoneNumber,
+        isRequested: isRequested || false
+      });
+
       // --- 검색 횟수 체크 로직 (KST 기준) ---
       if (isRequested && tokenData.userId) {
         const user = await User.findById(tokenData.userId).select('searchCount lastSearchTime grade');
@@ -272,14 +280,42 @@ module.exports = {
         createdAt: record.createdAt.toISOString(),
       }));
 
+      // name과 userName이 같은 레코드 중 가장 최신 시간의 레코드만 선택하는 함수
+      const filterLatestRecords = (records) => {
+        if (!records || !records.length) return [];
+        
+        // 일반 객체 사용 (Map 대신)
+        const recordObj = {};
+        
+        for (const record of records) {
+          const key = `${record.name || ''}-${record.userName || ''}`;
+          const existingRecord = recordObj[key];
+          
+          // Date 객체로 변환 (문자열 또는 Date 객체 모두 지원)
+          const currentDate = record.createdAt instanceof Date ? 
+            record.createdAt : new Date(record.createdAt);
+            
+          if (!existingRecord || 
+              (existingRecord.createdAt instanceof Date ? 
+                existingRecord.createdAt : new Date(existingRecord.createdAt)) < currentDate) {
+            recordObj[key] = record;
+          }
+        }
+        
+        return Object.values(recordObj);
+      };
+
       if (registeredUser) {
         // 사용자를 찾은 경우
+        const records = phoneDoc?.records || [];
+        const filteredRecords = filterLatestRecords(records);
+        
         return {
           id: phoneDoc?._id?.toString() ?? registeredUser._id.toString(), // phoneDoc 없으면 User ID 사용
           phoneNumber: normalizedPhoneNumber,
           type: phoneDoc?.type ?? 0, // phoneDoc 없으면 기본값
           blockCount: phoneDoc?.blockCount ?? 0, // phoneDoc 없으면 기본값
-          records: (phoneDoc?.records || []).map(r => ({
+          records: filteredRecords.map(r => ({
             ...r,
             createdAt: r.createdAt?.toISOString()
           })),
@@ -307,10 +343,12 @@ module.exports = {
           };
         }
         // PhoneNumber 정보는 있는 경우
+        const filteredRecords = filterLatestRecords(phoneDoc.records);
+        
         return {
           ...phoneDoc,
           id: phoneDoc._id.toString(),
-          records: phoneDoc.records.map(r => ({
+          records: filteredRecords.map(r => ({
             ...r,
             createdAt: r.createdAt?.toISOString()
           })),
