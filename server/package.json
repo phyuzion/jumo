@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "npx pm2-runtime start server.js -i max"
   },
   "dependencies": {
     "apollo-server-express": "^3.13.0",
@@ -16,6 +16,7 @@
     "graphql-type-json": "^0.3.2",
     "graphql-upload": "^13.0.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.9.5"
+    "mongoose": "^8.9.5",
+    "pm2": "^6.0.6"
   }
 }
