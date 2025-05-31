@@ -216,26 +216,25 @@ module.exports = {
         throw new UserInputError('phoneNumber가 비어 있습니다.');
       }
 
-      // 항상 실행되는 로그 추가 (조건 없이)
+      // 한 번만 유저 정보 조회 - 필요한 모든 필드 포함
+      const user = tokenData.userId ? 
+        await User.findById(tokenData.userId).select('name phoneNumber userType searchCount lastSearchTime grade') : null;
+      
+      // 항상 실행되는 로그 추가 (사용자 정보 포함)
       console.log('[Phone.Resolvers] 전화번호 검색 요청:', {
-        userId: tokenData.userId || 'Unknown',
-        userType: tokenData.userType || 'Unknown',
+        userId: tokenData.userId || 'Admin',
+        userName: user?.name || 'Unknown',
         searchNumber: normalizedPhoneNumber,
         isRequested: isRequested || false
       });
 
       // --- 검색 횟수 체크 로직 (KST 기준) ---
       if (isRequested && tokenData.userId) {
-        const user = await User.findById(tokenData.userId).select('searchCount lastSearchTime grade');
+        // 이미 조회한 user 정보 사용
         if (!user) {
           throw new UserInputError('유저를 찾을 수 없습니다.');
         }
-        console.log('[Phone.Resolvers] getPhoneNumber 검색:', {
-          name: user?.name || 'Admin',
-          phoneNumber: user?.phoneNumber || 'N/A',
-          searchNumber: phoneNumber
-        });
-  
+        
 
         // KST 기준으로 오늘 날짜 계산 (UTC+9)
         const now = new Date();
