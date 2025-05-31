@@ -48,7 +48,7 @@ module.exports = {
       // 새로운 CallLog 모델에서 로그 조회
       const logs = await CallLog.find({ userId })
         .sort({ time: -1 })
-        .limit(200);
+        .limit(1000);
 
       return logs.map(log => ({
         phoneNumber: log.phoneNumber,
@@ -66,7 +66,7 @@ module.exports = {
       // 새로운 SmsLog 모델에서 로그 조회
       const logs = await SmsLog.find({ userId })
         .sort({ time: -1 })
-        .limit(200);
+        .limit(1000);
 
       return logs.map(log => ({
         phoneNumber: log.phoneNumber,
@@ -316,7 +316,7 @@ module.exports = {
           t.phoneNumber === log.phoneNumber && 
           t.time.getTime() === log.time.getTime()
         )
-      ).sort((a, b) => b.time - a.time).slice(0, 200);
+      ).sort((a, b) => b.time - a.time).slice(0, 1000);
 
       // bulkWrite로 한번에 처리
       await withTransaction(async (session) => {
@@ -431,7 +431,7 @@ module.exports = {
           )
         )
         .sort((a, b) => b.time - a.time)
-        .slice(0, 200);
+        .slice(0, 1000);
 
       // bulkWrite로 한번에 처리
       await withTransaction(async (session) => {
