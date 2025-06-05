@@ -89,7 +89,8 @@
         <!-- flutter_background_service -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="phoneCall"
+            android:foregroundServiceType="phoneCall|dataSync"
+            android:exported="true"
         />
 
         <!-- Flutter Local Notifications receivers (for scheduled alarms, etc.) -->

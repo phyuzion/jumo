@@ -40,7 +40,7 @@ import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
 import 'package:flutter_windowmanager_plus/flutter_windowmanager_plus.dart';
-import 'dart:io';
+import 'dart:io' show Platform;
 import 'package:mobile/providers/recent_history_provider.dart';
 import 'package:mobile/repositories/contact_repository.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
@@ -181,10 +181,90 @@ Future<void> initializeDependencies() async {
   log('[initializeDependencies] Finished.');
 }
 
-Future<void> main() async {
+// 런앱 전에 백그라운드 서비스 알림 채널 먼저 초기화
+Future<void> _initializeNotificationChannels() async {
+  // 안드로이드에서만 필요
+  if (Platform.isAndroid) {
+    try {
+      // 백그라운드 서비스용 알림 채널 생성
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        'jumo_foreground_service_channel',
+        'KOLPON 서비스 상태',
+        importance: Importance.low,
+        showBadge: false,
+      );
+
+      // 부재중 전화 알림 채널 생성
+      const AndroidNotificationChannel missedCallChannel =
+          AndroidNotificationChannel(
+            'missed_call_channel_id',
+            '부재중 전화',
+            importance: Importance.high,
+            showBadge: true,
+          );
+
+      // 일반 알림 채널 생성
+      const AndroidNotificationChannel notificationChannel =
+          AndroidNotificationChannel(
+            'jumo_notification_channel',
+            'KOLPON 알림',
+            importance: Importance.high,
+            showBadge: true,
+          );
+
+      final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+          FlutterLocalNotificationsPlugin();
+
+      // 플랫폼 구현체 가져오기
+      final AndroidFlutterLocalNotificationsPlugin? androidNotifications =
+          flutterLocalNotificationsPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
+
+      // 알림 채널 생성 확인
+      if (androidNotifications != null) {
+        // 백그라운드 서비스 채널 생성
+        await androidNotifications.createNotificationChannel(channel);
+
+        // 부재중 전화 채널 생성
+        await androidNotifications.createNotificationChannel(missedCallChannel);
+
+        // 일반 알림 채널 생성
+        await androidNotifications.createNotificationChannel(
+          notificationChannel,
+        );
+
+        // 알림 설정 초기화도 함께 진행
+        await flutterLocalNotificationsPlugin.initialize(
+          const InitializationSettings(
+            android: AndroidInitializationSettings('ic_bg_service_small'),
+            iOS: DarwinInitializationSettings(),
+          ),
+          onDidReceiveNotificationResponse: (details) {
+            log('[main] Notification response received: ${details.payload}');
+          },
+        );
+
+        log('[main] Notification channels created before app start');
+      } else {
+        log('[main] Failed to get Android notifications implementation');
+      }
+    } catch (e) {
+      log('[main] Failed to create notification channel: $e');
+    }
+  }
+}
+
+void main() async {
+  // Dart에서 비동기 작업 가능하도록
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 앱 실행 전에 알림 채널 초기화
+  await _initializeNotificationChannels();
+
   try {
+    // Hive 초기화 및 어댑터 등록
     await initializeDependencies();
   } catch (e) {
     log('[main] Critical initialization failed: $e');

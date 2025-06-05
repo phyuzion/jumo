@@ -12,49 +12,50 @@ import 'package:mobile/services/background_service/service_constants.dart';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
-  // 백그라운드 서비스 실행 시 짧은 딜레이 추가
-  await Future.delayed(const Duration(milliseconds: 100));
+  log('[BackgroundService][onStart] STARTING SERVICE...');
 
+  // Foreground 서비스로 즉시 설정 (Android 12+ 요구사항)
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // 초기 알림 설정
-  try {
-    await Future.delayed(const Duration(milliseconds: 200));
-    if (service is AndroidServiceInstance) {
-      if (await service.isForegroundService()) {
-        log(
-          '[BackgroundService] Setting initial foreground notification (delayed).',
-        );
-        flutterLocalNotificationsPlugin.show(
-          FOREGROUND_SERVICE_NOTIFICATION_ID,
-          'KOLPON',
-          '',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              FOREGROUND_SERVICE_CHANNEL_ID,
-              'KOLPON 서비스 상태',
-              icon: 'ic_bg_service_small',
-              ongoing: true,
-              autoCancel: false,
-              importance: Importance.low,
-              priority: Priority.low,
-              playSound: false,
-              enableVibration: false,
-              onlyAlertOnce: true,
-            ),
+  if (service is AndroidServiceInstance) {
+    try {
+      // 즉시 foreground 서비스로 설정 (딜레이 없이)
+      await service.setForegroundNotificationInfo(title: 'KOLPON', content: '');
+      log('[BackgroundService] Service set as foreground immediately');
+
+      // 알림 채널이 생성되었는지 확인하고 알림 표시
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // 더 완전한 알림 설정
+      await flutterLocalNotificationsPlugin.show(
+        FOREGROUND_SERVICE_NOTIFICATION_ID,
+        'KOLPON',
+        '',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            FOREGROUND_SERVICE_CHANNEL_ID,
+            'KOLPON 서비스 상태',
+            icon: 'ic_bg_service_small',
+            ongoing: true,
+            autoCancel: false,
+            importance: Importance.low,
+            priority: Priority.low,
+            playSound: false,
+            enableVibration: false,
+            onlyAlertOnce: true,
           ),
-          payload: 'idle',
-        );
-        log('[BackgroundService] Initial foreground notification set.');
-      }
+        ),
+        payload: 'idle',
+      );
+      log('[BackgroundService] Enhanced foreground notification displayed');
+    } catch (e) {
+      log('[BackgroundService] Error setting foreground mode: $e');
     }
-  } catch (e) {
-    log('[BackgroundService][onStart] Error setting initial notification: $e');
   }
 
   // 검색 데이터 리셋 요청 처리 리스너 추가
-  service.on('resetSearchData').listen((event) {
+  service.on('resetSearchData').listen((event) async {
     log('[BackgroundService][CRITICAL] 검색 데이터 리셋 요청 수신');
 
     // 메인 앱에 리셋 요청 전달

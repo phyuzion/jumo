@@ -14,47 +14,92 @@ class AppBackgroundService {
   static Future<void> initializeService() async {
     log('[AppBackgroundService] Initializing background service...');
 
-    const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      FOREGROUND_SERVICE_CHANNEL_ID,
-      'KOLPON 서비스 상태',
-      importance: Importance.low,
-      showBadge: false,
-    );
+    try {
+      // 1. 알림 채널 생성 확인 - 가장 먼저 수행
+      const AndroidNotificationChannel channel = AndroidNotificationChannel(
+        FOREGROUND_SERVICE_CHANNEL_ID,
+        'KOLPON 서비스 상태',
+        importance: Importance.low,
+        showBadge: false,
+      );
 
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
+      const AndroidNotificationChannel missedCallChannel =
+          AndroidNotificationChannel(
+            'missed_call_channel_id',
+            '부재중 전화',
+            importance: Importance.high,
+            showBadge: false,
+          );
 
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >()
-        ?.createNotificationChannel(channel);
+      const AndroidNotificationChannel notificationChannel =
+          AndroidNotificationChannel(
+            'jumo_notification_channel',
+            'KOLPON 알림',
+            importance: Importance.high,
+            showBadge: false,
+          );
 
-    await flutterLocalNotificationsPlugin.initialize(
-      const InitializationSettings(
-        android: AndroidInitializationSettings('ic_bg_service_small'),
-        iOS: DarwinInitializationSettings(),
-      ),
-    );
+      final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+          FlutterLocalNotificationsPlugin();
 
-    await FlutterBackgroundService().configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStart: true,
-        isForegroundMode: true,
-        notificationChannelId: FOREGROUND_SERVICE_CHANNEL_ID,
-        initialNotificationTitle: 'KOLPON',
-        initialNotificationContent: '',
-        foregroundServiceNotificationId: FOREGROUND_SERVICE_NOTIFICATION_ID,
-      ),
-      iosConfiguration: IosConfiguration(
-        autoStart: true,
-        onForeground: onStart,
-        onBackground: onIosBackground,
-      ),
-    );
+      final AndroidFlutterLocalNotificationsPlugin? androidNotifications =
+          flutterLocalNotificationsPlugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
 
-    log('[AppBackgroundService] Background service initialized.');
+      if (androidNotifications != null) {
+        // 각 채널 생성 확인
+        await androidNotifications.createNotificationChannel(channel);
+        await androidNotifications.createNotificationChannel(missedCallChannel);
+        await androidNotifications.createNotificationChannel(
+          notificationChannel,
+        );
+
+        log('[AppBackgroundService] All notification channels created');
+      } else {
+        log(
+          '[AppBackgroundService] Failed to get Android notifications implementation',
+        );
+      }
+
+      // 2. 알림 초기화
+      await flutterLocalNotificationsPlugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('ic_bg_service_small'),
+          iOS: DarwinInitializationSettings(),
+        ),
+        onDidReceiveNotificationResponse: (details) {
+          log(
+            '[AppBackgroundService] Notification response received: ${details.payload}',
+          );
+        },
+      );
+
+      // 3. 서비스 구성 - 원본 설정으로 복원
+      final service = FlutterBackgroundService();
+      await service.configure(
+        androidConfiguration: AndroidConfiguration(
+          onStart: onStart,
+          autoStartOnBoot: false,
+          autoStart: false, // 원본대로 false로 변경
+          isForegroundMode: true, // 중요: foreground 모드 활성화
+          notificationChannelId: FOREGROUND_SERVICE_CHANNEL_ID,
+          initialNotificationTitle: 'KOLPON',
+          initialNotificationContent: '',
+          foregroundServiceNotificationId: FOREGROUND_SERVICE_NOTIFICATION_ID,
+        ),
+        iosConfiguration: IosConfiguration(
+          autoStart: false, // 원본대로 false로 변경
+          onForeground: onStart,
+          onBackground: onIosBackground,
+        ),
+      );
+
+      log('[AppBackgroundService] Background service configuration completed');
+    } catch (e) {
+      log('[AppBackgroundService] Error initializing background service: $e');
+    }
   }
 }
 

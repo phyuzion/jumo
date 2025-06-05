@@ -1,13 +1,32 @@
 import 'dart:developer';
+import 'dart:async';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 class NotificationManager {
   final ServiceInstance _service;
+  Timer? _notificationTimer;
+  static const Duration _notificationInterval = Duration(minutes: 1);
 
   NotificationManager(this._service);
 
   void initialize() {
     _setupEventListeners();
+    _setupPeriodicNotificationFetch();
+  }
+
+  void _setupPeriodicNotificationFetch() {
+    // 초기 알림 요청 (즉시 실행)
+    _fetchNotifications();
+
+    // 10분마다 알림 요청
+    _notificationTimer = Timer.periodic(_notificationInterval, (_) {
+      _fetchNotifications();
+    });
+  }
+
+  void _fetchNotifications() {
+    log('[NotificationManager] Requesting notifications from main isolate...');
+    _service.invoke('requestNotifications');
   }
 
   void _setupEventListeners() {
@@ -42,6 +61,9 @@ class NotificationManager {
 
         // 서버에 없는 노티피케이션을 로컬에서 삭제 요청
         if (serverNotificationIds.isNotEmpty) {
+          log(
+            '[NotificationManager] Requesting to sync local notifications with server IDs: ${serverNotificationIds.length} IDs',
+          );
           _service.invoke('syncNotificationsWithServer', {
             'serverIds': serverNotificationIds,
           });
