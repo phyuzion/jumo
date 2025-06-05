@@ -1052,18 +1052,6 @@ Future<void> onStart(ServiceInstance service) async {
   // 백그라운드 서비스 시작 시 통화 상태 체크 타이머 시작
   // UI가 초기화되지 않았더라도 백그라운드에서 상태를 캐싱하기 위해 시작
   startCallStateCheckTimer();
-
-  log(
-    '[BackgroundService] Listening to background service UI updates and notification requests.',
-  );
-
-  // ping 리스너 추가 (서비스 응답성 확인용)
-  service.on('ping').listen((event) {
-    log('[BackgroundService] Received ping, responding with pong.');
-    service.invoke('pong', {
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    });
-  });
 }
 
 Future<void> performInitialBackgroundTasks(ServiceInstance service) async {

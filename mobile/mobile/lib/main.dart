@@ -22,7 +22,6 @@ import 'dart:developer';
 import 'dart:async';
 import 'package:mobile/graphql/notification_api.dart';
 import 'package:mobile/utils/app_event_bus.dart';
-import 'package:mobile/services/app_background_service_helper.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart'
@@ -305,7 +304,6 @@ class _MyAppStatefulState extends State<MyAppStateful>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAppController();
       _handleInitialPayload();
-      _ensureBackgroundServiceRunning();
       _listenToBackgroundService();
       _saveScreenSizeToHive();
       _applySecureFlag();
@@ -557,19 +555,6 @@ class _MyAppStatefulState extends State<MyAppStateful>
           '[MyAppStateful] Error checking login state or refreshing contacts: $e',
         );
       }
-    }
-  }
-
-  // 백그라운드 서비스 상태 확인 및 필요 시 재시작
-  Future<void> _ensureBackgroundServiceRunning() async {
-    try {
-      log('[_MyAppStatefulState] Checking background service status...');
-      final isRunning = await BackgroundServiceHelper.ensureServiceRunning();
-      log('[_MyAppStatefulState] Background service running: $isRunning');
-    } catch (e) {
-      log(
-        '[_MyAppStatefulState] Error ensuring background service is running: $e',
-      );
     }
   }
 

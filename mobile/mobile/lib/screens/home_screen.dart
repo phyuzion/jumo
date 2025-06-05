@@ -21,7 +21,6 @@ import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:mobile/controllers/blocked_numbers_controller.dart';
-import 'package:mobile/services/app_background_service_helper.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -85,57 +84,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _loadNotificationCount();
       context.read<ContactsController>().syncContacts();
       log('[HomeScreen] App resumed, called syncContacts.');
-
-      // 백그라운드 서비스 상태 확인 및 필요 시 재시작
-      _ensureBackgroundServiceRunning();
-    }
-  }
-
-  Future<void> _ensureBackgroundServiceRunning() async {
-    try {
-      log('[HomeScreen] Checking background service status...');
-      final isRunning = await BackgroundServiceHelper.ensureServiceRunning();
-      log('[HomeScreen] Background service running: $isRunning');
-
-      // 서비스가 실행 중이지만 응답이 없는 경우 강제 재시작 (Preparing 상태)
-      if (isRunning) {
-        try {
-          final service = FlutterBackgroundService();
-          service.invoke('ping');
-
-          final completer = Completer<bool>();
-          StreamSubscription? sub;
-
-          sub = service.on('pong').listen((event) {
-            if (!completer.isCompleted) {
-              completer.complete(true);
-              sub?.cancel();
-            }
-          });
-
-          // 1초 동안 응답 기다림
-          Future.delayed(const Duration(seconds: 1), () {
-            if (!completer.isCompleted) {
-              completer.complete(false);
-              sub?.cancel();
-            }
-          });
-
-          final gotResponse = await completer.future;
-          if (!gotResponse) {
-            log(
-              '[HomeScreen] Service is running but not responding (preparing). Forcing restart...',
-            );
-            await BackgroundServiceHelper.ensureServiceRunning(
-              forceRestart: true,
-            );
-          }
-        } catch (e) {
-          log('[HomeScreen] Error checking service responsiveness: $e');
-        }
-      }
-    } catch (e) {
-      log('[HomeScreen] Error ensuring background service is running: $e');
     }
   }
 
