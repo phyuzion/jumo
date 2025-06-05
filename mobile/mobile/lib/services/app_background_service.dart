@@ -21,6 +21,7 @@ import 'package:mobile/repositories/notification_repository.dart'; // <<< 추가
 import 'package:mobile/main.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart'; // <<< 추가
 import 'package:mobile/repositories/blocked_history_repository.dart';
+import 'package:mobile/services/native_methods.dart'; // <<< 추가: NativeMethods 사용 위해 임포트
 //import 'package:system_alert_window/system_alert_window.dart';
 
 // const int CALL_STATUS_NOTIFICATION_ID = 1111;
@@ -31,6 +32,18 @@ int ongoingSeconds = 0; // 통화 시간 추적
 Timer? callTimer; // 통화 타이머
 String _currentNumberForTimer = ''; // 타이머용 현재 번호
 String _currentCallerNameForTimer = ''; // 타이머용 현재 발신자 이름
+
+// 통화 상태 캐싱을 위한 변수 추가
+bool _cachedCallActive = false;
+String _cachedCallNumber = '';
+String _cachedCallerName = '';
+bool _uiInitialized = false;
+
+// 통화 상태 체크를 위한 변수 추가
+Timer? callStateCheckTimer;
+bool _isFirstCheck = true;
+String _lastCheckedCallState = 'IDLE';
+String _lastCheckedCallNumber = '';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
@@ -45,7 +58,7 @@ Future<void> onStart(ServiceInstance service) async {
   );
 
   // <<< 1. 시작 시 짧은 딜레이 추가 >>>
-  await Future.delayed(const Duration(milliseconds: 500));
+  await Future.delayed(const Duration(milliseconds: 100));
   log('[BackgroundService][onStart] Initial delay complete.');
 
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -245,47 +258,6 @@ Future<void> onStart(ServiceInstance service) async {
     return completer.future;
   }
 
-  // <<< 새로운 함수: 메인 Isolate로부터 현재 통화 상태 가져오기 >>>
-  /*
-  Future<Map<String, dynamic>> _fetchCurrentCallStateFromMain() async {
-    final completer = Completer<Map<String, dynamic>>();
-    StreamSubscription? subscription;
-
-    subscription = service.on('respondCurrentCallStateToService').listen((
-      event,
-    ) {
-      final Map<String, dynamic> callDetails = Map<String, dynamic>.from(
-        event ?? {},
-      );
-      log(
-        '[BackgroundService] Received respondCurrentCallStateToService: $callDetails',
-      );
-      if (!completer.isCompleted) {
-        completer.complete(callDetails);
-      }
-      subscription?.cancel();
-    });
-
-    Future.delayed(const Duration(seconds: 3), () {
-      // 타임아웃 (3초)
-      if (!completer.isCompleted) {
-        log(
-          '[BackgroundService] Timeout waiting for respondCurrentCallStateToService.',
-        );
-        completer.complete({'state': 'TIMEOUT_FETCHING_MAIN', 'number': null});
-        subscription?.cancel();
-      }
-    });
-
-    log(
-      '[BackgroundService] Sending requestCurrentCallStateFromBackground to main.',
-    );
-    service.invoke('requestCurrentCallStateFromBackground');
-
-    return completer.future;
-  }
-  */
-
   // <<< 시간 포맷 함수 정의 먼저 >>>
   String _formatDurationBackground(int seconds) {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -300,13 +272,25 @@ Future<void> onStart(ServiceInstance service) async {
       log('[BackgroundService] Call timer stopped.');
     }
     callTimer = null;
+    // 통화가 완전히 끝났을 때만 ongoingSeconds 초기화
     ongoingSeconds = 0;
   }
 
   // <<< 타이머 시작 함수 정의 (간소화된 버전) >>>
   void _startCallTimerBackground() {
-    _stopCallTimerBackground();
-    ongoingSeconds = 0;
+    // 이미 실행 중인 타이머가 있으면 중지
+    if (callTimer?.isActive ?? false) {
+      callTimer!.cancel();
+      log('[BackgroundService] Existing call timer stopped for restart.');
+    }
+
+    // 기존 타이머가 없는 경우에만 ongoingSeconds 초기화
+    // 앱 재시작 시에는 이전 타이머 값을 유지함
+    if (callTimer == null && ongoingSeconds == 0) {
+      log('[BackgroundService] Initializing new call timer with 0 seconds.');
+      // 새 통화에 대해서만 타이머 초기화
+    }
+
     callTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       ongoingSeconds++;
 
@@ -325,8 +309,9 @@ Future<void> onStart(ServiceInstance service) async {
 
       Map<String, dynamic>? nativeCallDetails;
       try {
+        // 타임아웃 시간 증가 (700ms -> 1500ms)
         nativeCallDetails = await nativeStateCompleter.future.timeout(
-          const Duration(milliseconds: 700),
+          const Duration(milliseconds: 1500),
         );
       } catch (e) {
         log(
@@ -432,12 +417,192 @@ Future<void> onStart(ServiceInstance service) async {
 
   log('[BackgroundService] Setting up periodic timers and event listeners...');
 
+  // 통화 상태를 주기적으로 체크하는 타이머 설정
+  void startCallStateCheckTimer() {
+    // 이미 실행 중인 타이머가 있으면 취소
+    callStateCheckTimer?.cancel();
+
+    // 첫 번째 체크 플래그 설정
+    _isFirstCheck = true;
+
+    // 1초마다 통화 상태 체크
+    callStateCheckTimer = Timer.periodic(const Duration(seconds: 1), (
+      timer,
+    ) async {
+      try {
+        // 네이티브 통화 상태 확인 - 직접 호출 대신 메인 isolate에 요청
+        service.invoke('requestCurrentCallStateFromAppControllerForTimer');
+        final Completer<Map<String, dynamic>?> nativeStateCompleter =
+            Completer();
+        StreamSubscription? nativeStateSubscription;
+        nativeStateSubscription = service
+            .on('responseCurrentCallStateToBackgroundForTimer')
+            .listen((event) {
+              if (!nativeStateCompleter.isCompleted) {
+                nativeStateCompleter.complete(event);
+                nativeStateSubscription?.cancel();
+              }
+            });
+
+        Map<String, dynamic>? nativeCallState;
+        try {
+          // 타임아웃 시간 설정
+          nativeCallState = await nativeStateCompleter.future.timeout(
+            const Duration(milliseconds: 1500),
+          );
+        } catch (e) {
+          log(
+            '[BackgroundService][CallStateCheck] Timeout or error waiting for native state: $e',
+          );
+          nativeStateSubscription?.cancel();
+          return;
+        }
+
+        final String state = nativeCallState?['state'] as String? ?? 'IDLE';
+        final String number = nativeCallState?['number'] as String? ?? '';
+
+        // 상태 변경 감지 (첫 체크 또는 상태 변경 시에만 처리)
+        bool stateChanged =
+            state != _lastCheckedCallState || number != _lastCheckedCallNumber;
+
+        if (_isFirstCheck || stateChanged) {
+          // 상태 업데이트
+          _lastCheckedCallState = state;
+          _lastCheckedCallNumber = number;
+
+          if (state.toUpperCase() == 'ACTIVE' ||
+              state.toUpperCase() == 'DIALING') {
+            log(
+              '[BackgroundService][CallStateCheck] Active call detected: $number',
+            );
+
+            // 통화 중 상태 캐싱
+            _cachedCallActive = true;
+            _cachedCallNumber = number;
+
+            // 타이머가 실행 중이 아닐 때만 시작 (통화 시간 리셋 방지)
+            if (callTimer == null || !(callTimer?.isActive ?? false)) {
+              log('[BackgroundService][CallStateCheck] Starting call timer');
+              _startCallTimerBackground();
+            }
+
+            // UI 업데이트 메시지 전송
+            if (_uiInitialized) {
+              service.invoke('updateUiCallState', {
+                'state': 'active',
+                'number': number,
+                'callerName': _cachedCallerName,
+                'connected': true,
+                'duration': ongoingSeconds,
+                'reason': 'periodic_check',
+              });
+            }
+          } else if (state.toUpperCase() == 'IDLE' && _cachedCallActive) {
+            log(
+              '[BackgroundService][CallStateCheck] Call ended, stopping timer',
+            );
+
+            // 통화 종료 상태 캐싱
+            _cachedCallActive = false;
+            _cachedCallNumber = '';
+            _cachedCallerName = '';
+
+            // 타이머 중지
+            _stopCallTimerBackground();
+
+            // UI 업데이트 메시지 전송
+            if (_uiInitialized) {
+              service.invoke('updateUiCallState', {
+                'state': 'ended',
+                'number': _lastCheckedCallNumber, // 마지막으로 확인된 번호 전달
+                'callerName': '',
+                'connected': false,
+                'duration': 0,
+                'reason': 'periodic_check_ended',
+              });
+
+              // 포그라운드 알림 업데이트
+              if (service is AndroidServiceInstance) {
+                if (await service.isForegroundService()) {
+                  flutterLocalNotificationsPlugin.show(
+                    FOREGROUND_SERVICE_NOTIFICATION_ID,
+                    'KOLPON',
+                    '',
+                    const NotificationDetails(
+                      android: AndroidNotificationDetails(
+                        FOREGROUND_SERVICE_CHANNEL_ID,
+                        'KOLPON 서비스 상태',
+                        icon: 'ic_bg_service_small',
+                        ongoing: true,
+                        autoCancel: false,
+                        importance: Importance.low,
+                        priority: Priority.low,
+                        playSound: false,
+                        enableVibration: false,
+                        onlyAlertOnce: true,
+                      ),
+                    ),
+                    payload: 'idle',
+                  );
+                }
+              }
+            }
+          }
+        }
+
+        // 첫 번째 체크 완료 후 플래그 해제
+        if (_isFirstCheck) {
+          _isFirstCheck = false;
+        }
+      } catch (e) {
+        log(
+          '[BackgroundService][CallStateCheck] Error checking call state: $e',
+        );
+      }
+    });
+
+    log(
+      '[BackgroundService] Call state check timer started (1-second intervals)',
+    );
+  }
+
   // --- 주기적 작업들 ---
   Timer? notificationTimer;
   Timer? blockSyncTimer;
 
+  // UI 초기화 완료 신호를 처리하는 리스너 추가
+  service.on('appInitialized').listen((event) async {
+    log('[BackgroundService] Received appInitialized signal from main app');
+    _uiInitialized = true;
+
+    // UI가 초기화되었으면 캐싱된 통화 상태를 확인하고 필요하면 UI에 전송
+    if (_cachedCallActive && _cachedCallNumber.isNotEmpty) {
+      log(
+        '[BackgroundService] UI initialized. Sending cached call state: Number=$_cachedCallNumber',
+      );
+
+      // UI에 캐싱된 통화 상태 정보 전송
+      service.invoke('updateUiCallState', {
+        'state': 'active',
+        'number': _cachedCallNumber,
+        'callerName': _cachedCallerName,
+        'connected': true,
+        'duration': ongoingSeconds,
+        'reason': 'cached_state_after_ui_init',
+      });
+
+      // 타이머가 활성화되지 않았다면 시작
+      if (callTimer == null || !(callTimer?.isActive ?? false)) {
+        _startCallTimerBackground();
+      }
+    }
+
+    // 통화 상태 체크 타이머 시작
+    startCallStateCheckTimer();
+  });
+
   // 알림 확인 타이머 (10분으로 변경)
-  notificationTimer = Timer.periodic(const Duration(minutes: 10), (
+  notificationTimer = Timer.periodic(const Duration(seconds: 10), (
     timer,
   ) async {
     log(
@@ -471,14 +636,98 @@ Future<void> onStart(ServiceInstance service) async {
     await syncBlockedLists(); // <<< 주기적으로 헬퍼 호출 확인
   });
 
-  // --- 이벤트 기반 작업들 ---
-
-  // <<< 통화 상태 변경 리스너 (수정됨) >>>
-  service.on('callStateChanged').listen((event) async {
+  // 캐싱된 통화 상태 확인 요청 처리 리스너
+  service.on('checkCachedCallState').listen((event) async {
     log(
-      '[BackgroundService][on:callStateChanged] Received callStateChanged event: $event',
+      '[BackgroundService] Received checkCachedCallState request from main app',
     );
 
+    // UI가 초기화되었고 캐싱된 통화 상태가 있으면 UI에 전송
+    if (_uiInitialized && _cachedCallActive && _cachedCallNumber.isNotEmpty) {
+      log(
+        '[BackgroundService] Responding with cached active call state for number: $_cachedCallNumber',
+      );
+
+      // UI에 캐싱된 통화 상태 정보 전송
+      service.invoke('updateUiCallState', {
+        'state': 'active',
+        'number': _cachedCallNumber,
+        'callerName': _cachedCallerName,
+        'connected': true,
+        'duration': ongoingSeconds,
+        'reason': 'cached_state_check_response',
+      });
+
+      // 타이머가 활성화되지 않았다면 시작
+      if (callTimer == null || !(callTimer?.isActive ?? false)) {
+        _startCallTimerBackground();
+      }
+    } else {
+      // 특수 전화번호 처리를 위한 추가 확인
+      try {
+        service.invoke('requestCurrentCallStateFromAppControllerForTimer');
+        final Completer<Map<String, dynamic>?> completer = Completer();
+        StreamSubscription? subscription;
+
+        subscription = service
+            .on('responseCurrentCallStateToBackgroundForTimer')
+            .listen((callState) {
+              if (!completer.isCompleted) {
+                completer.complete(callState);
+                subscription?.cancel();
+              }
+            });
+
+        // 더 긴 타임아웃 설정 (2초)
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!completer.isCompleted) {
+            completer.complete(null);
+            subscription?.cancel();
+          }
+        });
+
+        final Map<String, dynamic>? currentState = await completer.future;
+        if (currentState != null) {
+          final String state = currentState['state'] as String? ?? 'IDLE';
+          final String number = currentState['number'] as String? ?? '';
+
+          log(
+            '[BackgroundService] Additional call state check: state=$state, number=$number',
+          );
+
+          // 통화 중인 경우 (특히 1644와 같은 특수 번호 처리)
+          if ((state.toUpperCase() == 'ACTIVE' ||
+                  state.toUpperCase() == 'DIALING') &&
+              number.isNotEmpty) {
+            // 캐싱 업데이트
+            _cachedCallActive = true;
+            _cachedCallNumber = number;
+
+            // UI에 상태 전송
+            service.invoke('updateUiCallState', {
+              'state': 'active',
+              'number': number,
+              'callerName': '',
+              'connected': true,
+              'duration': 0,
+              'reason': 'special_number_check_response',
+            });
+
+            // 타이머 시작
+            if (callTimer == null || !(callTimer?.isActive ?? false)) {
+              _currentNumberForTimer = number;
+              _startCallTimerBackground();
+            }
+          }
+        }
+      } catch (e) {
+        log('[BackgroundService] Error during additional call state check: $e');
+      }
+    }
+  });
+
+  // 기존 callStateChanged 리스너
+  service.on('callStateChanged').listen((event) async {
     if (event == null) {
       log(
         '[BackgroundService][on:callStateChanged] Received null event. Skipping.',
@@ -503,10 +752,31 @@ Future<void> onStart(ServiceInstance service) async {
       '[BackgroundService] Received callStateChanged: state=$state, num=$number, name=$callerName, connected=$isConnected, reason=$reason',
     );
 
+    // 통화 상태 캐싱 업데이트
+    if (state == 'active') {
+      _cachedCallActive = true;
+      _cachedCallNumber = number;
+      _cachedCallerName = callerName;
+    } else if (state == 'ended') {
+      _cachedCallActive = false;
+      _cachedCallNumber = '';
+      _cachedCallerName = '';
+    }
+
     // <<< 타이머 로직 호출 >>>
-    if (state == 'active' && isConnected == true) {
-      _startCallTimerBackground();
-    } else {
+    if (state == 'active') {
+      // 새 통화인 경우에만 타이머 시작
+      if (!isConnected &&
+          (callTimer == null || !(callTimer?.isActive ?? false))) {
+        // 새 통화 시작 (아직 연결되지 않음)
+        _startCallTimerBackground();
+      } else if (isConnected) {
+        // 이미 연결된 통화 - 타이머가 없는 경우에만 시작
+        if (callTimer == null || !(callTimer?.isActive ?? false)) {
+          _startCallTimerBackground();
+        }
+      }
+    } else if (state == 'ended') {
       _stopCallTimerBackground();
     }
 
@@ -584,16 +854,6 @@ Future<void> onStart(ServiceInstance service) async {
     }
   });
 
-  // 즉시 차단 목록 동기화 요청
-  /*
-  service.on('syncBlockedListsNow').listen((event) async {
-    log(
-      '[BackgroundService][on:syncBlockedListsNow] Received syncBlockedListsNow request.',
-    );
-    await syncBlockedLists();
-  });
-  */
-
   log('[BackgroundService] Setting up BroadcastReceiver for PHONE_STATE...');
 
   // ***** 전화 상태 BroadcastReceiver 설정 *****
@@ -622,7 +882,34 @@ Future<void> onStart(ServiceInstance service) async {
         );
 
         // <<< 여기서 실시간으로 isDefaultDialer 상태 확인 >>>
-        bool isDefaultDialer = await _fetchIsDefaultDialerFromMain();
+        log('[BackgroundService] Sending requestDefaultDialerStatus to main.');
+        service.invoke('requestDefaultDialerStatus');
+
+        final Completer<bool> completer = Completer<bool>();
+        StreamSubscription? subscription;
+
+        subscription = service.on('respondDefaultDialerStatus').listen((event) {
+          final bool isDefault = event?['isDefault'] as bool? ?? false;
+          log(
+            '[BackgroundService] Received respondDefaultDialerStatus: $isDefault',
+          );
+          if (!completer.isCompleted) {
+            completer.complete(isDefault);
+            subscription?.cancel();
+          }
+        });
+
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!completer.isCompleted) {
+            log(
+              '[BackgroundService] Timeout waiting for respondDefaultDialerStatus.',
+            );
+            completer.complete(false);
+            subscription?.cancel();
+          }
+        });
+
+        bool isDefaultDialer = await completer.future;
         log(
           '[BackgroundService][BroadcastReceiver] Fetched isDefaultDialer status: $isDefaultDialer',
         );
@@ -706,18 +993,74 @@ Future<void> onStart(ServiceInstance service) async {
     );
   }
 
-  await performInitialBackgroundTasks();
+  await performInitialBackgroundTasks(service);
   log(
     '[BackgroundService][onStart] Initial background tasks completed. Service is ready.',
   );
+
+  // 백그라운드 서비스 시작 시 통화 상태 체크 타이머 시작
+  // UI가 초기화되지 않았더라도 백그라운드에서 상태를 캐싱하기 위해 시작
+  startCallStateCheckTimer();
 }
 
-Future<void> performInitialBackgroundTasks() async {
+Future<void> performInitialBackgroundTasks(ServiceInstance service) async {
   // <<< 로그 추가 >>>
   log(
     '[BackgroundService][performInitialBackgroundTasks] Starting initial tasks...',
   );
-  await Future.delayed(const Duration(seconds: 5)); // 예시 딜레이
+
+  // 백그라운드 서비스 시작 시 현재 통화 상태 확인 및 캐싱
+  try {
+    // 1. 메인 앱에 현재 통화 상태 요청
+    service.invoke('requestCurrentCallStateFromAppControllerForTimer');
+
+    // 2. 응답 대기 설정
+    final Completer<Map<String, dynamic>?> completer = Completer();
+    StreamSubscription? subscription;
+    subscription = service
+        .on('responseCurrentCallStateToBackgroundForTimer')
+        .listen((event) {
+          if (!completer.isCompleted) {
+            completer.complete(event);
+            subscription?.cancel();
+          }
+        });
+
+    // 3. 타임아웃 설정 (1초로 감소)
+    Future.delayed(const Duration(seconds: 1), () {
+      if (!completer.isCompleted) {
+        log('[BackgroundService] Timeout waiting for initial call state.');
+        completer.complete(null);
+        subscription?.cancel();
+      }
+    });
+
+    // 4. 응답 처리
+    final Map<String, dynamic>? callState = await completer.future;
+    if (callState != null) {
+      final String state = callState['state'] as String? ?? 'IDLE';
+      final String number = callState['number'] as String? ?? '';
+
+      log(
+        '[BackgroundService] Initial call state check: state=$state, number=$number',
+      );
+
+      // 통화 중인 경우 상태 캐싱
+      if (state.toUpperCase() == 'ACTIVE' || state.toUpperCase() == 'DIALING') {
+        _cachedCallActive = true;
+        _cachedCallNumber = number;
+        _cachedCallerName = ''; // 이름은 아직 모름
+
+        log('[BackgroundService] Cached active call state: number=$number');
+
+        // 참고: 여기서는 UI에 바로 메시지를 보내지 않음
+        // UI가 초기화된 후 appInitialized 이벤트에서 캐싱된 상태를 전송
+      }
+    }
+  } catch (e) {
+    log('[BackgroundService] Error checking initial call state: $e');
+  }
+
   log(
     '[BackgroundService][performInitialBackgroundTasks] Initial tasks finished.',
   );

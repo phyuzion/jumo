@@ -19,6 +19,8 @@ import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:mobile/controllers/blocked_numbers_controller.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -107,12 +109,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       log('[HomeScreen] Error sending native initialized notification: $e');
     }
 
+    try {
+      await context.read<BlockedNumbersController>().initialize();
+      log(
+        '[BlockedNumbers] Initialization completed successfully (local data only)',
+      );
+    } catch (e) {
+      log('[HomeScreen] Error initializing BlockedNumbersController: $e');
+    }
+
     appController
         .performCoreInitialization()
         .then((_) {
           log(
             '[HomeScreen] AppController core initialization completed (async).',
           );
+          _setAppInitialized();
+          _checkCachedCallState();
         })
         .catchError((e) {
           log(
@@ -202,6 +215,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
     if (mounted) {
       context.read<CallStateProvider>().updateCallState(state: CallState.ended);
+    }
+  }
+
+  Future<void> _checkCachedCallState() async {
+    log('[HomeScreen] Checking for cached call state from background service');
+    try {
+      final service = FlutterBackgroundService();
+      if (await service.isRunning()) {
+        service.invoke('checkCachedCallState');
+        log(
+          '[HomeScreen] Sent checkCachedCallState signal to background service',
+        );
+      } else {
+        log(
+          '[HomeScreen] Background service not running, cannot check cached call state',
+        );
+      }
+    } catch (e) {
+      log('[HomeScreen] Error checking cached call state: $e');
+    }
+  }
+
+  Future<void> _setAppInitialized() async {
+    log('[HomeScreen] Notifying background service that UI is initialized');
+    try {
+      final service = FlutterBackgroundService();
+      if (await service.isRunning()) {
+        service.invoke('appInitialized', {
+          'initialized': true,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        });
+        log(
+          '[HomeScreen] Successfully sent appInitialized signal to background service',
+        );
+      } else {
+        log(
+          '[HomeScreen] Background service not running, skipping appInitialized signal',
+        );
+      }
+    } catch (e) {
+      log('[HomeScreen] Error sending appInitialized signal: $e');
     }
   }
 

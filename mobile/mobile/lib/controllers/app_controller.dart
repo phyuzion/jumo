@@ -176,18 +176,12 @@ class AppController with ChangeNotifier {
     service.on('requestCurrentCallStateFromAppControllerForTimer').listen((
       event,
     ) async {
-      log(
-        '[AppController.configureBackgroundService] Received requestCurrentCallStateFromAppControllerForTimer from background service.',
-      );
       try {
         final Map<String, dynamic> nativeCallDetails =
             await NativeMethods.getCurrentCallState();
         service.invoke(
           'responseCurrentCallStateToBackgroundForTimer',
           nativeCallDetails,
-        );
-        log(
-          '[AppController.configureBackgroundService] Sent responseCurrentCallStateToBackgroundForTimer with: $nativeCallDetails',
         );
       } catch (e) {
         log(
