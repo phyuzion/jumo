@@ -20,6 +20,9 @@ import 'package:provider/provider.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'dart:developer';
 import 'dart:async';
+import 'package:mobile/graphql/notification_api.dart';
+import 'package:mobile/utils/app_event_bus.dart';
+import 'package:mobile/services/app_background_service_helper.dart';
 
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_quill/flutter_quill.dart'
@@ -302,6 +305,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeAppController();
       _handleInitialPayload();
+      _ensureBackgroundServiceRunning();
       _listenToBackgroundService();
       _saveScreenSizeToHive();
       _applySecureFlag();
@@ -366,6 +370,8 @@ class _MyAppStatefulState extends State<MyAppStateful>
 
   void _listenToBackgroundService() {
     final service = FlutterBackgroundService();
+
+    // 기존 통화 상태 업데이트 리스너
     _updateUiCallStateSub = service.on('updateUiCallState').listen((event) {
       if (!mounted) return;
       final stateStr = event?['state'] as String?;
@@ -403,7 +409,71 @@ class _MyAppStatefulState extends State<MyAppStateful>
         );
       }
     });
-    log('[_MyAppStatefulState] Listening to background service UI updates.');
+
+    // 노티피케이션 요청 리스너 추가
+    service.on('requestNotifications').listen((event) async {
+      if (!mounted) return;
+      log(
+        '[_MyAppStatefulState] Received requestNotifications from background service',
+      );
+
+      try {
+        // 메인 isolate에서 API 호출 실행 (인증된 상태)
+        final notiList = await NotificationApi.getNotifications();
+        log(
+          '[_MyAppStatefulState] Fetched ${notiList.length} notifications from API',
+        );
+
+        // 결과를 백그라운드 서비스로 전송
+        service.invoke('notificationsResponse', {'notifications': notiList});
+      } catch (e) {
+        log('[_MyAppStatefulState] Error fetching notifications: $e');
+        // 오류 정보를 백그라운드 서비스로 전송
+        service.invoke('notificationsError', {'error': e.toString()});
+      }
+    });
+
+    // 노티피케이션 동기화 리스너 추가
+    service.on('syncNotificationsWithServer').listen((event) async {
+      if (!mounted) return;
+      final serverIds = event?['serverIds'] as List<dynamic>?;
+      log(
+        '[_MyAppStatefulState] Received syncNotificationsWithServer from background service, server IDs: ${serverIds?.length ?? 0}',
+      );
+
+      if (serverIds == null || serverIds.isEmpty) {
+        log('[_MyAppStatefulState] No server IDs provided. Skipping sync.');
+        return;
+      }
+
+      try {
+        final notificationRepository = context.read<NotificationRepository>();
+        // 문자열 목록으로 변환
+        final stringIds = serverIds.map((id) => id.toString()).toList();
+        final deletedCount = await notificationRepository.syncWithServerIds(
+          stringIds,
+        );
+        log(
+          '[_MyAppStatefulState] Synced notifications with server. Deleted $deletedCount notifications that no longer exist on server.',
+        );
+
+        // 노티피케이션 카운트 업데이트 이벤트 발행
+        if (deletedCount > 0) {
+          log(
+            '[_MyAppStatefulState] Broadcasting notification count update event',
+          );
+          appEventBus.fire(NotificationCountUpdatedEvent());
+        }
+      } catch (e) {
+        log(
+          '[_MyAppStatefulState] Error syncing notifications with server: $e',
+        );
+      }
+    });
+
+    log(
+      '[_MyAppStatefulState] Listening to background service UI updates and notification requests.',
+    );
   }
 
   Future<void> _saveScreenSizeToHive() async {
@@ -487,6 +557,19 @@ class _MyAppStatefulState extends State<MyAppStateful>
           '[MyAppStateful] Error checking login state or refreshing contacts: $e',
         );
       }
+    }
+  }
+
+  // 백그라운드 서비스 상태 확인 및 필요 시 재시작
+  Future<void> _ensureBackgroundServiceRunning() async {
+    try {
+      log('[_MyAppStatefulState] Checking background service status...');
+      final isRunning = await BackgroundServiceHelper.ensureServiceRunning();
+      log('[_MyAppStatefulState] Background service running: $isRunning');
+    } catch (e) {
+      log(
+        '[_MyAppStatefulState] Error ensuring background service is running: $e',
+      );
     }
   }
 

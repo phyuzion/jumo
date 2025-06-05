@@ -47,6 +47,9 @@ String _lastCheckedCallNumber = '';
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
+  log(
+    '[BackgroundService][onStart] STARTING SERVICE - THIS SHOULD ALWAYS APPEAR',
+  );
   // NOTE: Flutter 3.19+ 에서는 백그라운드 Isolate 에서 모든 플러그인을 다시 등록할 필요가 없습니다.
   // 특히 flutter_background_service_android 가 두 번째 Isolate 에 Attach 되면
   // "This class should only be used in the main isolate" 예외를 던집니다.
@@ -601,21 +604,51 @@ Future<void> onStart(ServiceInstance service) async {
     startCallStateCheckTimer();
   });
 
-  // 알림 확인 타이머 (10분으로 변경)
+  // 알림 확인 타이머 (10초마다 실행)
+  log('[BackgroundService] SETTING UP NOTIFICATION TIMER - THIS SHOULD APPEAR');
   notificationTimer = Timer.periodic(const Duration(seconds: 10), (
     timer,
   ) async {
     log(
+      '[BackgroundService] Periodic task (Notifications) RUNNING - TIMER TICK',
+    );
+    log(
       '[BackgroundService] Periodic task (Notifications - 10 min) running...',
     );
-    // 서버 알림 확인 로직 유지
+    // 서버 알림 확인 로직 - 메인 isolate에 요청
     try {
-      final notiList = await NotificationApi.getNotifications();
-      if (notiList.isEmpty) return;
+      // 직접 API 호출 대신 메인 isolate에 요청
+      log('[BackgroundService] Requesting notifications from main isolate');
+      service.invoke('requestNotifications');
+    } catch (e) {
+      log('[BackgroundService] Error requesting notifications from main: $e');
+    }
+  });
+
+  // 노티피케이션 응답 리스너 추가
+  service.on('notificationsResponse').listen((event) {
+    try {
+      final notiList = event?['notifications'] as List<dynamic>?;
+      log(
+        '[BackgroundService] Received notifications from main isolate: ${notiList?.length ?? 0} items',
+      );
+
+      if (notiList == null || notiList.isEmpty) return;
+
+      // 만료된 알림 제거 요청
       service.invoke('removeExpiredNotifications');
+
+      // 서버에 있는 알림 ID 목록을 추출
+      final serverNotificationIds = <String>[];
+
+      // 각 알림 처리
       for (final n in notiList) {
         final sid = (n['id'] ?? '').toString();
         if (sid.isEmpty) continue;
+
+        // 서버 ID 목록에 추가
+        serverNotificationIds.add(sid);
+
         service.invoke('saveNotification', {
           'id': sid,
           'title': n['title'] as String? ?? 'No Title',
@@ -623,9 +656,27 @@ Future<void> onStart(ServiceInstance service) async {
           'validUntil': n['validUntil'],
         });
       }
+
+      // 서버에 없는 노티피케이션을 로컬에서 삭제 요청
+      if (serverNotificationIds.isNotEmpty) {
+        log(
+          '[BackgroundService] Requesting to sync local notifications with server IDs: ${serverNotificationIds.length} IDs',
+        );
+        service.invoke('syncNotificationsWithServer', {
+          'serverIds': serverNotificationIds,
+        });
+      }
     } catch (e) {
-      log('[BackgroundService] Error fetching notifications: $e');
+      log('[BackgroundService] Error processing notifications response: $e');
     }
+  });
+
+  // 노티피케이션 에러 리스너 추가
+  service.on('notificationsError').listen((event) {
+    final errorMsg = event?['error'] as String? ?? 'Unknown error';
+    log(
+      '[BackgroundService] Error from main isolate when fetching notifications: $errorMsg',
+    );
   });
 
   // 차단 목록 동기화 타이머 (1시간 주기 - 호출 확인)
@@ -1001,6 +1052,18 @@ Future<void> onStart(ServiceInstance service) async {
   // 백그라운드 서비스 시작 시 통화 상태 체크 타이머 시작
   // UI가 초기화되지 않았더라도 백그라운드에서 상태를 캐싱하기 위해 시작
   startCallStateCheckTimer();
+
+  log(
+    '[BackgroundService] Listening to background service UI updates and notification requests.',
+  );
+
+  // ping 리스너 추가 (서비스 응답성 확인용)
+  service.on('ping').listen((event) {
+    log('[BackgroundService] Received ping, responding with pong.');
+    service.invoke('pong', {
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
+    });
+  });
 }
 
 Future<void> performInitialBackgroundTasks(ServiceInstance service) async {
