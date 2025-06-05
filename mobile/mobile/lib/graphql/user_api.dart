@@ -4,6 +4,8 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 // import 'package:mobile/repositories/auth_repository.dart'; // <<< 제거 (UserApi는 static 유지)
 
 import 'client.dart';
+import 'setting_api.dart'; // SettingApi 추가
+import 'package:mobile/utils/constants.dart'; // APP_VERSION 상수 사용
 
 /// 사용자 관련 API 모음
 class UserApi {
@@ -83,6 +85,20 @@ class UserApi {
     log('[[userLogin]] user=$userData');
 
     // <<< Hive 저장 로직은 여기서 제거됨 (login_screen에서 처리) >>>
+
+    // 로그인 성공 시 디바이스 정보 저장 (비동기로 실행하고 결과를 기다리지 않음)
+    try {
+      log('[UserApi.userLogin] Saving device info after login');
+      SettingApi.saveDeviceInfo(appVersion: APP_VERSION)
+          .then((success) {
+            log('[UserApi.userLogin] Device info saved: $success');
+          })
+          .catchError((e) {
+            log('[UserApi.userLogin] Error saving device info: $e');
+          });
+    } catch (e) {
+      log('[UserApi.userLogin] Error initiating device info save: $e');
+    }
 
     // API 결과 데이터만 반환
     return data;

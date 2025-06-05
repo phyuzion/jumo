@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:gql_dio_link/gql_dio_link.dart';
 import 'package:mobile/controllers/navigation_controller.dart';
 import 'package:mobile/graphql/user_api.dart';
+import 'package:mobile/graphql/setting_api.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/main.dart';
 import 'package:mobile/repositories/notification_repository.dart';
@@ -14,6 +15,7 @@ import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
 import 'package:mobile/repositories/settings_repository.dart';
+import 'package:mobile/utils/constants.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -73,6 +75,28 @@ class GraphQLClientManager {
           await authRepository.setUserGrade(userData['grade'] ?? '');
 
           log('[GraphQL] User info saved via AuthRepository after auto-login.');
+
+          // 자동 로그인 성공 시 디바이스 정보 저장 (비동기로 실행하고 결과를 기다리지 않음)
+          try {
+            log(
+              '[GraphQLClientManager.tryAutoLogin] Saving device info after auto-login',
+            );
+            SettingApi.saveDeviceInfo(appVersion: APP_VERSION)
+                .then((success) {
+                  log(
+                    '[GraphQLClientManager.tryAutoLogin] Device info saved: $success',
+                  );
+                })
+                .catchError((e) {
+                  log(
+                    '[GraphQLClientManager.tryAutoLogin] Error saving device info: $e',
+                  );
+                });
+          } catch (e) {
+            log(
+              '[GraphQLClientManager.tryAutoLogin] Error initiating device info save: $e',
+            );
+          }
         } else {
           log(
             '[GraphQL] Auto-login successful but user data format is unexpected.',
