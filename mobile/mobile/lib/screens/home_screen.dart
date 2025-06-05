@@ -417,7 +417,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (_isDefaultDialer)
           Positioned(
             top: 60,
-            bottom: panelBottomPosition + 70,
+            bottom:
+                MediaQuery.of(context).padding.bottom +
+                panelBottomPosition +
+                70,
             left: 16.0,
             right: 16.0,
             child: FloatingCallWidget(
@@ -433,7 +436,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         if (_isDefaultDialer)
           Positioned(
-            bottom: 70.0,
+            bottom: MediaQuery.of(context).padding.bottom + 56.0 + 16.0,
             right: 16.0,
             child: DynamicCallIsland(
               callState: callState,
