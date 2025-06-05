@@ -31,6 +31,9 @@ import {
 
 import { Header } from "../components";
 import { localTimeToUTCString, parseServerTimeToLocal } from '../../utils/dateUtils';
+import { parseUserSettings } from './userUtils';
+import UsersPhoneRecordsDialog from './UsersPhoneRecordsDialog';
+import UsersLogsDialog from './UsersLogsDialog';
 
 const PAGE_SIZE = 10; // syncfusion paging size(예시)
 
@@ -122,12 +125,24 @@ const Users = () => {
   const [resetRequestedUser, setResetRequestedUser] = useState(null);
   const [newPasswordInput, setNewPasswordInput] = useState('');
 
+  // 다이얼로그 상태 관리
+  const [showPhoneRecordsDialog, setShowPhoneRecordsDialog] = useState(false); // 번호부 다이얼로그
+  const [showLogsDialog, setShowLogsDialog] = useState(false); // 통화/문자 로그 다이얼로그
+
   // ================= useEffect =================
 
   // getAllUsers -> users
   useEffect(() => {
     if (data?.getAllUsers) {
-      setUsers(data.getAllUsers);
+      // 앱 버전 정보를 추출하여 정렬 가능한 필드로 추가
+      const processedUsers = data.getAllUsers.map(user => {
+        const deviceInfo = parseUserSettings(user.settings);
+        return {
+          ...user,
+          appVersion: deviceInfo?.appVersion || '0.0.0'
+        };
+      });
+      setUsers(processedUsers);
     }
   }, [data]);
 
@@ -363,15 +378,33 @@ const Users = () => {
 
   // ============= RECORDS, CALL LOG, SMS LOG ============
   // 1) 전화번호부 기록 버튼
-  const handleRecordsClick = async (u) => {
+  const handlePhoneRecordsClick = async (u) => {
+    setRecordUser(u);
     try {
-      await getUserRecordsLazy({ variables: { userId: u.id, _ts: Date.now() } });
+      const result = await getUserRecordsLazy({ variables: { userId: u.id, _ts: Date.now() } });
+      if (result.data?.getUserRecords) {
+        setPhoneRecords(result.data.getUserRecords.records);
+        setShowPhoneRecordsDialog(true);
+      }
     } catch (err) {
       alert(err.message);
     }
   };
 
-  // 2) 탭 전환
+  // 2) 통화/문자 로그 버튼
+  const handleLogsClick = async (u) => {
+    setRecordUser(u);
+    setSelectedTab('callLogs');
+    try {
+      await getUserCallLogLazy({ variables: { userId: u.id, _ts: Date.now() } });
+      await getUserSMSLogLazy({ variables: { userId: u.id, _ts: Date.now() } });
+      setShowLogsDialog(true);
+    } catch (err) {
+      alert(err.message);
+    }
+  };
+
+  // 3) 탭 전환
   const handleTabSelect = async (tab) => {
     setSelectedTab(tab);
     if (!recordUser) return;
@@ -448,62 +481,79 @@ const Users = () => {
               textAlign="Center"
               valueAccessor={validUntilAccessor}
             />
-            {/* Edit */}
+            {/* Edit 컬럼 - 3개 버튼 */}
             <ColumnDirective
               headerText="Edit"
               width="80"
               textAlign="Center"
               template={(u) => (
-                <button
-                  className="bg-orange-500 text-white px-2 py-1 rounded"
-                  onClick={() => handleEditClick(u)}
-                >
-                  수정
-                </button>
+                <div className="flex flex-col space-y-1">
+                  <button
+                    className="bg-orange-500 text-white px-2 py-1 rounded text-xs"
+                    onClick={() => handleEditClick(u)}
+                  >
+                    수정
+                  </button>
+                  <button
+                    className="bg-red-500 text-white px-2 py-1 rounded text-xs"
+                    onClick={() => handleResetPassword(u)}
+                  >
+                    PW
+                  </button>
+                  <button
+                    className="bg-teal-500 text-white px-2 py-1 rounded text-xs"
+                    onClick={() => handleResetRequestedClick(u)}
+                  >
+                    비번
+                  </button>
+                </div>
               )}
             />
-            {/* Reset PW */}
-            <ColumnDirective
-              headerText="Reset"
-              width="70"
-              textAlign="Center"
-              template={(u) => (
-                <button
-                  className="bg-red-500 text-white px-2 py-1 rounded"
-                  onClick={() => handleResetPassword(u)}
-                >
-                  PW
-                </button>
-              )}
-            />
-            {/* <<< 비번 변경 버튼 추가 시작 >>> */}
-            <ColumnDirective
-              headerText="비번변경"
-              width="70"
-              textAlign="Center"
-              template={(u) => (
-                <button
-                  className="bg-teal-500 text-white px-2 py-1 rounded" // 색상 변경 (예: teal)
-                  onClick={() => handleResetRequestedClick(u)}
-                >
-                  비번변경
-                </button>
-              )}
-            />
-            {/* <<< 비번 변경 버튼 추가 끝 >>> */}
-            {/* Records */}
+            {/* 기록 컬럼 - 2개 버튼 */}
             <ColumnDirective
               headerText="기록"
-              width="70"
+              width="80"
               textAlign="Center"
               template={(u) => (
-                <button
-                  className="bg-purple-500 text-white px-2 py-1 rounded"
-                  onClick={() => handleRecordsClick(u)}
-                >
-                  기록
-                </button>
+                <div className="flex flex-col space-y-1">
+                  <button
+                    className="bg-blue-500 text-white px-2 py-1 rounded text-xs"
+                    onClick={() => handlePhoneRecordsClick(u)}
+                  >
+                    번호부
+                  </button>
+                  <button
+                    className="bg-purple-500 text-white px-2 py-1 rounded text-xs"
+                    onClick={() => handleLogsClick(u)}
+                  >
+                    기록
+                  </button>
+                </div>
               )}
+            />
+            {/* 앱 버전 컬럼 - 정렬/필터링 가능 */}
+            <ColumnDirective 
+              field="appVersion" 
+              headerText="앱 버전" 
+              width="80" 
+              textAlign="Center"
+            />
+            {/* 디바이스 정보 컬럼 */}
+            <ColumnDirective
+              headerText="디바이스"
+              width="100"
+              textAlign="Center"
+              template={(u) => {
+                const deviceInfo = parseUserSettings(u.settings);
+                if (!deviceInfo) return <div className="text-gray-500 text-xs">정보 없음</div>;
+                
+                return (
+                  <div className="text-xs">
+                    <div className="font-semibold">{deviceInfo.model || 'Unknown'}</div>
+                    <div>{deviceInfo.platform || ''} {deviceInfo.osVersion || ''}</div>
+                  </div>
+                );
+              }}
             />
           </ColumnsDirective>
           <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
@@ -668,180 +718,70 @@ const Users = () => {
         </div>
       )}
 
-      {/* <<< 비밀번호 변경 요청 모달 추가 시작 >>> */}
-      {showResetRequestedModal && resetRequestedUser && (
+      {/* 비밀번호 변경 요청 모달 */}
+      {showResetRequestedModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white p-4 w-80 rounded shadow">
-            <h2 className="text-xl font-bold mb-2">비밀번호 변경</h2>
-            <p className="mb-2">UserID: {resetRequestedUser.loginId}</p>
-            <div className="flex flex-col gap-2">
+          <div className="bg-white rounded shadow p-6 w-96">
+            <h2 className="text-xl font-bold mb-4">비밀번호 변경</h2>
+            <p className="mb-4">
+              {resetRequestedUser?.name} ({resetRequestedUser?.loginId})의 비밀번호를 변경합니다.
+            </p>
+            <div className="mb-4">
+              <label className="block text-gray-700 mb-2">새 비밀번호</label>
               <input
-                type="text" // 비밀번호지만 확인 위해 text로 둘 수도 있음
-                placeholder="새 비밀번호 (4자 이상)"
+                type="password"
+                className="w-full px-3 py-2 border rounded"
                 value={newPasswordInput}
                 onChange={(e) => setNewPasswordInput(e.target.value)}
-                className="border p-1"
+                placeholder="4자 이상 입력"
               />
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="flex justify-end gap-2">
               <button
-                className="bg-teal-500 text-white px-3 py-1 rounded"
-                onClick={handleResetRequestedSubmit}
-              >
-                비번변경
-              </button>
-              <button
-                className="bg-gray-300 px-3 py-1 rounded"
+                className="bg-gray-300 px-4 py-2 rounded"
                 onClick={() => {
                   setShowResetRequestedModal(false);
                   setResetRequestedUser(null);
+                  setNewPasswordInput('');
                 }}
               >
                 취소
+              </button>
+              <button
+                className="bg-blue-500 text-white px-4 py-2 rounded"
+                onClick={handleResetRequestedSubmit}
+              >
+                변경
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* <<< 비밀번호 변경 요청 모달 추가 끝 >>> */}
 
-      {/* RECORDS MODAL (전화번호부 + 통화로그 + 문자로그 탭) */}
-      {showRecordsModal && recordUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-          <div className="bg-white rounded shadow w-[90vw] h-[90vh] flex flex-col">
-            {/* 헤더 영역 - 고정 */}
-            <div className="flex justify-between items-center p-4 border-b">
-              <div>
-                <h2 className="text-xl font-bold">유저 상세</h2>
-                <p className="text-sm text-gray-600">
-                  {recordUser.loginId} ({recordUser.name})
-                </p>
-              </div>
-              <button
-                className="bg-gray-300 px-3 py-1 rounded hover:bg-gray-400"
-                onClick={() => {
-                  setShowRecordsModal(false);
-                  setRecordUser(null);
-                  setPhoneRecords([]);
-                  setCallLogs([]);
-                  setSmsLogs([]);
-                  setSelectedTab('phoneRecords');
-                }}
-              >
-                닫기
-              </button>
-            </div>
+      {/* 번호부 다이얼로그 */}
+      {showPhoneRecordsDialog && recordUser && (
+        <UsersPhoneRecordsDialog
+          isOpen={showPhoneRecordsDialog}
+          onClose={() => {
+            setShowPhoneRecordsDialog(false);
+          }}
+          user={recordUser}
+          phoneRecords={phoneRecords}
+        />
+      )}
 
-            {/* 탭 영역 - 고정 */}
-            <div className="flex gap-2 p-4 border-b">
-              <button
-                className={`px-4 py-2 rounded ${
-                  selectedTab === 'phoneRecords' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                }`}
-                onClick={() => handleTabSelect('phoneRecords')}
-              >
-                번호부
-              </button>
-              <button
-                className={`px-4 py-2 rounded ${
-                  selectedTab === 'callLogs' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                }`}
-                onClick={() => handleTabSelect('callLogs')}
-              >
-                콜로그
-              </button>
-              <button
-                className={`px-4 py-2 rounded ${
-                  selectedTab === 'smsLogs' ? 'bg-blue-500 text-white' : 'bg-gray-200'
-                }`}
-                onClick={() => handleTabSelect('smsLogs')}
-              >
-                문자로그
-              </button>
-            </div>
-
-            {/* 그리드 영역 - 스크롤 가능 */}
-            <div className="flex-1 p-4 overflow-auto">
-              {selectedTab === 'phoneRecords' && (
-                <GridComponent
-                  dataSource={phoneRecords}
-                  enableHover={true}
-                  allowPaging={true}
-                  pageSettings={{ pageSize: 10 }}
-                  toolbar={['Search']}
-                  allowSorting={true}
-                >
-                  <ColumnsDirective>
-                    <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
-                    <ColumnDirective field="name" headerText="이름" width="120" />
-                    <ColumnDirective field="memo" headerText="메모" width="200" />
-                    <ColumnDirective field="userType" headerText="타입" width="80" />
-                    <ColumnDirective field="createdAt" headerText="생성일" width="150" 
-                      valueAccessor={timeAccessor}/>
-                  </ColumnsDirective>
-                  <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
-                </GridComponent>
-              )}
-
-              {selectedTab === 'callLogs' && (
-                <GridComponent
-                  dataSource={callLogs}
-                  enableHover={true}
-                  allowPaging={true}
-                  pageSettings={{ pageSize: 10 }}
-                  toolbar={['Search']}
-                  allowSorting={true}
-                  sortSettings={{
-                    columns: [
-                      { field: 'time', direction: 'Descending' }
-                    ]
-                  }}
-                >
-                  <ColumnsDirective>
-                    <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
-                    <ColumnDirective 
-                      field="time" 
-                      headerText="시간" 
-                      width="180"
-                      valueAccessor={timeAccessor}
-                    />
-                    <ColumnDirective field="callType" headerText="통화타입" width="100" />
-                  </ColumnsDirective>
-                  <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
-                </GridComponent>
-              )}
-
-              {selectedTab === 'smsLogs' && (
-                <GridComponent
-                  dataSource={smsLogs}
-                  enableHover={true}
-                  allowPaging={true}
-                  pageSettings={{ pageSize: 10 }}
-                  toolbar={['Search']}
-                  allowSorting={true}
-                  sortSettings={{
-                    columns: [
-                      { field: 'time', direction: 'Descending' }
-                    ]
-                  }}
-                >
-                  <ColumnsDirective>
-                    <ColumnDirective field="phoneNumber" headerText="전화번호" width="120" />
-                    <ColumnDirective 
-                      field="time" 
-                      headerText="시간" 
-                      width="180"
-                      valueAccessor={timeAccessor}
-                    />
-                    <ColumnDirective field="smsType" headerText="문자타입" width="100" />
-                    <ColumnDirective field="content" headerText="내용" width="300" />
-                  </ColumnsDirective>
-                  <Inject services={[Resize, Sort, Filter, Page, Toolbar, Search]} />
-                </GridComponent>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* 통화/문자 로그 다이얼로그 */}
+      {showLogsDialog && recordUser && (
+        <UsersLogsDialog
+          isOpen={showLogsDialog}
+          onClose={() => {
+            setShowLogsDialog(false);
+          }}
+          user={recordUser}
+          callLogs={callLogs}
+          smsLogs={smsLogs}
+          onTabChange={handleTabSelect}
+        />
       )}
     </div>
   );
