@@ -44,6 +44,8 @@ class MainActivity : FlutterFragmentActivity() {
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             Log.d(TAG, "기본 전화앱 설정 완료")
+            // 기본 전화앱으로 설정된 후 통화 상태 초기화
+            NativeBridge.resetCallState()
             methodResultForDialer?.success(true)
         } else {
             Log.d(TAG, "기본 전화앱 설정 거부")

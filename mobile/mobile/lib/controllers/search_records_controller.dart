@@ -125,11 +125,6 @@ class SearchRecordsController extends ChangeNotifier {
   String _getCallerName(PhoneNumberModel? model) {
     if (model == null) return '';
 
-    // 등록된 사용자의 경우 사용자 정보 사용
-    if (model.isRegisteredUser && model.registeredUserInfo != null) {
-      return model.registeredUserInfo!.userName;
-    }
-
     // 레코드가 있는 경우 첫 번째 레코드의 이름 사용
     if (model.records.isNotEmpty) {
       return model.records.first.name;

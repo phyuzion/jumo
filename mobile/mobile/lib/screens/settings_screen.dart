@@ -5,6 +5,7 @@ import 'package:mobile/graphql/client.dart';
 import 'package:mobile/graphql/user_api.dart';
 import 'package:mobile/models/blocked_history.dart';
 import 'package:mobile/models/blocked_number.dart';
+import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/repositories/auth_repository.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/utils/constants.dart';
@@ -13,8 +14,10 @@ import 'package:mobile/widgets/blocked_numbers_dialog.dart';
 import 'package:mobile/widgets/blocked_history_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/utils/app_event_bus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:developer';
+import 'package:flutter_background_service/flutter_background_service.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -259,6 +262,27 @@ class _SettingsScreenState extends State<SettingsScreen>
     setState(() {
       _isDefaultDialer = defDialer;
     });
+
+    // 기본 전화앱으로 설정된 경우 통화 상태 초기화
+    if (defDialer) {
+      log('[SettingsScreen] 기본 전화앱 설정 완료. 통화 상태 초기화');
+      // CallStateProvider를 통해 상태 초기화
+      final callStateProvider = Provider.of<CallStateProvider>(
+        context,
+        listen: false,
+      );
+      callStateProvider.resetState();
+
+      // 앱 이벤트 버스를 통해 CallSearchResetEvent 발행
+      appEventBus.fire(CallSearchResetEvent(''));
+
+      // 백그라운드 서비스 통화 상태 확인 요청
+      final service = FlutterBackgroundService();
+      service.invoke('checkCachedCallState');
+
+      log('[SettingsScreen] 기본 전화앱 설정 후 상태 초기화 완료');
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(_isDefaultDialer ? '기본 전화앱 등록됨' : '등록 안됨')),
     );

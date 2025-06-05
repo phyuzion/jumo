@@ -52,15 +52,16 @@ class CallStateManager {
           final currentTime = DateTime.now().millisecondsSinceEpoch;
           final elapsedTime = currentTime - _cachedIncomingTimestamp;
 
-          // 앱 초기화 직후에는 더 긴 시간 동안 인코밍 상태 유지 (60초)
+          // 앱 초기화 직후에는 더 긴 시간 동안 인코밍 상태 유지 (10초)
           final timestamp = event?['timestamp'] as int?;
           int incomingExpiryTime = 30000; // 기본 30초
 
+          // 앱 시작 후 첫 10초 이내라면 더 긴 타임아웃 적용 (10초)
           if (timestamp != null) {
             final sinceAppInit = currentTime - timestamp;
             if (sinceAppInit < 10000) {
               // 앱 시작 후 10초 이내
-              incomingExpiryTime = 60000; // 60초로 연장
+              incomingExpiryTime = 10000; // 10초로 변경
               log(
                 '[CallStateManager] 앱 시작 직후 인코밍 콜 유효 시간 연장: ${incomingExpiryTime}ms',
               );
@@ -127,14 +128,14 @@ class CallStateManager {
           // 인코밍 콜 유효성 검사 (앱 시작 시에는 더 길게 유지)
           int incomingExpiryTime = 30000; // 기본 30초
 
-          // 앱 시작 후 첫 10초 이내라면 더 긴 타임아웃 적용 (60초)
+          // 앱 초기화 직후에는 더 긴 시간 동안 인코밍 상태 유지 (10초)
           final appInitializedTime = event?['timestamp'] as int?;
           if (appInitializedTime != null) {
             final sinceAppInit =
                 DateTime.now().millisecondsSinceEpoch - appInitializedTime;
             if (sinceAppInit < 10000) {
               // 앱 시작 후 10초 이내
-              incomingExpiryTime = 60000; // 60초로 연장
+              incomingExpiryTime = 10000; // 10초로 변경
               log(
                 '[CallStateManager] 앱 시작 직후 인코밍 콜 유효 시간 연장: ${incomingExpiryTime}ms',
               );

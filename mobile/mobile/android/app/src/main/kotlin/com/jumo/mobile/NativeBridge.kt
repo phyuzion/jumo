@@ -133,6 +133,13 @@ object NativeBridge {
     fun notifyIncomingNumber(number: String) { methodChannel?.invokeMethod("onIncomingNumber", number) }
     fun notifyOnCall(number: String, connected: Boolean) { methodChannel?.invokeMethod("onCall", mapOf("number" to number, "connected" to connected)) }
     fun notifyCallEnded(endedNumber: String, reason: String) { methodChannel?.invokeMethod("onCallEnded", mapOf("number" to endedNumber, "reason" to reason)) }
+    
+    // 통화 상태 초기화 (기본 전화앱 설정 후 호출)
+    fun resetCallState() {
+        Log.d("NativeBridge", "resetCallState: 통화 상태 명시적 초기화")
+        // IDLE 상태로 명시적 초기화
+        methodChannel?.invokeMethod("onCallEnded", mapOf("number" to "", "reason" to "default_dialer_change"))
+    }
 }
 
 class ContactsStreamHandler(private val context: Context, private val scope: CoroutineScope) : EventChannel.StreamHandler {
