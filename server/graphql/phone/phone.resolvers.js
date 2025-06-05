@@ -263,8 +263,7 @@ module.exports = {
       }
       // --- 검색 횟수 체크 로직 끝 ---
 
-      const [registeredUser, phoneDoc, todayDocs] = await Promise.all([
-        User.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
+      const [phoneDoc, todayDocs] = await Promise.all([
         PhoneNumber.findOne({ phoneNumber: normalizedPhoneNumber }).lean(),
         TodayRecord.find({ phoneNumber: normalizedPhoneNumber }).sort({ createdAt: -1 }).lean(),
       ]);
@@ -304,58 +303,34 @@ module.exports = {
         return Object.values(recordObj);
       };
 
-      if (registeredUser) {
-        // 사용자를 찾은 경우
-        const records = phoneDoc?.records || [];
-        const filteredRecords = filterLatestRecords(records);
-        
+      // PhoneNumber 정보가 없는 경우
+      if (!phoneDoc) {
         return {
-          id: phoneDoc?._id?.toString() ?? registeredUser._id.toString(), // phoneDoc 없으면 User ID 사용
+          id: normalizedPhoneNumber, // 임시 ID
           phoneNumber: normalizedPhoneNumber,
-          type: phoneDoc?.type ?? 0, // phoneDoc 없으면 기본값
-          blockCount: phoneDoc?.blockCount ?? 0, // phoneDoc 없으면 기본값
-          records: filteredRecords.map(r => ({
-            ...r,
-            createdAt: r.createdAt?.toISOString()
-          })),
-          todayRecords: formattedTodayRecords,
-          isRegisteredUser: true,
-          registeredUserInfo: {
-            userName: registeredUser.name || '',
-            userRegion: registeredUser.region,
-            userType: registeredUser.userType || '일반',
-          },
-        };
-      } else {
-        // 사용자를 찾지 못한 경우
-        if (!phoneDoc) {
-          // PhoneNumber 정보도 없으면
-          return {
-            id: normalizedPhoneNumber, // 임시 ID
-            phoneNumber: normalizedPhoneNumber,
-            type: 0,
-            blockCount: 0,
-            records: [],
-            todayRecords: formattedTodayRecords,
-            isRegisteredUser: false,
-            registeredUserInfo: null,
-          };
-        }
-        // PhoneNumber 정보는 있는 경우
-        const filteredRecords = filterLatestRecords(phoneDoc.records);
-        
-        return {
-          ...phoneDoc,
-          id: phoneDoc._id.toString(),
-          records: filteredRecords.map(r => ({
-            ...r,
-            createdAt: r.createdAt?.toISOString()
-          })),
+          type: 0,
+          blockCount: 0,
+          records: [],
           todayRecords: formattedTodayRecords,
           isRegisteredUser: false,
           registeredUserInfo: null,
         };
       }
+      
+      // PhoneNumber 정보가 있는 경우
+      const filteredRecords = filterLatestRecords(phoneDoc.records);
+      
+      return {
+        ...phoneDoc,
+        id: phoneDoc._id.toString(),
+        records: filteredRecords.map(r => ({
+          ...r,
+          createdAt: r.createdAt?.toISOString()
+        })),
+        todayRecords: formattedTodayRecords,
+        isRegisteredUser: false,
+        registeredUserInfo: null,
+      };
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {

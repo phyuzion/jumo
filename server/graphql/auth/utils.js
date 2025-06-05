@@ -4,7 +4,7 @@ const User = require('../../models/User');
 
 // JWT 설정
 const SECRET_KEY = process.env.JWT_SECRET || 'someRandomSecretKey';
-const ACCESS_TOKEN_EXPIRE = '7d';   // 1일
+const ACCESS_TOKEN_EXPIRE = '3d';   // 3일
 const REFRESH_TOKEN_EXPIRE = '7d'; // 7일
 
 // JWT 관련 함수들
