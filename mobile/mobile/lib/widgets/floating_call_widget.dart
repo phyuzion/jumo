@@ -43,10 +43,23 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
   bool _isLoading = false;
   String? _error;
   SearchResultModel? _searchResult;
+  late SearchRecordsController _searchController;
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Provider에서 SearchRecordsController 인스턴스 가져오기
+    _searchController = Provider.of<SearchRecordsController>(
+      context,
+      listen: false,
+    );
+
+    // SearchRecordsController 초기화 후 데이터 로드
     if (widget.isVisible && widget.callState == CallState.incoming) {
       _loadSearchResult();
     }
@@ -84,6 +97,9 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
 
   Future<void> _loadSearchResult() async {
     if (!mounted || _isLoading) return;
+    // SearchRecordsController가 초기화되지 않았으면 리턴
+    if (!context.mounted) return;
+
     setState(() {
       _isLoading = true;
       _error = null;
@@ -93,9 +109,8 @@ class _FloatingCallWidgetState extends State<FloatingCallWidget> {
     try {
       final normalizedNumber = normalizePhone(widget.number);
 
-      final phoneData = await SearchRecordsController.searchPhone(
-        normalizedNumber,
-      );
+      // 인스턴스 메서드 호출로 변경
+      final phoneData = await _searchController.searchPhone(normalizedNumber);
       log('[FloatingCallWidget] Search result loaded: ${phoneData?.toJson()}');
       if (!mounted) return;
       setState(() {

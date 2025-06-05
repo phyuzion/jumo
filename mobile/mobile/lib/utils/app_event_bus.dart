@@ -12,3 +12,9 @@ class ContactsUpdatedEvent {}
 class SmsUpdatedEvent {}
 
 class NotificationCountUpdatedEvent {}
+
+/// 통화 검색 데이터 리셋 이벤트
+class CallSearchResetEvent {
+  final String phoneNumber;
+  CallSearchResetEvent(this.phoneNumber);
+}

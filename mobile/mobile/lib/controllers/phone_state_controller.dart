@@ -29,9 +29,18 @@ class PhoneStateController with WidgetsBindingObserver {
   ) {
     WidgetsBinding.instance.addObserver(this);
     log('[PhoneStateController.constructor] Instance created.');
+
+    final service = FlutterBackgroundService();
+    _searchResetSubscription = service.on('requestSearchDataReset').listen((
+      event,
+    ) {
+      log('[PhoneStateController][CRITICAL] 검색 데이터 리셋 요청 수신');
+      appEventBus.fire(CallSearchResetEvent(''));
+    });
   }
 
   StreamSubscription<PhoneState>? _phoneStateSubscription;
+  StreamSubscription? _searchResetSubscription;
 
   String? _lastProcessedNumber;
   PhoneStateStatus? _lastProcessedStatus;
@@ -61,6 +70,8 @@ class PhoneStateController with WidgetsBindingObserver {
   void stopListening() {
     _phoneStateSubscription?.cancel();
     _phoneStateSubscription = null;
+    _searchResetSubscription?.cancel();
+    _searchResetSubscription = null;
     log('[PhoneStateController] Stopped listening to phone state stream.');
   }
 
@@ -90,6 +101,12 @@ class PhoneStateController with WidgetsBindingObserver {
     switch (method) {
       case 'onIncomingNumber':
         status = PhoneStateStatus.CALL_INCOMING;
+        if (number.isNotEmpty) {
+          log(
+            '[PhoneStateController][CRITICAL] 네이티브에서 인코밍 콜 감지: $number - 데이터 초기화 요청',
+          );
+          appEventBus.fire(CallSearchResetEvent(number));
+        }
         break;
       case 'onCall':
         status =

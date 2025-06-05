@@ -43,6 +43,7 @@ import 'package:flutter_windowmanager_plus/flutter_windowmanager_plus.dart';
 import 'dart:io';
 import 'package:mobile/providers/recent_history_provider.dart';
 import 'package:mobile/repositories/contact_repository.dart';
+import 'package:mobile/controllers/search_records_controller.dart';
 
 final getIt = GetIt.instance;
 
@@ -239,6 +240,9 @@ Future<void> main() async {
     appController,
   );
 
+  // SearchRecordsController 인스턴스 생성
+  final searchRecordsController = SearchRecordsController();
+
   await NavigationController.init(phoneStateController, contactsController);
 
   runApp(
@@ -257,6 +261,9 @@ Future<void> main() async {
           value: callLogContoller,
         ),
         ChangeNotifierProvider.value(value: contactsController),
+        ChangeNotifierProvider<SearchRecordsController>.value(
+          value: searchRecordsController,
+        ),
         ChangeNotifierProvider(
           create:
               (context) => CallStateProvider(

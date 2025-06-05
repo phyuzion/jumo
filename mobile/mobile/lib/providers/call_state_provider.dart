@@ -8,6 +8,7 @@ import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
 import 'package:mobile/controllers/contacts_controller.dart';
 import 'package:proximity_sensor/proximity_sensor.dart';
+import 'package:mobile/utils/app_event_bus.dart';
 
 // 통화 상태 enum 정의 (HomeScreen에서 가져옴 - 여기서 관리하는 것이 더 적절)
 enum CallState { idle, incoming, active, ended }
@@ -40,6 +41,9 @@ class CallStateProvider with ChangeNotifier {
   String? _currentlyFetchingNameForNumber;
   final Set<String> _nameFetchedAttemptedForNumbers = {};
 
+  // 이벤트 구독 변수 추가
+  StreamSubscription? _resetEventSubscription;
+
   // Getters
   CallState get callState => _callState;
   String get number => _number;
@@ -63,6 +67,12 @@ class CallStateProvider with ChangeNotifier {
     this.contactsController,
   ) {
     contactsController.addListener(_onContactsUpdated); // <<< 리스너 등록
+
+    // 초기화 이벤트 구독
+    _resetEventSubscription = appEventBus.on<CallSearchResetEvent>().listen(
+      _handleResetEvent,
+    );
+    log('[CallStateProvider] 생성됨. 리셋 이벤트 리스너 설정 완료.');
   }
 
   // <<< 연락처 업데이트 리스너 메소드 >>>
@@ -88,6 +98,12 @@ class CallStateProvider with ChangeNotifier {
     final bool wasActive = _callState == CallState.active; // <<< 이전 상태 저장
     final CallState previousCallState = _callState; // 로깅을 위해 이전 상태 저장
     final String previousNumber = _number; // 이전 번호 저장
+
+    // Call Ended 상태에서 새 인코밍 콜이 들어오는 경우 명시적 초기화
+    if (previousCallState == CallState.ended && state == CallState.incoming) {
+      log('[CallStateProvider][CRITICAL] 통화 종료 상태에서 새 인코밍 콜 감지. 상태 완전 초기화');
+      resetState();
+    }
 
     // 번호가 변경되었는지 확인
     if (previousNumber.isNotEmpty && previousNumber != number) {
@@ -373,12 +389,57 @@ class CallStateProvider with ChangeNotifier {
     _proximitySensorSubscription = null;
   }
 
+  // 리셋 이벤트 핸들러
+  void _handleResetEvent(CallSearchResetEvent event) {
+    log('[CallStateProvider][CRITICAL] 검색 데이터 리셋 이벤트 수신: ${event.phoneNumber}');
+    if (event.phoneNumber.isNotEmpty &&
+        _number.isNotEmpty &&
+        event.phoneNumber != _number) {
+      // 현재 표시 중인 전화번호와 다른 번호가 들어온 경우
+      log(
+        '[CallStateProvider][CRITICAL] 기존 번호($_number)와 다른 새 번호(${event.phoneNumber}) 감지. 상태 리셋.',
+      );
+      resetState();
+    }
+  }
+
+  // 상태 리셋 메서드
+  void resetState() {
+    log('[CallStateProvider][CRITICAL] 전체 상태 명시적 초기화');
+
+    // 이전 통화 관련 변수만 초기화 (상태는 유지)
+    if (_callState != CallState.idle) {
+      log('[CallStateProvider] 통화 중 상태에서 리셋 - 현재 상태: $_callState');
+    }
+
+    // 이름 조회 관련 변수 초기화
+    _nameFetchedAttemptedForNumbers.clear();
+    _currentlyFetchingNameForNumber = null;
+
+    // 기본 변수 초기화
+    _number = '';
+    _callerName = '';
+    _duration = 0;
+    _isConnected = false;
+    _callEndReason = '';
+
+    // 버튼 상태 초기화
+    resetButtonStates();
+
+    // 타이머 취소 (있다면)
+    _cancelEndedStateTimer();
+
+    notifyListeners();
+    log('[CallStateProvider] 상태 초기화 완료 및 리스너 알림');
+  }
+
   // 앱 종료 등 리소스 해제 시 타이머 및 센서 리스너 정리
   @override
   void dispose() {
     _cancelEndedStateTimer();
     _stopProximityListener(); // <<< dispose 시 리스너 중지 추가
     contactsController.removeListener(_onContactsUpdated); // <<< 리스너 제거
+    _resetEventSubscription?.cancel(); // 리셋 이벤트 구독 취소
     super.dispose();
   }
 }

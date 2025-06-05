@@ -10,7 +10,7 @@ import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/repositories/notification_repository.dart';
-import 'package:mobile/services/app_background_service.dart';
+import 'package:mobile/services/background_service_manager.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/utils/app_event_bus.dart';
@@ -197,18 +197,9 @@ class AppController with ChangeNotifier {
     });
     // <<< 타이머용 리스너 추가 끝 >>>
 
-    // 안드로이드/iOS 설정
-    await service.configure(
-      androidConfiguration: AndroidConfiguration(
-        onStart: onStart,
-        autoStartOnBoot: false,
-        autoStart: false,
-        isForegroundMode: true,
-        notificationChannelId: 'jumo_foreground_service_channel',
-        foregroundServiceNotificationId: FOREGROUND_SERVICE_NOTIFICATION_ID,
-      ),
-      iosConfiguration: IosConfiguration(autoStart: false),
-    );
+    // 새로운 백그라운드 서비스 초기화 메서드 호출
+    await AppBackgroundService.initializeService();
+
     log('[AppController.configureBackgroundService] Finished.');
   }
 

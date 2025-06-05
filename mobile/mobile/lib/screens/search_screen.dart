@@ -23,12 +23,25 @@ class _SearchScreenState extends State<SearchScreen> {
   String? _error;
   SearchResultModel? _result;
   final _focusNode = FocusNode();
+  late SearchRecordsController _searchController;
 
   @override
   void initState() {
     super.initState();
 
+    // Provider에서 SearchRecordsController 가져오기 시도
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        _searchController = Provider.of<SearchRecordsController>(
+          context,
+          listen: false,
+        );
+      } catch (e) {
+        // Provider에 등록되지 않은 경우 새로 생성
+        _searchController = SearchRecordsController();
+        log('[SearchScreen] 새로운 SearchRecordsController 인스턴스 생성');
+      }
+
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map<String, dynamic>) {
         final initialNum = args['number'] as String?;
@@ -58,7 +71,8 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      final phoneData = await SearchRecordsController.searchPhone(
+      // 컨트롤러 인스턴스 메서드 호출로 변경
+      final phoneData = await _searchController.searchPhone(
         normalizedNum,
         isRequested: widget.isRequested,
       );
@@ -83,6 +97,8 @@ class _SearchScreenState extends State<SearchScreen> {
   void dispose() {
     _focusNode.dispose();
     _textCtrl.dispose();
+    // SearchRecordsController가 로컬에서 생성된 경우 추가 정리 코드 실행 가능
+    // 현재는 별도 처리 없이 그냥 해제
     super.dispose();
   }
 
