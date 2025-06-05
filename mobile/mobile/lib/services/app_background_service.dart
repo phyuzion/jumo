@@ -37,6 +37,8 @@ String _currentCallerNameForTimer = ''; // 타이머용 현재 발신자 이름
 bool _cachedCallActive = false;
 String _cachedCallNumber = '';
 String _cachedCallerName = '';
+String _cachedCallState = 'idle'; // 통화 상태 문자열 저장
+int _cachedIncomingTimestamp = 0; // 인코밍 전화 시작 시간 (밀리초)
 bool _uiInitialized = false;
 
 // 통화 상태 체크를 위한 변수 추가
@@ -473,42 +475,103 @@ Future<void> onStart(ServiceInstance service) async {
           _lastCheckedCallState = state;
           _lastCheckedCallNumber = number;
 
+          // 인코밍 전화 상태 보호: 앱이 방금 시작되었고, 인코밍 상태가 캐싱되어 있을 때
+          // ACTIVE로 너무 빨리 변경되는 것을 방지
+          final bool isJustStarted = _isFirstCheck;
+          final bool hasCachedIncoming =
+              _cachedCallState == 'incoming' &&
+              _cachedCallActive &&
+              _cachedCallNumber.isNotEmpty;
+          final bool isIncomingRecent =
+              DateTime.now().millisecondsSinceEpoch - _cachedIncomingTimestamp <
+              2000;
+
+          if (hasCachedIncoming &&
+              isJustStarted &&
+              isIncomingRecent &&
+              state.toUpperCase() == 'ACTIVE') {
+            log(
+              '[BackgroundService][CallStateCheck] 방금 시작된 앱에서 인코밍 콜 보호: ACTIVE 상태 무시, INCOMING 유지',
+            );
+            return; // 인코밍 상태 보호를 위해 추가 처리 중단
+          }
+
           if (state.toUpperCase() == 'ACTIVE' ||
               state.toUpperCase() == 'DIALING') {
             log(
               '[BackgroundService][CallStateCheck] Active call detected: $number',
             );
 
-            // 통화 중 상태 캐싱
+            // 기존 상태 완전히 초기화
+            _cachedCallActive = false;
+            _cachedCallNumber = '';
+            _cachedCallerName = '';
+            _cachedCallState = 'idle';
+            _cachedIncomingTimestamp = 0;
+
+            // 새 통화 중 상태 캐싱
             _cachedCallActive = true;
             _cachedCallNumber = number;
+            _cachedCallState = 'active';
+
+            log(
+              '[BackgroundService][CallStateCheck] Previous state cleared, new active state cached',
+            );
 
             // 타이머가 실행 중이 아닐 때만 시작 (통화 시간 리셋 방지)
             if (callTimer == null || !(callTimer?.isActive ?? false)) {
               log('[BackgroundService][CallStateCheck] Starting call timer');
               _startCallTimerBackground();
             }
+          } else if (state.toUpperCase() == 'RINGING') {
+            log(
+              '[BackgroundService][CallStateCheck] Incoming call detected: $number',
+            );
 
-            // UI 업데이트 메시지 전송
+            // 기존 상태 완전히 초기화
+            _cachedCallActive = false;
+            _cachedCallNumber = '';
+            _cachedCallerName = '';
+            _cachedCallState = 'idle';
+            _cachedIncomingTimestamp = 0;
+
+            // 새 인코밍 상태 캐싱
+            _cachedCallActive = true;
+            _cachedCallNumber = number;
+            _cachedCallState = 'incoming';
+            _cachedIncomingTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+            log(
+              '[BackgroundService][CallStateCheck] Previous state cleared, new incoming state cached',
+            );
+
+            // UI에 인코밍 상태 알림
             if (_uiInitialized) {
               service.invoke('updateUiCallState', {
-                'state': 'active',
+                'state': 'incoming',
                 'number': number,
-                'callerName': _cachedCallerName,
-                'connected': true,
-                'duration': ongoingSeconds,
+                'callerName': '', // 발신자 정보는 나중에 업데이트될 수 있음
+                'connected': false,
+                'duration': 0,
                 'reason': 'periodic_check',
               });
+
+              // 로그에 인코밍 상태임을 명확히 표시
+              log(
+                '[BackgroundService][CallStateCheck] UI updated with INCOMING state, not moving to ACTIVE',
+              );
             }
           } else if (state.toUpperCase() == 'IDLE' && _cachedCallActive) {
             log(
-              '[BackgroundService][CallStateCheck] Call ended, stopping timer',
+              '[BackgroundService][CallStateCheck] Call ended (state: $_cachedCallState), stopping timer',
             );
 
             // 통화 종료 상태 캐싱
             _cachedCallActive = false;
             _cachedCallNumber = '';
             _cachedCallerName = '';
+            _cachedCallState = 'idle';
+            _cachedIncomingTimestamp = 0;
 
             // 타이머 중지
             _stopCallTimerBackground();
@@ -581,10 +644,55 @@ Future<void> onStart(ServiceInstance service) async {
     // UI가 초기화되었으면 캐싱된 통화 상태를 확인하고 필요하면 UI에 전송
     if (_cachedCallActive && _cachedCallNumber.isNotEmpty) {
       log(
-        '[BackgroundService] UI initialized. Sending cached call state: Number=$_cachedCallNumber',
+        '[BackgroundService] UI initialized. Sending cached call state: $_cachedCallState for Number=$_cachedCallNumber',
       );
 
-      // UI에 캐싱된 통화 상태 정보 전송
+      // 인코밍 상태 처리
+      if (_cachedCallState == 'incoming') {
+        // 인코밍 상태 시간 확인 (앱 시작 시에는 더 길게 유지)
+        final currentTime = DateTime.now().millisecondsSinceEpoch;
+        final elapsedTime = currentTime - _cachedIncomingTimestamp;
+
+        // 앱 초기화 직후에는 더 긴 시간 동안 인코밍 상태 유지 (60초)
+        final timestamp = event?['timestamp'] as int?;
+        int incomingExpiryTime = 30000; // 기본 30초
+
+        if (timestamp != null) {
+          final sinceAppInit = currentTime - timestamp;
+          if (sinceAppInit < 10000) {
+            // 앱 시작 후 10초 이내
+            incomingExpiryTime = 60000; // 60초로 연장
+            log(
+              '[BackgroundService] 앱 시작 직후 인코밍 콜 유효 시간 연장: ${incomingExpiryTime}ms',
+            );
+          }
+        }
+
+        if (elapsedTime > incomingExpiryTime) {
+          log(
+            '[BackgroundService] Ignoring outdated incoming call (${elapsedTime}ms old, limit: ${incomingExpiryTime}ms)',
+          );
+          _cachedCallActive = false;
+          _cachedCallNumber = '';
+          _cachedCallerName = '';
+          _cachedCallState = 'idle';
+          _cachedIncomingTimestamp = 0;
+          return;
+        }
+
+        // 유효한 인코밍 상태 전달
+        service.invoke('updateUiCallState', {
+          'state': 'incoming',
+          'number': _cachedCallNumber,
+          'callerName': _cachedCallerName,
+          'connected': false,
+          'duration': 0,
+          'reason': 'cached_incoming_after_ui_init',
+        });
+        return;
+      }
+
+      // 활성 통화 상태 정보 전송
       service.invoke('updateUiCallState', {
         'state': 'active',
         'number': _cachedCallNumber,
@@ -696,10 +804,59 @@ Future<void> onStart(ServiceInstance service) async {
     // UI가 초기화되었고 캐싱된 통화 상태가 있으면 UI에 전송
     if (_uiInitialized && _cachedCallActive && _cachedCallNumber.isNotEmpty) {
       log(
-        '[BackgroundService] Responding with cached active call state for number: $_cachedCallNumber',
+        '[BackgroundService] Responding with cached call state: $_cachedCallState for number: $_cachedCallNumber',
       );
 
-      // UI에 캐싱된 통화 상태 정보 전송
+      // 인코밍 전화 상태인 경우 시간 확인 (30초 이상 지난 인코밍은 무시)
+      if (_cachedCallState == 'incoming') {
+        final currentTime = DateTime.now().millisecondsSinceEpoch;
+        final elapsedTime = currentTime - _cachedIncomingTimestamp;
+
+        // 인코밍 콜 유효성 검사 (앱 시작 시에는 더 길게 유지)
+        int incomingExpiryTime = 30000; // 기본 30초
+
+        // 앱 시작 후 첫 10초 이내라면 더 긴 타임아웃 적용 (60초)
+        final appInitializedTime = event?['timestamp'] as int?;
+        if (appInitializedTime != null) {
+          final sinceAppInit =
+              DateTime.now().millisecondsSinceEpoch - appInitializedTime;
+          if (sinceAppInit < 10000) {
+            // 앱 시작 후 10초 이내
+            incomingExpiryTime = 60000; // 60초로 연장
+            log(
+              '[BackgroundService] 앱 시작 직후 인코밍 콜 유효 시간 연장: ${incomingExpiryTime}ms',
+            );
+          }
+        }
+
+        // 설정된 시간보다 오래된 인코밍 콜은 이미 종료된 것으로 간주
+        if (elapsedTime > incomingExpiryTime) {
+          log(
+            '[BackgroundService] Ignoring outdated incoming call (${elapsedTime}ms old, limit: ${incomingExpiryTime}ms)',
+          );
+
+          // 캐시 초기화
+          _cachedCallActive = false;
+          _cachedCallNumber = '';
+          _cachedCallerName = '';
+          _cachedCallState = 'idle';
+          _cachedIncomingTimestamp = 0;
+          return;
+        }
+
+        // 유효한 인코밍 콜 상태 전달
+        service.invoke('updateUiCallState', {
+          'state': 'incoming',
+          'number': _cachedCallNumber,
+          'callerName': _cachedCallerName,
+          'connected': false,
+          'duration': 0,
+          'reason': 'cached_incoming_state_response',
+        });
+        return;
+      }
+
+      // 활성 통화 상태 전송
       service.invoke('updateUiCallState', {
         'state': 'active',
         'number': _cachedCallNumber,
@@ -753,6 +910,7 @@ Future<void> onStart(ServiceInstance service) async {
             // 캐싱 업데이트
             _cachedCallActive = true;
             _cachedCallNumber = number;
+            _cachedCallState = 'active';
 
             // UI에 상태 전송
             service.invoke('updateUiCallState', {
@@ -803,15 +961,47 @@ Future<void> onStart(ServiceInstance service) async {
       '[BackgroundService] Received callStateChanged: state=$state, num=$number, name=$callerName, connected=$isConnected, reason=$reason',
     );
 
-    // 통화 상태 캐싱 업데이트
+    // 통화 상태 캐싱 업데이트 (기존 상태 완전히 초기화 후 새 상태 설정)
     if (state == 'active') {
+      // 기존 상태 초기화
+      _cachedCallActive = false;
+      _cachedCallState = 'idle';
+      _cachedIncomingTimestamp = 0;
+
+      // 새 상태 설정
       _cachedCallActive = true;
       _cachedCallNumber = number;
       _cachedCallerName = callerName;
+      _cachedCallState = 'active'; // 상태 문자열 캐싱 추가
+
+      log(
+        '[BackgroundService] Call state changed to active, cleared previous state',
+      );
+    } else if (state == 'incoming') {
+      // 기존 상태 초기화
+      _cachedCallActive = false;
+      _cachedCallNumber = '';
+      _cachedCallerName = '';
+      _cachedCallState = 'idle';
+      _cachedIncomingTimestamp = 0;
+
+      // 새 인코밍 상태 캐싱
+      _cachedCallActive = true;
+      _cachedCallNumber = number;
+      _cachedCallerName = callerName;
+      _cachedCallState = 'incoming'; // 수신 중 상태 캐싱
+      _cachedIncomingTimestamp =
+          DateTime.now().millisecondsSinceEpoch; // 수신 시작 시간 기록
+
+      log(
+        '[BackgroundService] Call state changed to incoming, cleared previous state',
+      );
     } else if (state == 'ended') {
       _cachedCallActive = false;
       _cachedCallNumber = '';
       _cachedCallerName = '';
+      _cachedCallState = 'idle';
+      _cachedIncomingTimestamp = 0;
     }
 
     // <<< 타이머 로직 호출 >>>
@@ -964,6 +1154,46 @@ Future<void> onStart(ServiceInstance service) async {
         log(
           '[BackgroundService][BroadcastReceiver] Fetched isDefaultDialer status: $isDefaultDialer',
         );
+
+        // RINGING 상태인 경우 인코밍 콜 처리 추가
+        if (state == 'RINGING' &&
+            incomingNumber != null &&
+            incomingNumber.isNotEmpty) {
+          // 먼저 이전 상태 정보 완전히 초기화
+          log(
+            '[BackgroundService][BroadcastReceiver] New incoming call - clearing previous call state',
+          );
+          _cachedCallActive = false;
+          _cachedCallNumber = '';
+          _cachedCallerName = '';
+          _cachedCallState = 'idle';
+          _cachedIncomingTimestamp = 0;
+
+          // 새로운 인코밍 콜 정보 설정
+          _cachedCallActive = true;
+          _cachedCallNumber = incomingNumber;
+          _cachedCallState = 'incoming';
+          _cachedIncomingTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+          log(
+            '[BackgroundService][BroadcastReceiver] Directly cached incoming call from broadcast: $incomingNumber',
+          );
+
+          // UI에 바로 상태 전달 (UI가 초기화된 경우)
+          if (_uiInitialized) {
+            log(
+              '[BackgroundService][BroadcastReceiver] Sending immediate incoming call notification to UI',
+            );
+            service.invoke('updateUiCallState', {
+              'state': 'incoming',
+              'number': incomingNumber,
+              'callerName': '',
+              'connected': false,
+              'duration': 0,
+              'reason': 'broadcast_receiver_ringing',
+            });
+          }
+        }
 
         /* overlay removed
         // 이제 isDefaultDialer 값을 사용
