@@ -288,14 +288,11 @@ class BlockListenerService {
     log('[BlockListenerService] 사용자 차단 번호 직접 업데이트 요청 수신 (${numbers.length}개)');
 
     try {
-      // 1. 로컬 저장소에 저장
-      final repository = context.read<BlockedNumberRepository>();
+      // 로컬 저장소에 저장하는 부분 제거 (이미 BlockedNumbersController에서 저장했음)
       final normalized =
           numbers.map((n) => normalizePhone(n.toString())).toList();
-      await repository.saveAllUserBlockedNumbers(normalized);
-      log('[BlockListenerService] 사용자 차단 번호 ${normalized.length}개 로컬 저장 완료');
 
-      // 2. 서버 API 호출하여 업데이트
+      // 서버 API 호출하여 업데이트
       log('[BlockListenerService] 서버 API 호출 시작: BlockApi.updateBlockedNumbers');
       await BlockApi.updateBlockedNumbers(normalized);
       log('[BlockListenerService] 서버 API 호출 완료: 사용자 차단 번호 업데이트됨');
