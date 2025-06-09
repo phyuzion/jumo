@@ -159,6 +159,18 @@ class BlockedNumbersController {
       log('[BlockedNumbersCtrl][add] Calling repository to add number...');
       await _blockedNumberRepository.addUserBlockedNumber(normalizedNumber);
       log('[BlockedNumbersCtrl][add] Repository call finished.');
+
+      // 백그라운드 서비스에 변경 사항 즉시 알림
+      log('[BlockedNumbersCtrl][add] 사용자 차단 번호 추가 후 서버 동기화 요청');
+      FlutterBackgroundService().invoke('syncBlockedListsNow');
+
+      // 사용자 차단 번호 직접 업데이트 요청
+      log('[BlockedNumbersCtrl][add] 사용자 차단 번호 직접 업데이트 요청');
+      final allNumbers =
+          await _blockedNumberRepository.getAllUserBlockedNumbers();
+      FlutterBackgroundService().invoke('updateUserBlockedNumbers', {
+        'numbers': allNumbers,
+      });
     } catch (e) {
       log('[BlockedNumbersCtrl][add] Error calling repository: $e');
     }
@@ -169,8 +181,26 @@ class BlockedNumbersController {
 
   Future<void> removeBlockedNumber(String number) async {
     final normalizedNumber = normalizePhone(number);
-    await _blockedNumberRepository.removeUserBlockedNumber(normalizedNumber);
-    log('[BlockedNumbers] Removed number $normalizedNumber locally.');
+    log('[BlockedNumbersCtrl][remove] 차단 번호 제거 요청: $normalizedNumber');
+
+    try {
+      await _blockedNumberRepository.removeUserBlockedNumber(normalizedNumber);
+      log('[BlockedNumbersCtrl][remove] 저장소에서 번호 제거 완료');
+
+      // 백그라운드 서비스에 변경 사항 즉시 알림
+      log('[BlockedNumbersCtrl][remove] 사용자 차단 번호 제거 후 서버 동기화 요청');
+      FlutterBackgroundService().invoke('syncBlockedListsNow');
+
+      // 사용자 차단 번호 직접 업데이트 요청
+      log('[BlockedNumbersCtrl][remove] 사용자 차단 번호 직접 업데이트 요청');
+      final allNumbers =
+          await _blockedNumberRepository.getAllUserBlockedNumbers();
+      FlutterBackgroundService().invoke('updateUserBlockedNumbers', {
+        'numbers': allNumbers,
+      });
+    } catch (e) {
+      log('[BlockedNumbersCtrl][remove] 차단 번호 제거 오류: $e');
+    }
   }
 
   Future<void> setAutoBlockDanger(bool value) async {
@@ -192,82 +222,25 @@ class BlockedNumbersController {
   }
 
   Future<void> setBombCallsCount(int count) async {
+    log('[BlockedNumbers] 콜폭 차단 횟수 변경: $_bombCallsCount → $count');
     _bombCallsCount = count;
     await _settingsRepository.setBombCallsCount(count);
-    log(
-      '[BlockedNumbers] Requesting background sync after setting BombCallsCount...',
-    );
+    log('[BlockedNumbers] 콜폭 차단 횟수 설정 저장 완료, 백그라운드 서비스에 동기화 요청');
     FlutterBackgroundService().invoke('syncBlockedListsNow');
+
+    // 콜폭 번호를 직접 요청하는 이벤트도 추가 발송
+    log('[BlockedNumbers] 콜폭 번호 직접 요청: count=$count');
+    FlutterBackgroundService().invoke('requestBombNumbers', {'count': count});
   }
 
   Future<bool> isNumberBlockedAsync(
     String phoneNumber, {
     bool addHistory = false,
   }) async {
-    String? blockType;
     final normalizedPhoneNumber = normalizePhone(phoneNumber);
 
-    final isTodayBlockedSetting = await _settingsRepository.isTodayBlocked();
-    if (isTodayBlockedSetting /* && _isTodayBlockStillValid() */ ) {
-      blockType = 'today';
-    }
-
-    if (blockType == null) {
-      final isUnknownBlockedSetting =
-          await _settingsRepository.isUnknownBlocked();
-      if (isUnknownBlockedSetting) {
-        try {
-          final savedContacts = _contactsController.contacts;
-          if (!savedContacts.any(
-            (contact) =>
-                normalizePhone(contact.phoneNumber) == normalizedPhoneNumber,
-          )) {
-            blockType = 'unknown';
-          }
-        } catch (e) {
-          log(
-            '[BlockedNumbers] Error checking unknown number with contacts getter: $e',
-          );
-        }
-      }
-    }
-
-    if (blockType == null) {
-      final userBlockedList =
-          await _blockedNumberRepository.getAllUserBlockedNumbers();
-
-      if (userBlockedList.any(
-        (blockedNum) =>
-            normalizedPhoneNumber.contains(normalizePhone(blockedNum)),
-      )) {
-        blockType = 'user';
-      }
-    }
-
-    if (blockType == null) {
-      final isAutoBlockDangerSetting =
-          await _settingsRepository.isAutoBlockDanger();
-      if (isAutoBlockDangerSetting) {
-        final dangerList = await _blockedNumberRepository.getDangerNumbers();
-        if (dangerList
-            .map((d) => normalizePhone(d))
-            .contains(normalizedPhoneNumber)) {
-          blockType = 'danger';
-        }
-      }
-      if (blockType == null) {
-        final isBombCallsBlockedSetting =
-            await _settingsRepository.isBombCallsBlocked();
-        if (isBombCallsBlockedSetting) {
-          final bombList = await _blockedNumberRepository.getBombNumbers();
-          if (bombList
-              .map((b) => normalizePhone(b))
-              .contains(normalizedPhoneNumber)) {
-            blockType = 'bomb_calls';
-          }
-        }
-      }
-    }
+    // 각 차단 유형별로 검사
+    final blockType = await _getBlockTypeForNumber(normalizedPhoneNumber);
 
     if (blockType != null) {
       if (addHistory) {
@@ -277,6 +250,98 @@ class BlockedNumbersController {
     }
 
     return false;
+  }
+
+  /// 특정 번호의 차단 유형을 확인
+  ///
+  /// @return 차단된 경우 차단 유형 문자열 ('today', 'unknown', 'user', 'danger', 'bomb_calls'), 차단되지 않은 경우 null
+  Future<String?> _getBlockTypeForNumber(String normalizedPhoneNumber) async {
+    // 1. 오늘 전화 차단 확인
+    if (await isTodayBlockedAsync(normalizedPhoneNumber)) {
+      return 'today';
+    }
+
+    // 2. 저장 안된 번호 차단 확인
+    if (await isUnknownBlockedAsync(normalizedPhoneNumber)) {
+      return 'unknown';
+    }
+
+    // 3. 사용자 지정 차단 확인
+    if (await isUserBlockedAsync(normalizedPhoneNumber)) {
+      return 'user';
+    }
+
+    // 4. 위험 번호 차단 확인
+    if (await isDangerBlockedAsync(normalizedPhoneNumber)) {
+      return 'danger';
+    }
+
+    // 5. 콜폭 번호 차단 확인
+    if (await isBombCallBlockedAsync(normalizedPhoneNumber)) {
+      return 'bomb_calls';
+    }
+
+    return null;
+  }
+
+  /// 오늘 전화 차단 설정에 따라 차단 여부 확인
+  Future<bool> isTodayBlockedAsync(String normalizedPhoneNumber) async {
+    final isTodayBlockedSetting = await _settingsRepository.isTodayBlocked();
+    return isTodayBlockedSetting /* && _isTodayBlockStillValid() */;
+  }
+
+  /// 저장 안된 번호 차단 설정에 따라 차단 여부 확인
+  Future<bool> isUnknownBlockedAsync(String normalizedPhoneNumber) async {
+    final isUnknownBlockedSetting =
+        await _settingsRepository.isUnknownBlocked();
+    if (!isUnknownBlockedSetting) return false;
+
+    try {
+      final savedContacts = _contactsController.contacts;
+      return !savedContacts.any(
+        (contact) =>
+            normalizePhone(contact.phoneNumber) == normalizedPhoneNumber,
+      );
+    } catch (e) {
+      log(
+        '[BlockedNumbers] Error checking unknown number with contacts getter: $e',
+      );
+      return false;
+    }
+  }
+
+  /// 사용자가 직접 차단한 번호인지 확인
+  Future<bool> isUserBlockedAsync(String normalizedPhoneNumber) async {
+    final userBlockedList =
+        await _blockedNumberRepository.getAllUserBlockedNumbers();
+    return userBlockedList.any(
+      (blockedNum) =>
+          normalizedPhoneNumber.contains(normalizePhone(blockedNum)),
+    );
+  }
+
+  /// 위험 번호 자동 차단 설정에 따라 차단 여부 확인
+  Future<bool> isDangerBlockedAsync(String normalizedPhoneNumber) async {
+    final isAutoBlockDangerSetting =
+        await _settingsRepository.isAutoBlockDanger();
+    if (!isAutoBlockDangerSetting) return false;
+
+    final dangerList = await _blockedNumberRepository.getDangerNumbers();
+    return dangerList
+        .map((d) => normalizePhone(d))
+        .contains(normalizedPhoneNumber);
+  }
+
+  /// 콜폭 번호 차단 설정에 따라 차단 여부 확인
+  Future<bool> isBombCallBlockedAsync(String normalizedPhoneNumber) async {
+    final isBombCallsBlockedSetting =
+        await _settingsRepository.isBombCallsBlocked();
+    if (!isBombCallsBlockedSetting) return false;
+
+    final bombList = await _blockedNumberRepository.getBombNumbers();
+    return bombList
+        .map((b) => normalizePhone(b))
+        .contains(normalizedPhoneNumber);
   }
 
   @Deprecated('Use isNumberBlockedAsync instead')

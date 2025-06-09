@@ -5,7 +5,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 class NotificationManager {
   final ServiceInstance _service;
   Timer? _notificationTimer;
-  static const Duration _notificationInterval = Duration(minutes: 1);
+  static const Duration _notificationInterval = Duration(minutes: 10);
 
   NotificationManager(this._service);
 

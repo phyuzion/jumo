@@ -621,6 +621,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               onChanged: (value) async {
                 await _blockedNumbersController.setTodayBlocked(value);
                 if (!mounted) return;
+                // 백그라운드 서비스에 차단 목록 동기화 요청
+                final service = FlutterBackgroundService();
+                service.invoke('syncBlockedListsNow');
                 setState(() {});
               },
             ),
@@ -633,6 +636,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               onChanged: (value) async {
                 await _blockedNumbersController.setUnknownBlocked(value);
                 if (!mounted) return;
+                // 백그라운드 서비스에 차단 목록 동기화 요청
+                final service = FlutterBackgroundService();
+                service.invoke('syncBlockedListsNow');
                 setState(() {});
               },
             ),
@@ -649,6 +655,9 @@ class _SettingsScreenState extends State<SettingsScreen>
               onChanged: (value) async {
                 await _blockedNumbersController.setAutoBlockDanger(value);
                 if (!mounted) return;
+                // 백그라운드 서비스에 차단 목록 동기화 요청
+                final service = FlutterBackgroundService();
+                service.invoke('syncBlockedListsNow');
                 setState(() {});
               },
             ),
@@ -743,6 +752,13 @@ class _SettingsScreenState extends State<SettingsScreen>
                           count,
                         );
                         if (!mounted) return;
+                        // 백그라운드 서비스에 차단 목록 동기화 요청
+                        final service = FlutterBackgroundService();
+                        log(
+                          '[SettingsScreen] 콜폭 차단 횟수 변경: $count -> 백그라운드 서비스에 즉시 동기화 요청',
+                        );
+                        service.invoke('syncBlockedListsNow');
+
                         setState(() {});
                       }
                     },
@@ -766,6 +782,9 @@ class _SettingsScreenState extends State<SettingsScreen>
                         value,
                       );
                       if (!mounted) return;
+                      // 백그라운드 서비스에 차단 목록 동기화 요청
+                      final service = FlutterBackgroundService();
+                      service.invoke('syncBlockedListsNow');
                       setState(() {});
                     },
                   ),

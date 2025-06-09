@@ -44,6 +44,8 @@ import 'dart:io' show Platform;
 import 'package:mobile/providers/recent_history_provider.dart';
 import 'package:mobile/repositories/contact_repository.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
+import 'package:mobile/services/background_listeners/notification_listener_service.dart';
+import 'package:mobile/services/background_listeners/block_listener_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -384,6 +386,10 @@ class _MyAppStatefulState extends State<MyAppStateful>
     with WidgetsBindingObserver {
   StreamSubscription? _updateUiCallStateSub;
 
+  // 리스너 서비스 인스턴스 추가
+  NotificationListenerService? _notificationListenerService;
+  BlockListenerService? _blockListenerService;
+
   @override
   void initState() {
     super.initState();
@@ -456,7 +462,7 @@ class _MyAppStatefulState extends State<MyAppStateful>
   void _listenToBackgroundService() {
     final service = FlutterBackgroundService();
 
-    // 기존 통화 상태 업데이트 리스너
+    // 기존 통화 상태 업데이트 리스너 유지
     _updateUiCallStateSub = service.on('updateUiCallState').listen((event) {
       if (!mounted) return;
       final stateStr = event?['state'] as String?;
@@ -495,70 +501,14 @@ class _MyAppStatefulState extends State<MyAppStateful>
       }
     });
 
-    // 노티피케이션 요청 리스너 추가
-    service.on('requestNotifications').listen((event) async {
-      if (!mounted) return;
-      log(
-        '[_MyAppStatefulState] Received requestNotifications from background service',
-      );
-
-      try {
-        // 메인 isolate에서 API 호출 실행 (인증된 상태)
-        final notiList = await NotificationApi.getNotifications();
-        log(
-          '[_MyAppStatefulState] Fetched ${notiList.length} notifications from API',
-        );
-
-        // 결과를 백그라운드 서비스로 전송
-        service.invoke('notificationsResponse', {'notifications': notiList});
-      } catch (e) {
-        log('[_MyAppStatefulState] Error fetching notifications: $e');
-        // 오류 정보를 백그라운드 서비스로 전송
-        service.invoke('notificationsError', {'error': e.toString()});
-      }
-    });
-
-    // 노티피케이션 동기화 리스너 추가
-    service.on('syncNotificationsWithServer').listen((event) async {
-      if (!mounted) return;
-      final serverIds = event?['serverIds'] as List<dynamic>?;
-      log(
-        '[_MyAppStatefulState] Received syncNotificationsWithServer from background service, server IDs: ${serverIds?.length ?? 0}',
-      );
-
-      if (serverIds == null || serverIds.isEmpty) {
-        log('[_MyAppStatefulState] No server IDs provided. Skipping sync.');
-        return;
-      }
-
-      try {
-        final notificationRepository = context.read<NotificationRepository>();
-        // 문자열 목록으로 변환
-        final stringIds = serverIds.map((id) => id.toString()).toList();
-        final deletedCount = await notificationRepository.syncWithServerIds(
-          stringIds,
-        );
-        log(
-          '[_MyAppStatefulState] Synced notifications with server. Deleted $deletedCount notifications that no longer exist on server.',
-        );
-
-        // 노티피케이션 카운트 업데이트 이벤트 발행
-        if (deletedCount > 0) {
-          log(
-            '[_MyAppStatefulState] Broadcasting notification count update event',
-          );
-          appEventBus.fire(NotificationCountUpdatedEvent());
-        }
-      } catch (e) {
-        log(
-          '[_MyAppStatefulState] Error syncing notifications with server: $e',
-        );
-      }
-    });
-
-    log(
-      '[_MyAppStatefulState] Listening to background service UI updates and notification requests.',
+    // 모듈화된 리스너 서비스 초기화
+    _notificationListenerService = NotificationListenerService(
+      context,
+      service,
     );
+    _blockListenerService = BlockListenerService(context, service);
+
+    log('[_MyAppStatefulState] Background service listeners initialized.');
   }
 
   Future<void> _saveScreenSizeToHive() async {

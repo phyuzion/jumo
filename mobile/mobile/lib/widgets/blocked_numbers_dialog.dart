@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/blocked_number.dart';
 import '../controllers/blocked_numbers_controller.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 
 class BlockedNumbersDialog extends StatefulWidget {
   const BlockedNumbersDialog({Key? key}) : super(key: key);
@@ -48,11 +49,19 @@ class _BlockedNumbersDialogState extends State<BlockedNumbersDialog> {
     );
     _numberController.clear();
     await _loadBlockedNumbers();
+
+    // 백그라운드 서비스에 차단 목록 동기화 요청
+    final service = FlutterBackgroundService();
+    service.invoke('syncBlockedListsNow');
   }
 
   Future<void> _removeNumber(String number) async {
     await context.read<BlockedNumbersController>().removeBlockedNumber(number);
     await _loadBlockedNumbers();
+
+    // 백그라운드 서비스에 차단 목록 동기화 요청
+    final service = FlutterBackgroundService();
+    service.invoke('syncBlockedListsNow');
   }
 
   @override

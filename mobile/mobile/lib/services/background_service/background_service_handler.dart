@@ -74,7 +74,8 @@ Future<void> onStart(ServiceInstance service) async {
   notificationManager.initialize();
 
   // 차단 목록 관리자 초기화
-  final blockedListManager = BlockedListManager();
+  final blockedListManager = BlockedListManager(service);
+  blockedListManager.initialize();
 
   // 초기 백그라운드 작업 수행
   await performInitialBackgroundTasks(service, callStateManager);
