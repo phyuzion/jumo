@@ -39,15 +39,21 @@ class SearchApi {
   }) async {
     final client = GraphQLClientManager.client;
 
+    // GraphQL 캐시 완전히 비우기
     await client.resetStore(refetchQueries: false);
-    log('[SearchApi] GraphQL cache reset.');
+    log('[SearchApi] GraphQL cache cleared completely for search request.');
 
+    // 항상 네트워크에서 새 데이터만 가져오도록 설정
     final options = QueryOptions(
       document: gql(_getPhoneNumberQuery),
       variables: {'phoneNumber': phone, 'isRequested': isRequested},
       fetchPolicy: FetchPolicy.networkOnly,
+      cacheRereadPolicy: CacheRereadPolicy.ignoreAll, // 캐시 재읽기 방지
     );
 
+    log(
+      '[SearchApi] Requesting fresh data for phone number: $phone (cache disabled)',
+    );
     final result = await client.query(options);
 
     if (result.hasException) {

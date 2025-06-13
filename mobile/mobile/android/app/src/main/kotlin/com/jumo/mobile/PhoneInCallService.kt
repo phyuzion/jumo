@@ -2,6 +2,8 @@ package com.jumo.mobile
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import android.telecom.Call
@@ -51,6 +53,9 @@ class PhoneInCallService : InCallService() {
 
     // 스피커가 아닌 라우트를 저장하기 위한 변수 (초기값은 earpiece)
     private var lastNonSpeakerRoute: Int = CallAudioState.ROUTE_EARPIECE
+    
+    // 오디오 포커스 요청 객체 (API 26+)
+    private var audioFocusRequest: AudioFocusRequest? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -62,6 +67,16 @@ class PhoneInCallService : InCallService() {
         super.onDestroy()
         instance = null
         activeCalls.clear()
+        
+        // 오디오 포커스 해제
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            audioFocusRequest?.let {
+                audioManager.abandonAudioFocusRequest(it)
+                audioFocusRequest = null
+            }
+        }
+        
         Log.d("PhoneInCallService", "[onDestroy] InCallService destroyed.")
     }
 
@@ -89,28 +104,33 @@ class PhoneInCallService : InCallService() {
 
         when (newState) {
             Call.STATE_RINGING -> {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    if (call.details.callDirection == Call.Details.DIRECTION_INCOMING) {
-                        val number = call.details.handle?.schemeSpecificPart ?: ""
-                        showIncomingCall(number)
-                        Log.d("PhoneInCallService", "[handleCallState] incoming Dialing... => $number")
-                    }
+                val isIncoming = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    call.details.callDirection == Call.Details.DIRECTION_INCOMING
                 } else {
+                    true // API 28 이하에서는 방향을 확인할 수 없으므로 항상 수신 전화로 간주
+                }
+                
+                if (isIncoming) {
                     val number = call.details.handle?.schemeSpecificPart ?: ""
                     showIncomingCall(number)
                     Log.d("PhoneInCallService", "[handleCallState] incoming Dialing... => $number")
                 }
-
             }
             Call.STATE_DIALING -> {
                 val number = call.details.handle?.schemeSpecificPart ?: ""
                 Log.d("PhoneInCallService", "[handleCallState] Outgoing Dialing... => $number")
                 showOnCall(number, false)
+                
+                // 통화 시 오디오 포커스 요청 (API 버전별 분기)
+                requestAudioFocus()
             }
             Call.STATE_ACTIVE -> {
                 val number = call.details.handle?.schemeSpecificPart ?: ""
                 Log.d("PhoneInCallService", "[handleCallState] Call ACTIVE => $number")
                 showOnCall(number, true)
+                
+                // 통화 시 오디오 포커스 요청 (API 버전별 분기)
+                requestAudioFocus()
             }
             Call.STATE_DISCONNECTED -> {
                 val number = call.details.handle?.schemeSpecificPart ?: ""
@@ -127,6 +147,9 @@ class PhoneInCallService : InCallService() {
                 }
 
                 showCallEnded(number, reason)
+                
+                // 통화 종료 시 오디오 포커스 해제
+                abandonAudioFocus()
             }
         }
     }
@@ -160,33 +183,77 @@ class PhoneInCallService : InCallService() {
         if (hold) c.hold() else c.unhold()
     }
 
+    /** 오디오 포커스 요청 */
+    private fun requestAudioFocus() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Android 8.0 이상
+            val audioAttributes = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+                
+            audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                .setAudioAttributes(audioAttributes)
+                .setAcceptsDelayedFocusGain(false)
+                .setOnAudioFocusChangeListener { }
+                .build()
+                
+            audioManager.requestAudioFocus(audioFocusRequest!!)
+        } else {
+            // Android 8.0 미만
+            @Suppress("DEPRECATION")
+            audioManager.requestAudioFocus(null, AudioManager.STREAM_VOICE_CALL, 
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+        }
+    }
+    
+    /** 오디오 포커스 해제 */
+    private fun abandonAudioFocus() {
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Android 8.0 이상
+            audioFocusRequest?.let {
+                audioManager.abandonAudioFocusRequest(it)
+            }
+        } else {
+            // Android 8.0 미만
+            @Suppress("DEPRECATION")
+            audioManager.abandonAudioFocus(null)
+        }
+    }
+
     /** ===========================
      *  (1) 스피커 On/Off
      * ========================== */
     private fun toggleSpeakerCall(enable: Boolean) {
         val call = activeCalls.lastOrNull() ?: return
-        val audioState = this.callAudioState
+        val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         if (enable) {
             // 스피커 켜기 전, 현재 라우트가 스피커가 아니면 저장
+            val audioState = this.callAudioState
             if (audioState.route != CallAudioState.ROUTE_SPEAKER) {
                 lastNonSpeakerRoute = audioState.route
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12 이상
                 setAudioRoute(CallAudioState.ROUTE_SPEAKER)
             } else {
-                val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                // Android 12 미만
                 audioManager.mode = AudioManager.MODE_IN_CALL
                 audioManager.isSpeakerphoneOn = true
             }
         } else {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12 이상
                 setAudioRoute(lastNonSpeakerRoute)
             } else {
-                val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                // Android 12 미만
                 audioManager.mode = AudioManager.MODE_IN_CALL
-
                 audioManager.isSpeakerphoneOn = false
             }
         }
@@ -196,17 +263,9 @@ class PhoneInCallService : InCallService() {
      *  (2) 뮤트 On/Off
      * ========================== */
     private fun toggleMuteCall(muteOn: Boolean) {
-        val call = activeCalls.lastOrNull() ?: return
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             audioManager.isMicrophoneMute = muteOn
-            Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn (API >= 31)")
-        } else {
-            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            audioManager.isMicrophoneMute = muteOn
-            Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn (API < 31)")
-        }
+        Log.d("PhoneInCallService", "[toggleMuteCall] Mute set to: $muteOn")
     }
 
     /** ===========================

@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.telecom.TelecomManager
 import android.util.Log
 import android.view.WindowManager
 import android.widget.Toast
@@ -26,6 +27,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     private var flutterAppInitialized = false
     private var pendingIncomingNumber: String? = null
+    
+    private val REQUEST_CODE_SET_DEFAULT_DIALER = 1001
 
     private val callPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -62,6 +65,21 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         checkIntentForCall(intent)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_CODE_SET_DEFAULT_DIALER) {
+            if (isDefaultDialer()) {
+                Log.d(TAG, "기본 전화앱 설정 완료 (하위 버전)")
+                NativeBridge.resetCallState()
+                methodResultForDialer?.success(true)
+            } else {
+                Log.d(TAG, "기본 전화앱 설정 거부 (하위 버전)")
+                methodResultForDialer?.success(false)
+            }
+            methodResultForDialer = null
+        }
     }
 
     private fun checkIntentForCall(intent: Intent?){
@@ -110,7 +128,21 @@ class MainActivity : FlutterFragmentActivity() {
                 methodResultForDialer?.success(true)
                 methodResultForDialer = null
             }
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Android 8.0 (Oreo) 이상, Android 10 미만
+            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            val changeDialerIntent = Intent(TelecomManager.ACTION_CHANGE_DEFAULT_DIALER)
+                .putExtra(TelecomManager.EXTRA_CHANGE_DEFAULT_DIALER_PACKAGE_NAME, packageName)
+            
+            try {
+                startActivityForResult(changeDialerIntent, REQUEST_CODE_SET_DEFAULT_DIALER)
+            } catch (e: Exception) {
+                Log.e(TAG, "기본 전화앱 설정 인텐트 실행 실패", e)
+                methodResultForDialer?.success(false)
+                methodResultForDialer = null
+            }
         } else {
+            // Android 8.0 미만
             methodResultForDialer?.success(false)
             methodResultForDialer = null
         }
@@ -120,6 +152,10 @@ class MainActivity : FlutterFragmentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val roleManager = getSystemService(Context.ROLE_SERVICE) as RoleManager
             return roleManager.isRoleHeld(RoleManager.ROLE_DIALER)
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Android 8.0 (Oreo) 이상, Android 10 미만
+            val telecomManager = getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            return packageName == telecomManager.defaultDialerPackage
         }
         return false
     }

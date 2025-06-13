@@ -11,14 +11,11 @@ import 'package:mobile/models/today_record.dart';
 import 'package:mobile/utils/app_event_bus.dart';
 
 class SearchRecordsController extends ChangeNotifier {
-  // 캐싱된 검색 결과 및 상태 관리
+  // 검색 결과 및 상태 관리
   PhoneNumberModel? _searchResult;
   String _phoneNumber = '';
   String _callerName = '';
   bool _searchInProgress = false;
-
-  // 캐싱 저장소
-  final Map<String, PhoneNumberModel> _cachedSearchResults = {};
 
   // 이벤트 리스너
   StreamSubscription? _resetEventSubscription;
@@ -53,9 +50,6 @@ class SearchRecordsController extends ChangeNotifier {
     _callerName = '';
     _searchInProgress = false;
 
-    // 캐싱된 검색 데이터 초기화 (선택적)
-    // _cachedSearchResults.clear(); // 전체 캐시 초기화가 필요하면 주석 해제
-
     // 리스너에게 초기화 알림 - 마이크로태스크로 지연
     Future.microtask(() => notifyListeners());
     log('[SearchRecordsController] 검색 데이터 초기화 완료 및 리스너 알림');
@@ -65,7 +59,6 @@ class SearchRecordsController extends ChangeNotifier {
   Future<PhoneNumberModel?> searchPhone(
     String rawPhone, {
     bool isRequested = false,
-    bool useCache = true,
   }) async {
     if (rawPhone.isEmpty) {
       log('[SearchRecordsController] 빈 전화번호로 검색 시도. 무시됨.');
@@ -82,18 +75,7 @@ class SearchRecordsController extends ChangeNotifier {
     Future.microtask(() => notifyListeners());
 
     try {
-      // 캐시 확인 (필요시)
-      if (useCache && _cachedSearchResults.containsKey(normalizedPhone)) {
-        _searchResult = _cachedSearchResults[normalizedPhone];
-        _callerName = _getCallerName(_searchResult);
-        log('[SearchRecordsController] 캐시에서 결과 반환: $_callerName');
-        _searchInProgress = false;
-        // 빌드 사이클에서 충돌 방지를 위해 마이크로태스크로 지연
-        Future.microtask(() => notifyListeners());
-        return _searchResult;
-      }
-
-      // 실제 서버 호출
+      // 항상 서버에서 최신 데이터 요청
       final data = await SearchApi.getPhoneNumber(
         normalizedPhone,
         isRequested: isRequested,
@@ -102,11 +84,6 @@ class SearchRecordsController extends ChangeNotifier {
       // 결과 처리
       _searchResult = data;
       _callerName = _getCallerName(data);
-
-      // 캐시에 저장
-      if (data != null) {
-        _cachedSearchResults[normalizedPhone] = data;
-      }
 
       log('[SearchRecordsController] 검색 완료: $_callerName');
     } catch (e) {
