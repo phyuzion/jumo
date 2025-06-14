@@ -202,7 +202,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Text(
-          '최근 통화',
+          '최근 통화 : 총 ${todayRecords.length}건',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
@@ -239,7 +239,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         child: Text(
-          '검색 결과',
+          '검색 결과 : 총 ${phoneRecords.length}건',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
