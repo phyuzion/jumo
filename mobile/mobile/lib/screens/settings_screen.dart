@@ -18,6 +18,7 @@ import 'package:mobile/utils/app_event_bus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
+import 'package:restart_app/restart_app.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -904,6 +905,64 @@ class _SettingsScreenState extends State<SettingsScreen>
               );
             },
           ),
+
+          // 구분선 추가
+          const Divider(thickness: 1),
+
+          // 앱 재시작 버튼 추가
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16.0,
+              vertical: 8.0,
+            ),
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12.0),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
+              onPressed: () {
+                // 재시작 전 확인 다이얼로그 표시
+                showDialog(
+                  context: context,
+                  builder:
+                      (context) => AlertDialog(
+                        title: const Text('앱 재시작'),
+                        content: const Text(
+                          '앱을 완전히 재시작하시겠습니까?\n(저장된 데이터는 유지됩니다)',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('취소'),
+                          ),
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              // restart_app 패키지를 사용하여 앱 재시작
+                              Restart.restartApp(
+                                notificationTitle: '앱 재시작 중',
+                                notificationBody: '여기를 탭하여 앱을 다시 열어주세요.',
+                              );
+                            },
+                            child: const Text('재시작'),
+                          ),
+                        ],
+                      ),
+                );
+              },
+              child: const Text(
+                '앱 완전 재시작',
+                style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+
+          // 하단 여백 추가
+          const SizedBox(height: 16.0),
         ],
       ),
     );
