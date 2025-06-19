@@ -363,6 +363,12 @@ class PhoneInCallService : InCallService() {
     // 확장된 전화 알림 표시 메서드
     private fun showIncomingCallNotification(number: String) {
         try {
+            // 앱이 포그라운드에 있는지 확인
+            if (JumoApp.isAppInForeground()) {
+                Log.d("PhoneInCallService", "App is in foreground, skipping notification for $number")
+                return
+            }
+            
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             
             // ContactManager에서 전화번호에 해당하는 연락처 이름 조회
@@ -417,27 +423,26 @@ class PhoneInCallService : InCallService() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             
-            // Person 객체 생성 (연락처 정보 표시용)
-            val person = Person.Builder()
+            // 안드로이드 X Person 객체 (레거시 알림용)
+            val personX = Person.Builder()
                 .setName(displayName)
                 .setKey(number)
                 .setImportant(true)
                 .build()
             
-            // Android 12 이상에서는 CallStyle 사용
+            // Android 버전에 따라 적절한 노티피케이션 스타일 사용
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 try {
                     // CallStyle을 사용하여 시스템 통화 UI 형태의 노티피케이션 구성
-                    val personBuilder = android.app.Person.Builder()
+                    val personNative = android.app.Person.Builder()
                         .setName(displayName)
                         .setKey(number)
                         .setImportant(true)
                     
                     if (contactName != null) {
-                        personBuilder.setUri("tel:$number")
+                        personNative.setUri("tel:$number")
                     }
                     
-                    // Android 12 이상에서는 Notification.Builder와 CallStyle 직접 사용
                     val callStyleNotificationBuilder = Notification.Builder(this, CHANNEL_ID)
                         .setSmallIcon(resources.getIdentifier("app_icon", "drawable", packageName))
                         .setContentTitle(displayName)
@@ -448,7 +453,7 @@ class PhoneInCallService : InCallService() {
                         .setOngoing(true)
                         .setTimeoutAfter(60000)
                         .setStyle(Notification.CallStyle.forIncomingCall(
-                            personBuilder.build(),
+                            personNative.build(),
                             rejectPendingIntent,
                             acceptPendingIntent
                         ))
@@ -456,42 +461,17 @@ class PhoneInCallService : InCallService() {
                     // 직접 생성한 Notification 객체로 노티피케이션 표시
                     notificationManager.notify(NOTIFICATION_ID, callStyleNotificationBuilder.build())
                     Log.d("PhoneInCallService", "Using CallStyle for Android 12+")
-                    return // 노티피케이션이 이미 표시되었으므로 여기서 리턴
                 } catch (e: Exception) {
                     Log.e("PhoneInCallService", "Error setting up CallStyle: ${e.message}", e)
                     // 오류 발생 시 기존 스타일로 대체
+                    showLegacyNotification(notificationManager, personX, displayName, number, fullScreenPendingIntent, acceptPendingIntent, rejectPendingIntent)
                 }
+            } else {
+                // Android 12 미만인 경우 레거시 스타일 사용
+                showLegacyNotification(notificationManager, personX, displayName, number, fullScreenPendingIntent, acceptPendingIntent, rejectPendingIntent)
             }
             
-            // Android 12 미만이거나 CallStyle에 오류가 발생한 경우 레거시 스타일 사용
-            val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-                .setSmallIcon(resources.getIdentifier("app_icon", "drawable", packageName))
-                .setContentTitle(displayName)
-                .setContentText(number)
-                .setPriority(NotificationCompat.PRIORITY_MAX)
-                .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setFullScreenIntent(fullScreenPendingIntent, true)
-                .setAutoCancel(false)
-                .setOngoing(true)
-                .setTimeoutAfter(60000) // 60초
-                .addAction(
-                    android.R.drawable.ic_menu_call,
-                    "수락",
-                    acceptPendingIntent
-                )
-                .addAction(
-                    android.R.drawable.ic_menu_close_clear_cancel,
-                    "거절",
-                    rejectPendingIntent
-                )
-            
-            // 레거시 스타일 설정
-            setupLegacyNotificationStyle(builder, person, displayName, number)
-            
-            // 노티피케이션 표시
-            notificationManager.notify(NOTIFICATION_ID, builder.build())
-            Log.d("PhoneInCallService", "Incoming call notification shown for $displayName ($number)")
+            Log.d("PhoneInCallService", "Incoming call notification processing completed for $displayName ($number)")
             
         } catch (e: Exception) {
             Log.e("PhoneInCallService", "Error showing notification: $e")
@@ -530,5 +510,45 @@ class PhoneInCallService : InCallService() {
         } catch (e: Exception) {
             Log.e("PhoneInCallService", "Error canceling notification: $e")
         }
+    }
+    
+    // 레거시 스타일의 노티피케이션을 표시하는 메서드
+    private fun showLegacyNotification(
+        notificationManager: NotificationManager,
+        person: Person,
+        displayName: String,
+        number: String,
+        fullScreenPendingIntent: PendingIntent,
+        acceptPendingIntent: PendingIntent,
+        rejectPendingIntent: PendingIntent
+    ) {
+        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(resources.getIdentifier("app_icon", "drawable", packageName))
+            .setContentTitle(displayName)
+            .setContentText(number)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setFullScreenIntent(fullScreenPendingIntent, true)
+            .setAutoCancel(false)
+            .setOngoing(true)
+            .setTimeoutAfter(60000) // 60초
+            .addAction(
+                android.R.drawable.ic_menu_call,
+                "수락",
+                acceptPendingIntent
+            )
+            .addAction(
+                android.R.drawable.ic_menu_close_clear_cancel,
+                "거절",
+                rejectPendingIntent
+            )
+        
+        // 레거시 스타일 설정
+        setupLegacyNotificationStyle(builder, person, displayName, number)
+        
+        // 노티피케이션 표시
+        notificationManager.notify(NOTIFICATION_ID, builder.build())
+        Log.d("PhoneInCallService", "Legacy notification shown for $displayName ($number)")
     }
 }

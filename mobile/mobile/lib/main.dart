@@ -322,6 +322,9 @@ void main() async {
     appController,
   );
 
+  // PhoneStateController를 AppController에 설정
+  appController.setPhoneStateController(phoneStateController);
+
   // SearchRecordsController 인스턴스 생성
   final searchRecordsController = SearchRecordsController();
 

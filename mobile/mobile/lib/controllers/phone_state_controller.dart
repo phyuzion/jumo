@@ -358,12 +358,118 @@ class PhoneStateController with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // log('[PhoneStateController.didChangeAppLifecycleState] State: $state');
     if (state == AppLifecycleState.resumed) {
-      // _syncInitialCallState();
+      syncInitialCallState();
     }
   }
 
   Future<void> syncInitialCallState() async {
-    // log('[PhoneStateController] Syncing initial call state...');
-    // ... 내부 로직 동일 ...
+    log('[PhoneStateController] Syncing initial call state...');
+    try {
+      // 현재 통화 상태를 네이티브 측에서 가져옴
+      final callDetails = await NativeMethods.getCurrentCallState();
+      log(
+        '[PhoneStateController] Initial call state from native: $callDetails',
+      );
+
+      final state = callDetails['state'] as String? ?? 'IDLE';
+      final number = callDetails['number'] as String?;
+
+      // 전화번호가 없거나 IDLE 상태면 처리할 필요 없음
+      if (number == null || number.isEmpty || state == 'IDLE') {
+        log(
+          '[PhoneStateController] No active call detected in initial state check.',
+        );
+        return;
+      }
+
+      // 통화 상태에 따라 적절한 이벤트 발생
+      final normalizedNumber = normalizePhone(number);
+      String callerName = '';
+
+      // 전화 상태에 따른 처리
+      switch (state) {
+        case 'RINGING':
+          log(
+            '[PhoneStateController] Detected RINGING call on app start/resume: $normalizedNumber',
+          );
+
+          // 차단된 번호인지 확인
+          bool isBlocked = false;
+          try {
+            isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
+              normalizedNumber,
+              addHistory: false, // 이미 진행 중인 전화이므로 기록 남기지 않음
+            );
+          } catch (e) {
+            log('[PhoneStateController] Error checking block status: $e');
+          }
+
+          if (isBlocked) {
+            log(
+              '[PhoneStateController] Call from $normalizedNumber is BLOCKED.',
+            );
+            try {
+              await NativeMethods.rejectCall();
+            } catch (e) {
+              log('[PhoneStateController] Error rejecting call: $e');
+            }
+            return;
+          }
+
+          // 발신자 정보 초기화 이벤트 트리거
+          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+          // 통화 상태 알림을 백그라운드 서비스에 전송
+          notifyServiceCallState(
+            'onIncomingNumber',
+            normalizedNumber,
+            callerName,
+          );
+          break;
+
+        case 'ACTIVE':
+        case 'DIALING':
+          log(
+            '[PhoneStateController] Detected ACTIVE/DIALING call on app start/resume: $normalizedNumber',
+          );
+
+          // 발신자 정보 초기화 이벤트 트리거
+          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+          // 통화 상태 알림을 백그라운드 서비스에 전송
+          notifyServiceCallState(
+            'onCall',
+            normalizedNumber,
+            callerName,
+            connected: state == 'ACTIVE',
+          );
+          break;
+
+        case 'HOLDING':
+          log(
+            '[PhoneStateController] Detected HOLDING call on app start/resume: $normalizedNumber',
+          );
+
+          // 발신자 정보 초기화 이벤트 트리거
+          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+          // 홀드 상태는 ACTIVE 상태로 간주하고 connected = true로 설정
+          notifyServiceCallState(
+            'onCall',
+            normalizedNumber,
+            callerName,
+            connected: true,
+          );
+          break;
+
+        default:
+          log(
+            '[PhoneStateController] Unhandled call state: $state for number: $normalizedNumber',
+          );
+          break;
+      }
+    } catch (e) {
+      log('[PhoneStateController] Error syncing initial call state: $e');
+    }
   }
 }
