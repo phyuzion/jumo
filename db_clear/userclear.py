@@ -243,8 +243,8 @@ def delete_selected_records(db, selected_group):
             
             if result.modified_count > 0:
                 deleted_count += 1
-    except Exception as e:
-            print(f"레코드 삭제 중 오류 발생: {e}")
+        except Exception as e:
+                print(f"레코드 삭제 중 오류 발생: {e}")
     
     print(f"\n삭제 작업 완료: {deleted_count}/{len(records)}개 레코드가 삭제되었습니다.")
 
@@ -278,7 +278,7 @@ def main():
                         # 5. 선택된 레코드 삭제
                         delete_selected_records(db, selected_group)
                 else:
-                print("표시할 옵션이 없습니다.")
+                    print("표시할 옵션이 없습니다.")
         else:
             print(f"userName '{user_name}'를 포함하는 레코드가 없어 삭제할 내용이 없습니다.")
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/repositories/notification_repository.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
+import 'package:mobile/utils/device_utils.dart';
 import 'package:mobile/widgets/notification_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_ce/hive.dart';
@@ -55,6 +56,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initializeHomeScreen();
     _checkDefaultDialer();
+    _checkDeviceState(); // 디바이스 상태 확인
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadNotificationCount();
       _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen(
@@ -80,10 +82,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _checkDefaultDialer();
+      _checkDeviceState(); // 앱이 재개될 때마다 디바이스 상태 확인
       _searchFocusNode.unfocus();
       _loadNotificationCount();
       context.read<ContactsController>().syncContacts();
       log('[HomeScreen] App resumed, called syncContacts.');
+    }
+  }
+
+  /// 디바이스 상태 확인 (폴더블 기기 여부, 열림/닫힘 상태 등)
+  Future<void> _checkDeviceState() async {
+    try {
+      final deviceUtils = DeviceUtils();
+      final isFlip = await deviceUtils.isFlip();
+      final isFold = await deviceUtils.isFold();
+      final isNormal = await deviceUtils.isNormal();
+      final isOpen = await deviceUtils.isOpen();
+      final isOnCoverDisplay = await deviceUtils.isOnCoverDisplay();
+
+      log(
+        '[HomeScreen] 디바이스 상태: isFlip=$isFlip, isFold=$isFold, isNormal=$isNormal, isOpen=$isOpen, isOnCoverDisplay=$isOnCoverDisplay',
+      );
+    } catch (e) {
+      log('[HomeScreen] 디바이스 상태 확인 중 오류: $e');
     }
   }
 

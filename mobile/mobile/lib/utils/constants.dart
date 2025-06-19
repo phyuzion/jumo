@@ -5,6 +5,25 @@ const String APP_NAME = 'KOL_PHONE';
 const String APP_DOWNLOAD_LINK =
     'https://jumo-vs8e.onrender.com/download/app.apk';
 
+// 폴더블 기기 모델명 리스트
+const List<String> FLIP_MODELS = [
+  'SM-F700', // Galaxy Z Flip
+  'SM-F707', // Galaxy Z Flip 5G
+  'SM-F711', // Galaxy Z Flip 3
+  'SM-F721', // Galaxy Z Flip 4
+  'SM-F731', // Galaxy Z Flip 5
+  'SM-W2022', // China 버전
+];
+
+const List<String> FOLD_MODELS = [
+  'SM-F900', // Galaxy Fold
+  'SM-F907', // Galaxy Fold 5G
+  'SM-F916', // Galaxy Z Fold 2
+  'SM-F926', // Galaxy Z Fold 3
+  'SM-F936', // Galaxy Z Fold 4
+  'SM-F946', // Galaxy Z Fold 5
+];
+
 String normalizePhone(String raw) {
   final lower = raw.toLowerCase().trim();
   var replaced = lower.replaceAll('+82', '82');
