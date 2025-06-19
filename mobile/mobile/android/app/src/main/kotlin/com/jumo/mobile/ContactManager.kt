@@ -9,6 +9,41 @@ import android.util.Log
 object ContactManager {
     // 기존 getContacts 함수는 삭제합니다.
 
+    // 전화번호로 연락처 이름을 조회하는 함수 추가
+    fun getContactNameByPhoneNumber(context: Context, phoneNumber: String): String? {
+        val contentResolver: ContentResolver = context.contentResolver
+        var contactName: String? = null
+        
+        try {
+            // 전화번호 정규화 (- 등의 특수문자 제거)
+            val normalizedNumber = phoneNumber.replace(Regex("[^0-9+]"), "")
+            
+            // 전화번호로 연락처 검색
+            val uri = ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+            val projection = arrayOf(
+                ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME
+            )
+            
+            // PHONE_NUMBERS_EQUAL 사용하여 정확한 매칭 수행
+            val selection = "${ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER} = ? OR " +
+                    "${ContactsContract.CommonDataKinds.Phone.NUMBER} = ? OR " +
+                    "${ContactsContract.CommonDataKinds.Phone.NUMBER} LIKE ?"
+            val selectionArgs = arrayOf(normalizedNumber, phoneNumber, "%$normalizedNumber")
+            
+            contentResolver.query(uri, projection, selection, selectionArgs, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    contactName = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME))
+                }
+            }
+            
+            Log.d("ContactManager", "getContactNameByPhoneNumber: $phoneNumber -> $contactName")
+        } catch (e: Exception) {
+            Log.e("ContactManager", "Error getting contact name by phone number: ${e.message}", e)
+        }
+        
+        return contactName
+    }
+
     // 스트리밍 방식으로 연락처 정보를 처리하는 함수
     fun processContactsStreamed(
         context: Context,

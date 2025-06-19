@@ -85,6 +85,20 @@ class MainActivity : FlutterFragmentActivity() {
     private fun checkIntentForCall(intent: Intent?){
         if (intent == null) return
 
+        // 노티피케이션에서 전화 수락/거절 액션 처리
+        if (intent.action == "ACCEPT_CALL") {
+            Log.d(TAG, "Accept call action from notification")
+            val number = intent.getStringExtra("incoming_number") ?: ""
+            PhoneInCallService.acceptCall()
+            // 수락 후 앱을 전면에 표시
+            enableLockScreenFlags()
+            return
+        } else if (intent.action == "REJECT_CALL") {
+            Log.d(TAG, "Reject call action from notification")
+            PhoneInCallService.rejectCall()
+            return
+        }
+
         if (intent.getBooleanExtra("incoming_call", false)) {
             Log.d(TAG, "Incoming call intent received")
             enableLockScreenFlags()
