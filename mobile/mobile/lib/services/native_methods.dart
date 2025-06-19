@@ -73,24 +73,6 @@ class NativeMethods {
     }
   }
 
-  // 디바이스 폴드 상태 확인
-  static Future<Map<String, dynamic>> getDeviceState() async {
-    try {
-      final result = await _methodChannel.invokeMapMethod<String, dynamic>(
-        'isDeviceOpen',
-      );
-      return result ??
-          {'isOpen': true, 'hasExternalDisplay': false, 'currentDisplayId': 0};
-    } catch (e) {
-      log('[NativeMethods] Error calling isDeviceOpen: $e');
-      return {
-        'isOpen': true,
-        'hasExternalDisplay': false,
-        'currentDisplayId': 0,
-      };
-    }
-  }
-
   static Stream<List<Map<String, dynamic>>> getContactsStream({
     int? lastSyncTimestampEpochMillis,
   }) {

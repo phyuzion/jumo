@@ -73,28 +73,6 @@ object NativeBridge {
                         result.error("STATE_ERROR", "Failed to get current call state", "$e")
                     }
                 }
-                "isDeviceOpen" -> {
-                    try {
-                        val context = JumoApp.context
-                        val isOpen = DeviceUtils.isDeviceOpen(context)
-                        val hasExternalDisplay = DeviceUtils.hasExternalDisplay(context)
-                        val currentDisplayId = try {
-                            val wm = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
-                            wm.defaultDisplay.displayId
-                        } catch (e: Exception) {
-                            0
-                        }
-                        
-                        result.success(mapOf(
-                            "isOpen" to isOpen,
-                            "hasExternalDisplay" to hasExternalDisplay,
-                            "currentDisplayId" to currentDisplayId
-                        ))
-                    } catch (e: Exception) {
-                        Log.e("NativeBridge", "isDeviceOpen error: $e")
-                        result.error("DEVICE_STATE_ERROR", "Failed to get device state", "$e")
-                    }
-                }
                 "upsertContact" -> { 
                      try {
                         val rawContactId = call.argument<String>("rawContactId")
