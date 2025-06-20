@@ -2,12 +2,15 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:async';
 import 'dart:developer';
+import 'dart:typed_data'; // Int64List 를 위한 import 추가
+import 'dart:ui'; // Color 를 위한 import 추가
 
 // NavigatorKey 등 활용하려면 import
-// import 'package:mobile/controllers/navigation_controller.dart';
+import 'package:mobile/controllers/navigation_controller.dart';
 
 // 통화 상태 알림 전용 ID
-// const int CALL_STATUS_NOTIFICATION_ID = 1111;
+const int CALL_STATUS_NOTIFICATION_ID = 9876;
+const String INCOMING_CALL_CHANNEL_ID = 'incoming_call_channel_id';
 
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
@@ -28,6 +31,8 @@ class LocalNotificationService {
         log(
           '[LocalNotification] Notification tapped (foreground): Payload=${notificationResponse.payload}',
         );
+
+        // 페이로드가 있으면 처리
         if (notificationResponse.payload != null) {
           handlePayloadNavigation(notificationResponse.payload!);
         }
@@ -99,9 +104,19 @@ class LocalNotificationService {
       foregroundChannel,
     );
 
-    // 4. (선택/제거) 진행 중 통화 채널 - 현재 사용 안 함
-    // const AndroidNotificationChannel ongoingCallChannel = ...;
-    // await flutterLocalNotificationsPlugin.createNotificationChannel(ongoingCallChannel);
+    // 4. 수신 전화 채널 추가
+    // 진동 및 LED 설정은 const가 아닐 수 있으므로 non-const로 생성
+    final AndroidNotificationChannel incomingCallChannel =
+        AndroidNotificationChannel(
+          INCOMING_CALL_CHANNEL_ID,
+          '수신 전화',
+          description: '수신 전화 알림',
+          importance: Importance.max,
+          // vibrationPattern과 ledColor는 여기서 제외하고 노티피케이션에서 설정
+        );
+    await flutterLocalNotificationsPlugin.createNotificationChannel(
+      incomingCallChannel,
+    );
 
     log('[LocalNotification] All required notification channels created.');
   }
@@ -124,8 +139,55 @@ class LocalNotificationService {
     await _plugin.show(id, title, body, details);
   }
 
-  // (C) 통화 중 알림 (ongoing)
-  // static Future<void> showOngoingCallNotification({ ... }) async { ... }
+  // 수신 전화 알림 표시
+  static Future<void> showIncomingCallNotification({
+    required String phoneNumber,
+    String callerName = '',
+  }) async {
+    // 이미 동일한 번호로 알림이 있으면 취소 후 새로 표시
+    await cancelNotification(CALL_STATUS_NOTIFICATION_ID);
+
+    try {
+      final displayName = callerName.isNotEmpty ? callerName : phoneNumber;
+
+      // 부재중 전화처럼 간단하게 설정
+      final androidDetails = AndroidNotificationDetails(
+        INCOMING_CALL_CHANNEL_ID,
+        '수신 전화',
+        channelDescription: '수신 전화 알림',
+        importance: Importance.high,
+        priority: Priority.high,
+        fullScreenIntent: true,
+        ongoing: true,
+        playSound: true,
+        icon: 'app_icon',
+      );
+
+      final details = NotificationDetails(android: androidDetails);
+
+      // 이름이 있으면 이름을 타이틀에, 없으면 "전화 수신중"을 타이틀에
+      final title = callerName.isNotEmpty ? callerName : '📞 전화 수신중';
+
+      // 내용에는 전화번호만 표시
+      final body = phoneNumber;
+
+      final payload = 'incoming:$phoneNumber';
+
+      await _plugin.show(
+        CALL_STATUS_NOTIFICATION_ID,
+        title,
+        body,
+        details,
+        payload: payload,
+      );
+
+      log(
+        '[LocalNotification] Showed incoming call notification for: $displayName ($phoneNumber)',
+      );
+    } catch (e) {
+      log('[LocalNotification] Error showing incoming call notification: $e');
+    }
+  }
 
   // (D) 부재중 전화 알림 (채널 ID 확인)
   static Future<void> showMissedCallNotification({
@@ -178,21 +240,21 @@ class LocalNotificationService {
 
     log('[LocalNotification] Handling payload: type=$type, number=$number');
 
-    // <<< 네비게이션 로직 제거 >>>
-    // Provider 업데이트는 앱 실행 시 main.dart에서 처리하거나,
-    // 앱 실행 중에는 _listenToBackgroundService에서 처리되므로 여기서 직접 호출 불필요.
+    // 네비게이션 로직 - 페이로드 타입에 따라 처리
+    final currentContext = NavigationController.navKey.currentContext;
+    if (currentContext == null) {
+      log('[LocalNotification] Cannot navigate: Navigator context is null.');
+      return;
+    }
 
-    // final currentContext = NavigationController.navKey.currentContext;
-    // if (currentContext == null) {
-    //   log('[LocalNotification] Cannot navigate: Navigator context is null.');
-    //   return;
-    // }
-    // log('[LocalNotification] Navigating based on payload: type=$type, number=$number');
-    // switch (type) {
-    //   case 'incoming':
-    //     NavigationController.goToIncoming(number);
-    //     break;
-    //   // ... (다른 case)
-    // }
+    if (type == 'incoming') {
+      log('[LocalNotification] Navigating to incoming call screen: $number');
+      NavigationController.goToDecider();
+    } else if (type == 'missed') {
+      log(
+        '[LocalNotification] Navigating to call logs for missed call: $number',
+      );
+      NavigationController.goToDecider();
+    }
   }
 }

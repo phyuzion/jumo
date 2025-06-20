@@ -5,6 +5,10 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
 import 'package:mobile/services/background_service/service_constants.dart';
 import 'package:mobile/services/background_service/call_timer.dart';
+import 'package:mobile/services/local_notification_service.dart';
+
+// 수신 전화 노티피케이션 ID
+const int CALL_STATUS_NOTIFICATION_ID = 9876;
 
 class CallStateManager {
   final ServiceInstance _service;
@@ -24,6 +28,10 @@ class CallStateManager {
   bool _isFirstCheck = true;
   String _lastCheckedCallState = 'IDLE';
   String _lastCheckedCallNumber = '';
+
+  // 인코밍 콜 알림 주기적 갱신을 위한 타이머
+  Timer? _incomingCallRefreshTimer;
+  int _incomingCallNotificationCount = 0; // 표시 횟수 추적
 
   CallStateManager(this._service, this._notifications)
     : _callTimer = CallTimer(_service, _notifications);
@@ -368,6 +376,24 @@ class CallStateManager {
             // 철저한 상태 초기화
             _thoroughCallStateReset(incomingNumber);
 
+            // 연락처 이름 가져오기 시도
+            final contactName = await _getContactName(incomingNumber);
+
+            // 수신 전화 노티피케이션 표시
+            try {
+              log('[CallStateManager] 수신 전화 노티피케이션 표시 시도');
+              await LocalNotificationService.showIncomingCallNotification(
+                phoneNumber: incomingNumber,
+                callerName: contactName, // 가져온 연락처 이름 사용
+              );
+              log('[CallStateManager] 수신 전화 노티피케이션 표시 성공');
+
+              // 인코밍 콜 알림 갱신 타이머 시작
+              _startIncomingCallRefreshTimer(incomingNumber, contactName);
+            } catch (e) {
+              log('[CallStateManager] 수신 전화 노티피케이션 표시 오류: $e');
+            }
+
             // UI에 바로 상태 전달
             if (_uiInitialized) {
               log(
@@ -376,11 +402,23 @@ class CallStateManager {
               _updateUiCallState(
                 'incoming',
                 incomingNumber,
-                '',
+                contactName, // 가져온 연락처 이름 전달
                 false,
                 0,
                 'broadcast_receiver_ringing_reset',
               );
+            }
+          } else if (state == 'IDLE' && _incomingCallRefreshTimer != null) {
+            // RINGING -> IDLE로 변경된 경우 타이머 중지 및 알림 취소
+            _stopIncomingCallRefreshTimer();
+
+            try {
+              await LocalNotificationService.cancelNotification(
+                CALL_STATUS_NOTIFICATION_ID,
+              );
+              log('[CallStateManager] 수신 전화 노티피케이션 취소 성공');
+            } catch (e) {
+              log('[CallStateManager] 수신 전화 노티피케이션 취소 오류: $e');
             }
           }
         }
@@ -474,6 +512,25 @@ class CallStateManager {
             // 철저한 상태 초기화
             _thoroughCallStateReset(number);
 
+            // 수신 전화 노티피케이션 표시 (새로 추가된 코드)
+            try {
+              // 연락처 이름 가져오기 시도 (이미 인코밍 타이머가 실행 중인지 확인)
+              if (_incomingCallRefreshTimer == null) {
+                final contactName = await _getContactName(number);
+                log('[CallStateManager] 타이머에서 수신 전화 노티피케이션 표시 시도');
+                await LocalNotificationService.showIncomingCallNotification(
+                  phoneNumber: number,
+                  callerName: contactName,
+                );
+                log('[CallStateManager] 타이머에서 수신 전화 노티피케이션 표시 성공');
+
+                // 인코밍 콜 노티피케이션 갱신 타이머 시작
+                _startIncomingCallRefreshTimer(number, contactName);
+              }
+            } catch (e) {
+              log('[CallStateManager] 타이머에서 수신 전화 노티피케이션 표시 오류: $e');
+            }
+
             // UI에 인코밍 상태 알림
             if (_uiInitialized) {
               _updateUiCallState(
@@ -500,6 +557,16 @@ class CallStateManager {
 
             // 타이머 중지
             _callTimer.stopCallTimer();
+
+            // 수신 전화 노티피케이션 취소
+            try {
+              await LocalNotificationService.cancelNotification(
+                CALL_STATUS_NOTIFICATION_ID,
+              );
+              log('[CallStateManager] 수신 전화 노티피케이션 취소 성공');
+            } catch (e) {
+              log('[CallStateManager] 수신 전화 노티피케이션 취소 오류: $e');
+            }
 
             // UI 업데이트 메시지 전송
             if (_uiInitialized) {
@@ -696,5 +763,109 @@ class CallStateManager {
     _cachedIncomingTimestamp = DateTime.now().millisecondsSinceEpoch;
 
     log('[CallStateManager][CRITICAL] 상태 초기화 완료 후 설정: $_cachedCallNumber');
+  }
+
+  // 인코밍 콜 알림 주기적으로 갱신하는 타이머 시작
+  void _startIncomingCallRefreshTimer(String phoneNumber, String callerName) {
+    // 이미 실행 중인 타이머가 있으면 취소
+    _stopIncomingCallRefreshTimer();
+
+    // 카운터 초기화
+    _incomingCallNotificationCount = 1; // 이미 한 번 표시했으므로 1부터 시작
+
+    // 3초마다 알림 갱신 (20번까지)
+    _incomingCallRefreshTimer = Timer.periodic(const Duration(seconds: 3), (
+      timer,
+    ) async {
+      // 최대 20회까지만 알림 표시 (약 60초)
+      if (_incomingCallNotificationCount >= 20) {
+        _stopIncomingCallRefreshTimer();
+        return;
+      }
+
+      // 연락처 이름이 없으면 다시 가져오기 시도 (매 2회마다)
+      String updatedName = callerName;
+      if (callerName.isEmpty && _incomingCallNotificationCount % 2 == 0) {
+        updatedName = await _getContactName(phoneNumber);
+        if (updatedName.isNotEmpty) {
+          callerName = updatedName; // 이름을 가져왔으면 업데이트
+        }
+      }
+
+      try {
+        await LocalNotificationService.showIncomingCallNotification(
+          phoneNumber: phoneNumber,
+          callerName: updatedName,
+        );
+        log(
+          '[CallStateManager] 수신 전화 노티피케이션 갱신 성공 (${_incomingCallNotificationCount}/20)',
+        );
+        _incomingCallNotificationCount++;
+      } catch (e) {
+        log('[CallStateManager] 수신 전화 노티피케이션 갱신 오류: $e');
+      }
+
+      // 현재 전화 상태 확인하여 RINGING이 아니면 타이머 정지
+      try {
+        final callState = await _getCurrentCallStateFromNative();
+        if (callState != null) {
+          final String state = callState['state'] as String? ?? 'IDLE';
+          if (state.toUpperCase() != 'RINGING') {
+            log('[CallStateManager] RINGING 상태가 아님. 갱신 타이머 정지');
+            _stopIncomingCallRefreshTimer();
+
+            // 알림 취소
+            await LocalNotificationService.cancelNotification(
+              CALL_STATUS_NOTIFICATION_ID,
+            );
+          }
+        }
+      } catch (e) {
+        log('[CallStateManager] 통화 상태 확인 중 오류: $e');
+      }
+    });
+
+    log('[CallStateManager] 수신 전화 노티피케이션 갱신 타이머 시작');
+  }
+
+  // 인코밍 콜 알림 갱신 타이머 정지
+  void _stopIncomingCallRefreshTimer() {
+    if (_incomingCallRefreshTimer?.isActive ?? false) {
+      _incomingCallRefreshTimer!.cancel();
+      _incomingCallRefreshTimer = null;
+      log('[CallStateManager] 수신 전화 노티피케이션 갱신 타이머 정지');
+    }
+  }
+
+  // 연락처 이름 조회 (백그라운드에서)
+  Future<String> _getContactName(String phoneNumber) async {
+    try {
+      // 메인 앱에 연락처 조회 요청
+      _service.invoke('requestContactName', {'phoneNumber': phoneNumber});
+
+      // 응답 기다리기
+      final completer = Completer<String>();
+      StreamSubscription? subscription;
+
+      subscription = _service.on('responseContactName').listen((event) {
+        final name = event?['contactName'] as String? ?? '';
+        if (!completer.isCompleted) {
+          completer.complete(name);
+          subscription?.cancel();
+        }
+      });
+
+      // 2초 타임아웃 설정
+      return await completer.future.timeout(
+        const Duration(seconds: 2),
+        onTimeout: () {
+          subscription?.cancel();
+          return '';
+        },
+      );
+    } catch (e) {
+      log('[CallStateManager] Error getting contact name: $e');
+      return '';
+    }
   }
 }

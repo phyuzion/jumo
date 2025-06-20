@@ -214,6 +214,16 @@ Future<void> _initializeNotificationChannels() async {
             showBadge: true,
           );
 
+      // 수신 전화 알림 채널 추가
+      const AndroidNotificationChannel incomingCallChannel =
+          AndroidNotificationChannel(
+            'incoming_call_channel_id',
+            '수신 전화',
+            description: '수신 전화 알림',
+            importance: Importance.max,
+            showBadge: true,
+          );
+
       final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
           FlutterLocalNotificationsPlugin();
 
@@ -237,10 +247,15 @@ Future<void> _initializeNotificationChannels() async {
           notificationChannel,
         );
 
+        // 수신 전화 채널 생성
+        await androidNotifications.createNotificationChannel(
+          incomingCallChannel,
+        );
+
         // 알림 설정 초기화도 함께 진행
         await flutterLocalNotificationsPlugin.initialize(
           const InitializationSettings(
-            android: AndroidInitializationSettings('ic_bg_service_small'),
+            android: AndroidInitializationSettings('app_icon'),
             iOS: DarwinInitializationSettings(),
           ),
           onDidReceiveNotificationResponse: (details) {
@@ -499,9 +514,42 @@ class _MyAppStatefulState extends State<MyAppStateful>
         );
       } else {
         log(
-          '[_MyAppStatefulState] Received invalid state from background: $stateStr',
+          '[_MyAppStatefulState] Invalid state received from background service: $stateStr',
         );
       }
+    });
+
+    // 연락처 이름 조회 요청 리스너 추가
+    service.on('requestContactName').listen((event) async {
+      if (!mounted) return;
+
+      final phoneNumber = event?['phoneNumber'] as String?;
+      if (phoneNumber == null || phoneNumber.isEmpty) {
+        log(
+          '[_MyAppStatefulState] Invalid phone number request from background',
+        );
+        return;
+      }
+
+      log('[_MyAppStatefulState] Contact name request for: $phoneNumber');
+
+      String contactName = '';
+      try {
+        // ContactsController를 통해 이름 조회
+        final contactsController = context.read<ContactsController>();
+        contactName = await contactsController.getContactName(phoneNumber);
+        log('[_MyAppStatefulState] Contact name found: $contactName');
+      } catch (e) {
+        log('[_MyAppStatefulState] Error fetching contact name: $e');
+      }
+
+      // 결과 전송 (빈 문자열이라도 전송)
+      service.invoke('responseContactName', {'contactName': contactName});
+    });
+
+    // 핸드쉐이크: 메인 앱이 초기화되었음을 알림
+    service.invoke('appInitialized', {
+      'timestamp': DateTime.now().millisecondsSinceEpoch,
     });
 
     // 모듈화된 리스너 서비스 초기화

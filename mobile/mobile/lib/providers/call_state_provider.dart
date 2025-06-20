@@ -13,6 +13,9 @@ import 'package:mobile/utils/app_event_bus.dart';
 // 통화 상태 enum 정의 (HomeScreen에서 가져옴 - 여기서 관리하는 것이 더 적절)
 enum CallState { idle, incoming, active, ended }
 
+// 로컬 노티피케이션용 상수 (local_notification_service.dart에 정의된 값과 일치시킴)
+const int INCOMING_CALL_NOTIFICATION_ID = 9876;
+
 class CallStateProvider with ChangeNotifier {
   final PhoneStateController phoneStateController;
   final CallLogController callLogController;
@@ -216,9 +219,34 @@ class CallStateProvider with ChangeNotifier {
           _isPopupVisible = false;
         }
         _cancelEndedStateTimer();
+
+        // 수신 전화 노티피케이션 표시
+        if (state == CallState.incoming) {
+          try {
+            log(
+              '[CallStateProvider] 수신 전화 노티피케이션 표시 시도: $_number, $_callerName',
+            );
+            await LocalNotificationService.showIncomingCallNotification(
+              phoneNumber: _number,
+              callerName: _callerName,
+            );
+          } catch (e) {
+            log('[CallStateProvider] 수신 전화 노티피케이션 표시 오류: $e');
+          }
+        }
       } else if (state == CallState.ended) {
         _isPopupVisible = true;
         _startEndedStateTimer();
+
+        // 통화가 종료되면 수신 전화 노티피케이션 취소
+        try {
+          await LocalNotificationService.cancelNotification(
+            INCOMING_CALL_NOTIFICATION_ID,
+          );
+        } catch (e) {
+          log('[CallStateProvider] 수신 전화 노티피케이션 취소 오류: $e');
+        }
+
         if (_callEndReason == 'missed') {
           final notificationId = _number.hashCode;
           LocalNotificationService.showMissedCallNotification(
@@ -237,6 +265,15 @@ class CallStateProvider with ChangeNotifier {
         // idle
         _isPopupVisible = false;
         _cancelEndedStateTimer();
+
+        // idle 상태로 전환되면 수신 전화 노티피케이션 취소
+        try {
+          await LocalNotificationService.cancelNotification(
+            INCOMING_CALL_NOTIFICATION_ID,
+          );
+        } catch (e) {
+          log('[CallStateProvider] 수신 전화 노티피케이션 취소 오류: $e');
+        }
       }
     }
     // --- 상태 전환 시 1회성 작업 끝 ---
@@ -270,6 +307,24 @@ class CallStateProvider with ChangeNotifier {
           log(
             '[CallStateProvider] Fetched and updated callerName to: $fetchedName for $number',
           );
+
+          // 이름이 업데이트되면 현재 표시 중인 노티피케이션도 업데이트
+          if (_callState == CallState.incoming) {
+            try {
+              await LocalNotificationService.showIncomingCallNotification(
+                phoneNumber: number,
+                callerName: fetchedName,
+              );
+              log(
+                '[CallStateProvider] Updated incoming call notification with new name: $fetchedName',
+              );
+            } catch (e) {
+              log(
+                '[CallStateProvider] Error updating notification with new name: $e',
+              );
+            }
+          }
+
           notifyListeners(); // 이름이 실제로 변경되었으므로 알림
         }
       } else {

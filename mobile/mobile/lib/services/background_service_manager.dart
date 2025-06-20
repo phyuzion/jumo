@@ -39,6 +39,16 @@ class AppBackgroundService {
             showBadge: false,
           );
 
+      // 수신 전화 알림 채널 추가
+      const AndroidNotificationChannel incomingCallChannel =
+          AndroidNotificationChannel(
+            'incoming_call_channel_id',
+            '수신 전화',
+            description: '수신 전화 알림',
+            importance: Importance.max,
+            showBadge: false,
+          );
+
       final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
           FlutterLocalNotificationsPlugin();
 
@@ -55,6 +65,10 @@ class AppBackgroundService {
         await androidNotifications.createNotificationChannel(
           notificationChannel,
         );
+        // 수신 전화 채널 추가
+        await androidNotifications.createNotificationChannel(
+          incomingCallChannel,
+        );
 
         log('[AppBackgroundService] All notification channels created');
       } else {
@@ -66,7 +80,7 @@ class AppBackgroundService {
       // 2. 알림 초기화
       await flutterLocalNotificationsPlugin.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('ic_bg_service_small'),
+          android: AndroidInitializationSettings('app_icon'),
           iOS: DarwinInitializationSettings(),
         ),
         onDidReceiveNotificationResponse: (details) {
