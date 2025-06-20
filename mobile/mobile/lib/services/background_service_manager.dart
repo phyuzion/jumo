@@ -97,11 +97,16 @@ class AppBackgroundService {
           onStart: onStart,
           autoStartOnBoot: false,
           autoStart: false, // 원본대로 false로 변경
-          isForegroundMode: true, // 중요: foreground 모드 활성화
+          isForegroundMode: false, // 중요: foreground 모드 활성화
           notificationChannelId: FOREGROUND_SERVICE_CHANNEL_ID,
           initialNotificationTitle: 'KOLPON',
           initialNotificationContent: '',
           foregroundServiceNotificationId: FOREGROUND_SERVICE_NOTIFICATION_ID,
+          foregroundServiceTypes: [
+            AndroidForegroundType.phoneCall,
+            AndroidForegroundType.dataSync,
+            AndroidForegroundType.specialUse,
+          ],
         ),
         iosConfiguration: IosConfiguration(
           autoStart: false, // 원본대로 false로 변경

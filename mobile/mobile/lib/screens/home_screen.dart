@@ -35,6 +35,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   StreamSubscription? _notificationSub;
   bool _isDefaultDialer = false;
 
+  // 서비스 상태 확인 타이머 추가
+  Timer? _serviceCheckTimer;
+  bool _isServiceRunning = true;
+
   final _searchController = TextEditingController();
   final _searchFocusNode = FocusNode();
 
@@ -55,6 +59,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initializeHomeScreen();
     _checkDefaultDialer();
+    // 서비스 상태 확인 타이머 시작
+    _startServiceCheckTimer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadNotificationCount();
       _notificationSub = appEventBus.on<NotificationCountUpdatedEvent>().listen(
@@ -73,7 +79,61 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _notificationSub?.cancel();
     _searchController.dispose();
     _searchFocusNode.dispose();
+    // 타이머 정리
+    _serviceCheckTimer?.cancel();
     super.dispose();
+  }
+
+  // 서비스 상태 확인 타이머 시작
+  void _startServiceCheckTimer() {
+    _serviceCheckTimer = Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => _checkAndRestartServiceIfNeeded(),
+    );
+    log('[HomeScreen] Service check timer started (checks every 2 seconds)');
+  }
+
+  // 서비스 상태 확인 및 필요시 재시작
+  Future<void> _checkAndRestartServiceIfNeeded() async {
+    try {
+      final service = FlutterBackgroundService();
+      final isRunning = await service.isRunning();
+
+      if (_isServiceRunning != isRunning) {
+        setState(() {
+          _isServiceRunning = isRunning;
+        });
+      }
+
+      if (!isRunning) {
+        log(
+          '[HomeScreen][CRITICAL] Background service is not running, attempting to restart',
+        );
+        await _restartBackgroundService();
+      }
+    } catch (e) {
+      log('[HomeScreen] Error checking service status: $e');
+    }
+  }
+
+  // 백그라운드 서비스 재시작
+  Future<void> _restartBackgroundService() async {
+    try {
+      final appController = context.read<AppController>();
+      await appController.startBackgroundService();
+      log('[HomeScreen] Background service restarted successfully');
+
+      // 서비스 재시작 후 통화 상태 확인
+      final phoneStateController = context.read<PhoneStateController>();
+      await phoneStateController.syncInitialCallState();
+      log('[HomeScreen] Call state synced after service restart');
+
+      setState(() {
+        _isServiceRunning = true;
+      });
+    } catch (e) {
+      log('[HomeScreen][CRITICAL] Failed to restart background service: $e');
+    }
   }
 
   @override
@@ -101,6 +161,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
       // 캐싱된 상태 확인은 항상 실행 (타이머에 영향 없음)
       _checkCachedCallState();
+
+      // 서비스 상태 확인
+      _checkAndRestartServiceIfNeeded();
 
       log('[HomeScreen] App resumed, updated contacts and UI state.');
     }
@@ -358,6 +421,32 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
               ),
           ],
         ),
+        // 백그라운드 서비스 상태 인디케이터 추가 (디버깅용)
+        if (!_isServiceRunning)
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.red,
+                ),
+                onPressed: _restartBackgroundService,
+              ),
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(45),

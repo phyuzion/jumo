@@ -447,13 +447,46 @@ class CallStateProvider with ChangeNotifier {
   // 리셋 이벤트 핸들러
   void _handleResetEvent(CallSearchResetEvent event) {
     log('[CallStateProvider][CRITICAL] 검색 데이터 리셋 이벤트 수신: ${event.phoneNumber}');
-    if (event.phoneNumber.isNotEmpty &&
-        _number.isNotEmpty &&
-        event.phoneNumber != _number) {
-      // 현재 표시 중인 전화번호와 다른 번호가 들어온 경우
-      log(
-        '[CallStateProvider][CRITICAL] 기존 번호($_number)와 다른 새 번호(${event.phoneNumber}) 감지. 상태 리셋.',
-      );
+
+    // 이벤트에 전화번호가 포함된 경우 (실제 전화 이벤트)
+    if (event.phoneNumber.isNotEmpty) {
+      // 현재 표시 중인 번호와 다른 번호가 들어온 경우 전체 상태 리셋
+      if (_number.isNotEmpty && event.phoneNumber != _number) {
+        log(
+          '[CallStateProvider][CRITICAL] 기존 번호($_number)와 다른 새 번호(${event.phoneNumber}) 감지. 상태 리셋.',
+        );
+        resetState();
+      }
+
+      // 새 전화 상태로 업데이트 (상태 증진)
+      log('[CallStateProvider][CRITICAL] 새 전화 번호 감지. 통화 상태 업데이트 시작');
+
+      // 현재 상태에 따라 적절한 다음 상태로 전환
+      CallState newState;
+
+      if (_callState == CallState.idle || _callState == CallState.ended) {
+        // 현재 앱이 foreground에서 실행 중이고 전화가 감지된 경우
+        // Native 통화 상태에 따라 결정 (기본값은 ACTIVE로 설정)
+        newState = CallState.active;
+
+        // 번호는 이벤트에서 온 번호로 설정
+        updateCallState(
+          state: newState,
+          number: event.phoneNumber,
+          callerName: '', // 이름은 비워두고 나중에 조회
+          isConnected: false, // 초기에는 연결되지 않은 것으로 설정
+        );
+
+        // 팝업 표시를 통해 UI에 즉시 반영
+        _isPopupVisible = true;
+
+        log(
+          '[CallStateProvider] 통화 상태 업데이트됨: $_callState, 번호: $event.phoneNumber, 팝업: $_isPopupVisible',
+        );
+      }
+    } else {
+      // 빈 번호의 이벤트인 경우 (일반적인 초기화 요청)
+      log('[CallStateProvider][CRITICAL] 전체 상태 명시적 초기화');
       resetState();
     }
   }

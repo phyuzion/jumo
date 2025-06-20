@@ -95,7 +95,7 @@
         <!-- flutter_background_service -->
         <service
             android:name="id.flutter.flutter_background_service.BackgroundService"
-            android:foregroundServiceType="phoneCall|dataSync"
+            android:foregroundServiceType="phoneCall|dataSync|specialUse"
             android:exported="true"
         />
 
