@@ -83,7 +83,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _searchFocusNode.unfocus();
       _loadNotificationCount();
       context.read<ContactsController>().syncContacts();
-      log('[HomeScreen] App resumed, called syncContacts.');
+
+      // 현재 통화 상태 확인
+      final callStateProvider = context.read<CallStateProvider>();
+      final currentCallState = callStateProvider.callState;
+
+      // 앱이 resume될 때 통화 중이 아닐 때만 통화 상태 동기화
+      if (currentCallState != CallState.active) {
+        final phoneStateController = context.read<PhoneStateController>();
+        phoneStateController.syncInitialCallState();
+        log('[HomeScreen] App resumed, synced call state (not in active call)');
+      } else {
+        log(
+          '[HomeScreen] App resumed, skipped call state sync (in active call)',
+        );
+      }
+
+      // 캐싱된 상태 확인은 항상 실행 (타이머에 영향 없음)
+      _checkCachedCallState();
+
+      log('[HomeScreen] App resumed, updated contacts and UI state.');
     }
   }
 
