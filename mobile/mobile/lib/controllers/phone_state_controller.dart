@@ -12,6 +12,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:mobile/controllers/app_controller.dart';
 import 'package:mobile/utils/app_event_bus.dart';
+import 'package:mobile/services/local_notification_service.dart';
 
 class PhoneStateController with WidgetsBindingObserver {
   final GlobalKey<NavigatorState> navigatorKey;
@@ -37,6 +38,9 @@ class PhoneStateController with WidgetsBindingObserver {
       log('[PhoneStateController][CRITICAL] 검색 데이터 리셋 요청 수신');
       appEventBus.fire(CallSearchResetEvent(''));
     });
+
+    // 정기적인 통화 상태 체크 타이머 시작
+    _startCallStateCheckTimer();
   }
 
   StreamSubscription<PhoneState>? _phoneStateSubscription;
@@ -46,6 +50,16 @@ class PhoneStateController with WidgetsBindingObserver {
   PhoneStateStatus? _lastProcessedStatus;
   DateTime? _lastProcessedTime;
   String? _rejectedNumber;
+
+  // 인코밍 콜 노티피케이션 주기적 갱신을 위한 타이머
+  Timer? _incomingCallRefreshTimer;
+  int _incomingCallNotificationCount = 0;
+  String _currentIncomingNumber = '';
+  String _currentIncomingCallerName = '';
+
+  // 통화 상태 정기 체크 타이머 추가
+  Timer? _callStateCheckTimer;
+  DateTime? _lastCallStateCheckTime;
 
   void startListening() {
     _phoneStateSubscription?.cancel();
@@ -65,6 +79,11 @@ class PhoneStateController with WidgetsBindingObserver {
     log(
       '[PhoneStateController.startListening] Listening to phone state stream.',
     );
+
+    // 통화 상태 체크 타이머가 실행 중이 아니면 시작
+    if (_callStateCheckTimer == null || !_callStateCheckTimer!.isActive) {
+      _startCallStateCheckTimer();
+    }
   }
 
   void stopListening() {
@@ -72,7 +91,79 @@ class PhoneStateController with WidgetsBindingObserver {
     _phoneStateSubscription = null;
     _searchResetSubscription?.cancel();
     _searchResetSubscription = null;
+    _stopIncomingCallRefreshTimer(); // 인코밍 콜 타이머 정리
+
+    // 통화 상태 체크 타이머도 정리
+    if (_callStateCheckTimer?.isActive ?? false) {
+      _callStateCheckTimer!.cancel();
+      _callStateCheckTimer = null;
+      log('[PhoneStateController] 정기 통화 상태 체크 타이머 정지');
+    }
+
     log('[PhoneStateController] Stopped listening to phone state stream.');
+  }
+
+  // 인코밍 콜 노티피케이션 갱신 타이머 시작
+  void _startIncomingCallRefreshTimer(String phoneNumber, String callerName) {
+    // 이미 실행 중인 타이머가 있으면 취소
+    _stopIncomingCallRefreshTimer();
+
+    // 현재 인코밍 정보 저장
+    _currentIncomingNumber = phoneNumber;
+    _currentIncomingCallerName = callerName;
+
+    // 카운터 초기화
+    _incomingCallNotificationCount = 1; // 이미 한 번 표시했으므로 1부터 시작
+
+    // 3초마다 알림 갱신 (최대 20번, 약 60초)
+    _incomingCallRefreshTimer = Timer.periodic(const Duration(seconds: 3), (
+      timer,
+    ) async {
+      // 최대 20회까지만 알림 표시
+      if (_incomingCallNotificationCount >= 20) {
+        _stopIncomingCallRefreshTimer();
+        return;
+      }
+
+      // 연락처 이름이 없으면 매 2회마다 다시 가져오기 시도
+      String updatedName = _currentIncomingCallerName;
+      if (_currentIncomingCallerName.isEmpty &&
+          _incomingCallNotificationCount % 2 == 0) {
+        updatedName = await contactsController.getContactName(
+          _currentIncomingNumber,
+        );
+        if (updatedName.isNotEmpty) {
+          _currentIncomingCallerName = updatedName; // 이름 업데이트
+        }
+      }
+
+      try {
+        await LocalNotificationService.showIncomingCallNotification(
+          phoneNumber: _currentIncomingNumber,
+          callerName: updatedName,
+        );
+        log(
+          '[PhoneStateController] 수신 전화 노티피케이션 갱신 성공 (${_incomingCallNotificationCount}/20)',
+        );
+        _incomingCallNotificationCount++;
+      } catch (e) {
+        log('[PhoneStateController] 수신 전화 노티피케이션 갱신 오류: $e');
+      }
+    });
+
+    log('[PhoneStateController] 수신 전화 노티피케이션 갱신 타이머 시작');
+  }
+
+  // 인코밍 콜 노티피케이션 갱신 타이머 정지
+  void _stopIncomingCallRefreshTimer() {
+    if (_incomingCallRefreshTimer?.isActive ?? false) {
+      _incomingCallRefreshTimer!.cancel();
+      _incomingCallRefreshTimer = null;
+      log('[PhoneStateController] 수신 전화 노티피케이션 갱신 타이머 정지');
+    }
+    _currentIncomingNumber = '';
+    _currentIncomingCallerName = '';
+    _incomingCallNotificationCount = 0;
   }
 
   Future<void> handleNativeEvent(
@@ -113,9 +204,29 @@ class PhoneStateController with WidgetsBindingObserver {
             connected
                 ? PhoneStateStatus.CALL_STARTED
                 : PhoneStateStatus.CALL_STARTED;
+        // 통화가 시작되면 수신 전화 노티피케이션 취소 및 타이머 정지
+        _stopIncomingCallRefreshTimer();
+        try {
+          await LocalNotificationService.cancelNotification(
+            9876,
+          ); // INCOMING_CALL_NOTIFICATION_ID
+          log('[PhoneStateController] 통화 시작으로 수신 전화 노티피케이션 취소');
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+        }
         break;
       case 'onCallEnded':
         status = PhoneStateStatus.CALL_ENDED;
+        // 통화 종료 시 남은 노티피케이션 및 타이머 정리
+        _stopIncomingCallRefreshTimer();
+        try {
+          await LocalNotificationService.cancelNotification(
+            9876,
+          ); // INCOMING_CALL_NOTIFICATION_ID
+          log('[PhoneStateController] 통화 종료로 수신 전화 노티피케이션 취소');
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+        }
         break;
     }
 
@@ -245,6 +356,34 @@ class PhoneStateController with WidgetsBindingObserver {
         return;
       }
       // log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
+
+      // 수신 전화 노티피케이션 표시 및 타이머 시작
+      try {
+        log('[PhoneStateController] 수신 전화 노티피케이션 표시 시도: $normalizedNumber');
+        // 연락처 이름 가져오기
+        String callerName = await contactsController.getContactName(
+          normalizedNumber!,
+        );
+        await LocalNotificationService.showIncomingCallNotification(
+          phoneNumber: normalizedNumber,
+          callerName: callerName,
+        );
+        log('[PhoneStateController] 수신 전화 노티피케이션 표시 성공');
+
+        // 노티피케이션 갱신 타이머 시작
+        _startIncomingCallRefreshTimer(normalizedNumber, callerName);
+      } catch (e) {
+        log('[PhoneStateController] 수신 전화 노티피케이션 표시 오류: $e');
+      }
+    } else if (status == PhoneStateStatus.CALL_STARTED) {
+      // 통화 시작 시 인코밍 콜 노티피케이션 취소 및 타이머 정지
+      _stopIncomingCallRefreshTimer();
+      try {
+        await LocalNotificationService.cancelNotification(9876);
+        log('[PhoneStateController] 통화 시작으로 수신 전화 노티피케이션 취소');
+      } catch (e) {
+        log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+      }
     }
 
     final String callerName = '';
@@ -256,6 +395,14 @@ class PhoneStateController with WidgetsBindingObserver {
       case PhoneStateStatus.NOTHING:
         newState = CallState.idle;
         stateMethod = 'onCallEnded';
+        // NOTHING 상태로 변경 시에도 인코밍 콜 정리
+        _stopIncomingCallRefreshTimer();
+        try {
+          await LocalNotificationService.cancelNotification(9876);
+          log('[PhoneStateController] 상태 초기화로 수신 전화 노티피케이션 취소');
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+        }
         break;
       case PhoneStateStatus.CALL_INCOMING:
         newState = CallState.incoming;
@@ -268,6 +415,16 @@ class PhoneStateController with WidgetsBindingObserver {
       case PhoneStateStatus.CALL_ENDED:
         newState = CallState.ended;
         stateMethod = 'onCallEnded';
+        // 통화 종료 시 수신 전화 노티피케이션 취소
+        _stopIncomingCallRefreshTimer();
+        try {
+          await LocalNotificationService.cancelNotification(
+            9876,
+          ); // INCOMING_CALL_NOTIFICATION_ID
+          log('[PhoneStateController] 통화 종료로 수신 전화 노티피케이션 취소');
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+        }
         break;
     }
 
@@ -419,6 +576,27 @@ class PhoneStateController with WidgetsBindingObserver {
           // 발신자 정보 초기화 이벤트 트리거
           appEventBus.fire(CallSearchResetEvent(normalizedNumber));
 
+          // 수신 전화 노티피케이션 표시 및 타이머 시작
+          try {
+            log(
+              '[PhoneStateController] 앱 시작/재개 시 수신 전화 노티피케이션 표시 시도: $normalizedNumber',
+            );
+            // 연락처 이름 가져오기
+            callerName = await contactsController.getContactName(
+              normalizedNumber,
+            );
+            await LocalNotificationService.showIncomingCallNotification(
+              phoneNumber: normalizedNumber,
+              callerName: callerName,
+            );
+            log('[PhoneStateController] 수신 전화 노티피케이션 표시 성공');
+
+            // 노티피케이션 갱신 타이머 시작
+            _startIncomingCallRefreshTimer(normalizedNumber, callerName);
+          } catch (e) {
+            log('[PhoneStateController] 수신 전화 노티피케이션 표시 오류: $e');
+          }
+
           // 통화 상태 알림을 백그라운드 서비스에 전송
           notifyServiceCallState(
             'onIncomingNumber',
@@ -436,6 +614,15 @@ class PhoneStateController with WidgetsBindingObserver {
           // 발신자 정보 초기화 이벤트 트리거
           appEventBus.fire(CallSearchResetEvent(normalizedNumber));
 
+          // 통화 중이므로 인코밍 콜 노티피케이션 취소 및 타이머 정지
+          _stopIncomingCallRefreshTimer();
+          try {
+            await LocalNotificationService.cancelNotification(9876);
+            log('[PhoneStateController] 활성 통화 상태에서 수신 전화 노티피케이션 취소');
+          } catch (e) {
+            log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+          }
+
           // 통화 상태 알림을 백그라운드 서비스에 전송
           notifyServiceCallState(
             'onCall',
@@ -452,6 +639,15 @@ class PhoneStateController with WidgetsBindingObserver {
 
           // 발신자 정보 초기화 이벤트 트리거
           appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+          // 통화 중이므로 인코밍 콜 노티피케이션 취소 및 타이머 정지
+          _stopIncomingCallRefreshTimer();
+          try {
+            await LocalNotificationService.cancelNotification(9876);
+            log('[PhoneStateController] 홀드 상태에서 수신 전화 노티피케이션 취소');
+          } catch (e) {
+            log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+          }
 
           // 홀드 상태는 ACTIVE 상태로 간주하고 connected = true로 설정
           notifyServiceCallState(
@@ -471,5 +667,134 @@ class PhoneStateController with WidgetsBindingObserver {
     } catch (e) {
       log('[PhoneStateController] Error syncing initial call state: $e');
     }
+  }
+
+  // 정기적인 통화 상태 체크 타이머 시작
+  void _startCallStateCheckTimer() {
+    _callStateCheckTimer?.cancel();
+
+    // 2초마다 현재 통화 상태 체크
+    _callStateCheckTimer = Timer.periodic(const Duration(seconds: 2), (
+      _,
+    ) async {
+      final now = DateTime.now();
+
+      // 마지막 체크 이후 너무 짧은 시간이 지났으면 스킵 (최소 1.5초)
+      if (_lastCallStateCheckTime != null &&
+          now.difference(_lastCallStateCheckTime!).inMilliseconds < 1500) {
+        return;
+      }
+
+      _lastCallStateCheckTime = now;
+
+      try {
+        final callDetails = await NativeMethods.getCurrentCallState();
+        log('[PhoneStateController] 정기 통화 상태 체크 결과: $callDetails');
+
+        final state = callDetails['state'] as String? ?? 'IDLE';
+        final number = callDetails['number'] as String?;
+
+        // RINGING 상태이고 전화번호가 있는 경우
+        if (state == 'RINGING' && number != null && number.isNotEmpty) {
+          final normalizedNumber = normalizePhone(number);
+
+          // 차단된 번호인지 확인
+          bool isBlocked = false;
+          try {
+            isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
+              normalizedNumber,
+              addHistory: false, // 기록은 실제 전화 이벤트 처리 시에만 추가
+            );
+          } catch (e) {
+            log('[PhoneStateController] Error checking block status: $e');
+          }
+
+          if (isBlocked) {
+            log(
+              '[PhoneStateController] Call from $normalizedNumber is BLOCKED.',
+            );
+            try {
+              await NativeMethods.rejectCall();
+              log(
+                '[PhoneStateController] Rejected blocked call from timer check.',
+              );
+            } catch (e) {
+              log('[PhoneStateController] Error rejecting call: $e');
+            }
+            return;
+          }
+
+          // 현재 표시 중인 번호와 같으면 갱신하지 않음 (타이머에서 이미 처리 중)
+          if (_currentIncomingNumber == normalizedNumber &&
+              _incomingCallRefreshTimer != null) {
+            log(
+              '[PhoneStateController] 이미 같은 번호로 노티피케이션 표시 중: $normalizedNumber',
+            );
+            return;
+          }
+
+          // 수신 전화 노티피케이션 표시 및 타이머 시작
+          try {
+            log('[PhoneStateController] 정기 체크에서 수신 전화 감지: $normalizedNumber');
+
+            // 발신자 정보 초기화 이벤트 트리거 (UI에 알림)
+            appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+            // 연락처 이름 가져오기
+            String callerName = await contactsController.getContactName(
+              normalizedNumber,
+            );
+            await LocalNotificationService.showIncomingCallNotification(
+              phoneNumber: normalizedNumber,
+              callerName: callerName,
+            );
+            log('[PhoneStateController] 정기 체크 후 수신 전화 노티피케이션 표시 성공');
+
+            // 노티피케이션 갱신 타이머 시작
+            _startIncomingCallRefreshTimer(normalizedNumber, callerName);
+
+            // 백그라운드 서비스에도 알림
+            notifyServiceCallState(
+              'onIncomingNumber',
+              normalizedNumber,
+              callerName,
+            );
+          } catch (e) {
+            log('[PhoneStateController] 정기 체크 후 수신 전화 노티피케이션 표시 오류: $e');
+          }
+        }
+        // RINGING이 아닌데 노티피케이션 표시 중이면 취소
+        else if (state != 'RINGING' && _incomingCallRefreshTimer != null) {
+          log('[PhoneStateController] 정기 체크: RINGING 아님, 노티피케이션 정리');
+          _stopIncomingCallRefreshTimer();
+          try {
+            await LocalNotificationService.cancelNotification(9876);
+            log('[PhoneStateController] 정기 체크 후 수신 전화 노티피케이션 취소');
+          } catch (e) {
+            log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+          }
+
+          // ACTIVE 상태로 변경된 경우
+          if ((state == 'ACTIVE' || state == 'DIALING') &&
+              number != null &&
+              number.isNotEmpty) {
+            log('[PhoneStateController] 정기 체크: 통화 활성화 감지');
+            final normalizedNumber = normalizePhone(number);
+
+            // 백그라운드 서비스에 통화 시작 알림
+            notifyServiceCallState(
+              'onCall',
+              normalizedNumber,
+              '',
+              connected: state == 'ACTIVE',
+            );
+          }
+        }
+      } catch (e) {
+        log('[PhoneStateController] 정기 통화 상태 체크 오류: $e');
+      }
+    });
+
+    log('[PhoneStateController] 정기 통화 상태 체크 타이머 시작 (2초 간격)');
   }
 }
