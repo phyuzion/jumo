@@ -303,6 +303,31 @@ module.exports = {
         return Object.values(recordObj);
       };
 
+      // 이름이 같은 레코드 중 가장 최신 시간의 레코드만 선택하는 함수
+      const filterSameNameRecords = (records) => {
+        if (!records || !records.length) return [];
+        
+        // 일반 객체 사용
+        const recordObj = {};
+        
+        for (const record of records) {
+          const key = `${record.name || ''}`;  // 이름만으로 키 생성
+          const existingRecord = recordObj[key];
+          
+          // Date 객체로 변환 (문자열 또는 Date 객체 모두 지원)
+          const currentDate = record.createdAt instanceof Date ? 
+            record.createdAt : new Date(record.createdAt);
+            
+          if (!existingRecord || 
+              (existingRecord.createdAt instanceof Date ? 
+                existingRecord.createdAt : new Date(existingRecord.createdAt)) < currentDate) {
+            recordObj[key] = record;
+          }
+        }
+        
+        return Object.values(recordObj);
+      };
+
       // PhoneNumber 정보가 없는 경우
       if (!phoneDoc) {
         return {
@@ -319,11 +344,13 @@ module.exports = {
       
       // PhoneNumber 정보가 있는 경우
       const filteredRecords = filterLatestRecords(phoneDoc.records);
+      // 이름이 같은 레코드 중 최신 것만 추가 필터링
+      const finalFilteredRecords = filterSameNameRecords(filteredRecords);
       
       return {
         ...phoneDoc,
         id: phoneDoc._id.toString(),
-        records: filteredRecords.map(r => ({
+        records: finalFilteredRecords.map(r => ({
           ...r,
           createdAt: r.createdAt?.toISOString()
         })),

@@ -6,7 +6,10 @@ const { ApolloServer } = require('apollo-server-express');
 const { graphqlUploadExpress } = require('graphql-upload');
 const jwt = require('jsonwebtoken');
 const rateLimit = require('express-rate-limit');
-const { ApolloServerPluginLandingPageProductionDefault } = require('apollo-server-core');
+const { 
+  ApolloServerPluginLandingPageProductionDefault,
+  ApolloServerPluginLandingPageDisabled 
+} = require('apollo-server-core');
 
 const connectDB = require('./config/db');
 const { typeDefs, resolvers } = require('./graphql');
@@ -53,13 +56,14 @@ async function startServer() {
   const server = new ApolloServer({
     typeDefs,
     resolvers,
-    introspection: true,
+    introspection: false, // 프로덕션 환경에서는 introspection을 비활성화
+    playground: false, // 명시적으로 playground 비활성화 (Apollo Server v2/v3)
     plugins: [
-      ApolloServerPluginLandingPageProductionDefault({
-        embed: true,
-        footer: false
-      })
+      ApolloServerPluginLandingPageDisabled() // Apollo Server v4 이상에서 랜딩 페이지 비활성화
     ],
+    includeStacktraceInErrorResponses: false, // 에러 응답에 스택 트레이스 포함 안 함
+    csrfPrevention: true, // CSRF 방지 활성화
+    cache: 'bounded', // 캐시 설정
     context: async ({ req }) => {
       const authHeader = req.headers.authorization || '';
       const tokenData = await getUserFromToken(authHeader);
@@ -68,6 +72,7 @@ async function startServer() {
   });
 
   await server.start();
+  
   server.applyMiddleware({ app, path: '/graphql' });
 
   app.listen(PORT, () => {
