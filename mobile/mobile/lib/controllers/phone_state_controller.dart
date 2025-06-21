@@ -192,11 +192,43 @@ class PhoneStateController with WidgetsBindingObserver {
     switch (method) {
       case 'onIncomingNumber':
         status = PhoneStateStatus.CALL_INCOMING;
+
+        // 먼저 차단 확인을 수행하고, 차단된 번호인 경우 이벤트를 발생시키지 않고 바로 차단하도록 수정
         if (number.isNotEmpty) {
+          final normalizedNumber = normalizePhone(number);
+
+          // 차단된 번호인지 확인
+          bool isBlocked = false;
+          try {
+            isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
+              normalizedNumber,
+              addHistory: true,
+            );
+          } catch (e) {
+            log('[PhoneStateController] Error checking block status: $e');
+          }
+
+          // 차단된 번호인 경우 거절하고 종료
+          if (isBlocked) {
+            log(
+              '[PhoneStateController] Call from $normalizedNumber is BLOCKED. Rejecting immediately...',
+            );
+            _rejectedNumber = normalizedNumber;
+            try {
+              await NativeMethods.rejectCall();
+              log('[PhoneStateController] Reject call command sent.');
+              return; // 차단된 번호이므로 여기서 처리 종료
+            } catch (e) {
+              log('[PhoneStateController] Error rejecting call: $e');
+            }
+            return;
+          }
+
+          // 차단되지 않은 번호만 데이터 초기화 요청
           log(
-            '[PhoneStateController][CRITICAL] 네이티브에서 인코밍 콜 감지: $number - 데이터 초기화 요청',
+            '[PhoneStateController][CRITICAL] 네이티브에서 인코밍 콜 감지: $normalizedNumber - 데이터 초기화 요청',
           );
-          appEventBus.fire(CallSearchResetEvent(number));
+          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
         }
         break;
       case 'onCall':
@@ -330,32 +362,8 @@ class PhoneStateController with WidgetsBindingObserver {
     }
 
     if (status == PhoneStateStatus.CALL_INCOMING) {
-      // log(
-      //   '[PhoneStateController] Checking block status for incoming call: $normalizedNumber',
-      // );
-      bool isBlocked = false;
-      try {
-        isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
-          normalizedNumber!,
-          addHistory: true,
-        );
-      } catch (e) {
-        log('[PhoneStateController] Error checking block status: $e');
-      }
-
-      if (isBlocked) {
-        log('[PhoneStateController] Call from $normalizedNumber is BLOCKED.');
-        _rejectedNumber = normalizedNumber;
-        try {
-          // log('[PhoneStateController] Attempting to reject call...');
-          await NativeMethods.rejectCall();
-          // log('[PhoneStateController] Reject call command sent.');
-        } catch (e) {
-          log('[PhoneStateController] Error rejecting call: $e');
-        }
-        return;
-      }
-      // log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
+      // 차단 확인 로직은 handleNativeEvent로 이동, 여기서는 이미 차단 확인이 끝난 번호만 처리
+      log('[PhoneStateController] Call from $normalizedNumber is NOT blocked.');
 
       // 수신 전화 노티피케이션 표시 및 타이머 시작
       try {
@@ -550,7 +558,7 @@ class PhoneStateController with WidgetsBindingObserver {
             '[PhoneStateController] Detected RINGING call on app start/resume: $normalizedNumber',
           );
 
-          // 차단된 번호인지 확인
+          // 차단된 번호인지 확인 (이 부분이 먼저 실행되도록 수정)
           bool isBlocked = false;
           try {
             isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
@@ -570,10 +578,10 @@ class PhoneStateController with WidgetsBindingObserver {
             } catch (e) {
               log('[PhoneStateController] Error rejecting call: $e');
             }
-            return;
+            return; // 차단된 번호라면 여기서 처리 종료
           }
 
-          // 발신자 정보 초기화 이벤트 트리거
+          // 차단되지 않은 번호인 경우에만 발신자 정보 초기화 이벤트 트리거
           appEventBus.fire(CallSearchResetEvent(normalizedNumber));
 
           // 수신 전화 노티피케이션 표시 및 타이머 시작
@@ -698,7 +706,7 @@ class PhoneStateController with WidgetsBindingObserver {
         if (state == 'RINGING' && number != null && number.isNotEmpty) {
           final normalizedNumber = normalizePhone(number);
 
-          // 차단된 번호인지 확인
+          // 차단된 번호인지 확인 (이 부분이 먼저 실행되도록 수정)
           bool isBlocked = false;
           try {
             isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
@@ -721,7 +729,7 @@ class PhoneStateController with WidgetsBindingObserver {
             } catch (e) {
               log('[PhoneStateController] Error rejecting call: $e');
             }
-            return;
+            return; // 차단된 번호라면 여기서 처리 종료
           }
 
           // 현재 표시 중인 번호와 같으면 갱신하지 않음 (타이머에서 이미 처리 중)
@@ -737,7 +745,7 @@ class PhoneStateController with WidgetsBindingObserver {
           try {
             log('[PhoneStateController] 정기 체크에서 수신 전화 감지: $normalizedNumber');
 
-            // 발신자 정보 초기화 이벤트 트리거 (UI에 알림)
+            // 차단되지 않은 번호에 대해서만 발신자 정보 초기화 이벤트 트리거
             appEventBus.fire(CallSearchResetEvent(normalizedNumber));
 
             // 연락처 이름 가져오기

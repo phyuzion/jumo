@@ -547,6 +547,42 @@ class _MyAppStatefulState extends State<MyAppStateful>
       service.invoke('responseContactName', {'contactName': contactName});
     });
 
+    // 차단된 번호인지 확인하는 리스너 추가
+    service.on('checkIfNumberBlocked').listen((event) async {
+      if (!mounted) return;
+
+      final phoneNumber = event?['phoneNumber'] as String?;
+      if (phoneNumber == null || phoneNumber.isEmpty) {
+        log(
+          '[_MyAppStatefulState] Invalid phone number for block check from background',
+        );
+        service.invoke('responseNumberBlockedStatus', {'isBlocked': false});
+        return;
+      }
+
+      log('[_MyAppStatefulState] Block check request for: $phoneNumber');
+
+      bool isBlocked = false;
+      try {
+        // BlockedNumbersController를 통해 차단 여부 확인
+        final blockedNumbersController =
+            context.read<BlockedNumbersController>();
+        isBlocked = await blockedNumbersController.isNumberBlockedAsync(
+          phoneNumber,
+          addHistory: false,
+        );
+        log(
+          '[_MyAppStatefulState] Block check result for $phoneNumber: $isBlocked',
+        );
+      } catch (e) {
+        log('[_MyAppStatefulState] Error checking if number is blocked: $e');
+        isBlocked = false;
+      }
+
+      // 결과 전송
+      service.invoke('responseNumberBlockedStatus', {'isBlocked': isBlocked});
+    });
+
     // 핸드쉐이크: 메인 앱이 초기화되었음을 알림
     service.invoke('appInitialized', {
       'timestamp': DateTime.now().millisecondsSinceEpoch,

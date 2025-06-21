@@ -267,6 +267,45 @@ class CallStateManager {
           '[CallStateManager][CRITICAL] 이벤트에서 새 인코밍 콜 감지: $number - 모든 상태 초기화',
         );
 
+        // 차단된 번호인지 확인
+        bool isBlocked = false;
+        try {
+          // 메인 앱에 차단 여부 확인 요청
+          _service.invoke('checkIfNumberBlocked', {'phoneNumber': number});
+
+          // 응답 대기 (최대 500ms)
+          final completer = Completer<bool>();
+          StreamSubscription? subscription;
+
+          subscription = _service.on('responseNumberBlockedStatus').listen((
+            event,
+          ) {
+            final blocked = event?['isBlocked'] as bool? ?? false;
+            if (!completer.isCompleted) {
+              completer.complete(blocked);
+              subscription?.cancel();
+            }
+          });
+
+          // 짧은 타임아웃 설정 (UI 응답성 유지)
+          isBlocked = await completer.future.timeout(
+            const Duration(milliseconds: 500),
+            onTimeout: () {
+              subscription?.cancel();
+              return false; // 타임아웃 시 차단되지 않은 것으로 간주
+            },
+          );
+        } catch (e) {
+          log('[CallStateManager] 차단 여부 확인 중 오류: $e');
+          isBlocked = false;
+        }
+
+        // 차단된 번호인 경우 UI 업데이트하지 않음
+        if (isBlocked) {
+          log('[CallStateManager] 차단된 번호($number) 감지됨. UI 업데이트 건너뜀.');
+          return;
+        }
+
         // 철저한 상태 초기화
         _thoroughCallStateReset(number);
 
@@ -372,6 +411,49 @@ class CallStateManager {
             log(
               '[CallStateManager][CRITICAL] 새 인코밍 콜 감지: $incomingNumber - 모든 상태 초기화',
             );
+
+            // 차단된 번호인지 확인
+            bool isBlocked = false;
+            try {
+              // 메인 앱에 차단 여부 확인 요청
+              _service.invoke('checkIfNumberBlocked', {
+                'phoneNumber': incomingNumber,
+              });
+
+              // 응답 대기 (최대 500ms)
+              final completer = Completer<bool>();
+              StreamSubscription? subscription;
+
+              subscription = _service.on('responseNumberBlockedStatus').listen((
+                event,
+              ) {
+                final blocked = event?['isBlocked'] as bool? ?? false;
+                if (!completer.isCompleted) {
+                  completer.complete(blocked);
+                  subscription?.cancel();
+                }
+              });
+
+              // 짧은 타임아웃 설정 (UI 응답성 유지)
+              isBlocked = await completer.future.timeout(
+                const Duration(milliseconds: 500),
+                onTimeout: () {
+                  subscription?.cancel();
+                  return false; // 타임아웃 시 차단되지 않은 것으로 간주
+                },
+              );
+            } catch (e) {
+              log('[CallStateManager] 차단 여부 확인 중 오류: $e');
+              isBlocked = false;
+            }
+
+            // 차단된 번호인 경우 UI 업데이트하지 않음
+            if (isBlocked) {
+              log(
+                '[CallStateManager] 차단된 번호($incomingNumber) 감지됨. UI 업데이트 건너뜀.',
+              );
+              return;
+            }
 
             // 철저한 상태 초기화
             _thoroughCallStateReset(incomingNumber);
@@ -508,6 +590,45 @@ class CallStateManager {
             log(
               '[CallStateManager][CRITICAL] 타이머에서 새 인코밍 콜 감지: $number - 모든 상태 초기화',
             );
+
+            // 차단된 번호인지 확인
+            bool isBlocked = false;
+            try {
+              // 메인 앱에 차단 여부 확인 요청
+              _service.invoke('checkIfNumberBlocked', {'phoneNumber': number});
+
+              // 응답 대기 (최대 500ms)
+              final completer = Completer<bool>();
+              StreamSubscription? subscription;
+
+              subscription = _service.on('responseNumberBlockedStatus').listen((
+                event,
+              ) {
+                final blocked = event?['isBlocked'] as bool? ?? false;
+                if (!completer.isCompleted) {
+                  completer.complete(blocked);
+                  subscription?.cancel();
+                }
+              });
+
+              // 짧은 타임아웃 설정 (UI 응답성 유지)
+              isBlocked = await completer.future.timeout(
+                const Duration(milliseconds: 500),
+                onTimeout: () {
+                  subscription?.cancel();
+                  return false; // 타임아웃 시 차단되지 않은 것으로 간주
+                },
+              );
+            } catch (e) {
+              log('[CallStateManager] 차단 여부 확인 중 오류: $e');
+              isBlocked = false;
+            }
+
+            // 차단된 번호인 경우 UI 업데이트하지 않음
+            if (isBlocked) {
+              log('[CallStateManager] 차단된 번호($number) 감지됨. UI 업데이트 건너뜀.');
+              return;
+            }
 
             // 철저한 상태 초기화
             _thoroughCallStateReset(number);
