@@ -46,6 +46,7 @@ import 'package:mobile/repositories/contact_repository.dart';
 import 'package:mobile/controllers/search_records_controller.dart';
 import 'package:mobile/services/background_listeners/notification_listener_service.dart';
 import 'package:mobile/services/background_listeners/block_listener_service.dart';
+import 'package:mobile/graphql/client.dart';
 
 final getIt = GetIt.instance;
 
@@ -651,8 +652,51 @@ class _MyAppStatefulState extends State<MyAppStateful>
       log('[MyAppStateful] App resumed. Checking login state...');
       try {
         final authRepository = context.read<AuthRepository>();
-        authRepository.getLoginStatus().then((isLoggedIn) {
+        authRepository.getLoginStatus().then((isLoggedIn) async {
           if (isLoggedIn) {
+            // 로그인 상태인 경우 유효기간 체크
+            final validUntilStr = await authRepository.getUserValidUntil();
+            if (validUntilStr != null && validUntilStr.isNotEmpty) {
+              try {
+                // validUntil 문자열을 정수로 변환 (밀리초 타임스탬프)
+                final validUntilMs = int.tryParse(validUntilStr);
+                if (validUntilMs != null) {
+                  // UTC 기준으로 저장된 타임스탬프를 DateTime으로 변환
+                  final validUntilDate = DateTime.fromMillisecondsSinceEpoch(
+                    validUntilMs,
+                    isUtc: true,
+                  );
+                  final now = DateTime.now().toUtc();
+
+                  log(
+                    '[MyAppStateful] Checking validUntil: $validUntilDate, now: $now',
+                  );
+
+                  // 현재 시간이 유효기간을 지났으면 로그아웃
+                  if (now.isAfter(validUntilDate)) {
+                    log('[MyAppStateful] Account expired. Logging out...');
+                    await GraphQLClientManager.logout();
+
+                    // 로그아웃 후 DeciderScreen으로 이동
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('계정 유효기간이 만료되었습니다. 다시 로그인해주세요.'),
+                          backgroundColor: Color(0xFF450a02),
+                        ),
+                      );
+                      Navigator.of(
+                        context,
+                      ).pushNamedAndRemoveUntil('/decider', (route) => false);
+                    }
+                    return; // 로그아웃 후 아래 코드 실행하지 않음
+                  }
+                }
+              } catch (e) {
+                log('[MyAppStateful] Error checking validUntil: $e');
+              }
+            }
+
             log('[MyAppStateful] User is logged in. Refreshing contacts...');
             final contactsCtrl = context.read<ContactsController>();
             contactsCtrl.syncContacts(forceFullSync: false);

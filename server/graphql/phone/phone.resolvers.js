@@ -96,6 +96,20 @@ exports.testUtils = {
   mergeRecords
 };
 
+/**
+ * 이름에 콜폭/ㅋㅍ 관련 키워드가 포함되어 있는지 확인하는 함수
+ */
+function isCallBombName(name) {
+  if (!name) return false;
+  
+  const lowerName = name.toLowerCase();
+  return lowerName.includes('ㅋㅍ') || 
+         lowerName.includes('ㅋ ㅍ') || 
+         lowerName.includes('ㅋ/ㅍ') || 
+         lowerName.includes('콜폭') || 
+         lowerName.includes('콜 폭');
+}
+
 // GraphQL resolver는 객체 형태여야 함
 module.exports = {
   Mutation: {
@@ -174,10 +188,10 @@ module.exports = {
 
         // blockCount 계산 로직 유지
         let blockCount = currentBlockCount;
-        for (const record of merged) {
-          const name = record.name?.toLowerCase() || '';
-          if (name.includes('ㅋㅍ') || name.includes('콜폭')) {
+        for (const record of mapByPhone[phone]) {
+          if (isCallBombName(record.name)) {
             blockCount++;
+            break; // 한 번만 증가시키고 종료
           }
         }
 
@@ -201,6 +215,22 @@ module.exports = {
         await withTransaction(async (session) => {
           await PhoneNumber.bulkWrite(bulkOps, { session });
         });
+        
+        // 메모리 해제 코드 추가
+        bulkOps.length = 0;
+        
+        // 맵 객체 참조 해제
+        Object.keys(mapByPhone).forEach(key => {
+          delete mapByPhone[key];
+        });
+        
+        Object.keys(phoneDocMap).forEach(key => {
+          delete phoneDocMap[key];
+        });
+        
+        // 배열 참조 해제
+        phoneNumbers.length = 0;
+        existingDocs.length = 0;
       }
 
       console.log('[Phone.Resolvers] upsertPhoneRecords bulkWrite 완료. ops=', bulkOps.length);
@@ -300,7 +330,14 @@ module.exports = {
           }
         }
         
-        return Object.values(recordObj);
+        const result = Object.values(recordObj);
+        
+        // 메모리 해제
+        Object.keys(recordObj).forEach(key => {
+          delete recordObj[key];
+        });
+        
+        return result;
       };
 
       // 이름이 같은 레코드 중 가장 최신 시간의 레코드만 선택하는 함수
@@ -325,11 +362,26 @@ module.exports = {
           }
         }
         
-        return Object.values(recordObj);
+        const result = Object.values(recordObj);
+        
+        // 메모리 해제
+        Object.keys(recordObj).forEach(key => {
+          delete recordObj[key];
+        });
+        
+        return result;
       };
 
       // PhoneNumber 정보가 없는 경우
       if (!phoneDoc) {
+        // 메모리 해제
+        if (todayDocs) {
+          todayDocs.length = 0;
+        }
+        if (formattedTodayRecords) {
+          formattedTodayRecords.length = 0;
+        }
+        
         return {
           id: normalizedPhoneNumber, // 임시 ID
           phoneNumber: normalizedPhoneNumber,
@@ -347,7 +399,7 @@ module.exports = {
       // 이름이 같은 레코드 중 최신 것만 추가 필터링
       const finalFilteredRecords = filterSameNameRecords(filteredRecords);
       
-      return {
+      const result = {
         ...phoneDoc,
         id: phoneDoc._id.toString(),
         records: finalFilteredRecords.map(r => ({
@@ -358,6 +410,25 @@ module.exports = {
         isRegisteredUser: false,
         registeredUserInfo: null,
       };
+      
+      // 명시적 메모리 해제
+      if (phoneDoc && phoneDoc.records) {
+        phoneDoc.records.length = 0;
+      }
+      if (todayDocs) {
+        todayDocs.length = 0;
+      }
+      if (filteredRecords) {
+        filteredRecords.length = 0;
+      }
+      if (finalFilteredRecords) {
+        finalFilteredRecords.length = 0;
+      }
+      if (formattedTodayRecords) {
+        formattedTodayRecords.length = 0;
+      }
+      
+      return result;
     },
 
     async getPhoneNumbersByType(_, { type }, { tokenData }) {
@@ -398,15 +469,22 @@ module.exports = {
          createdAtString = userRecord.createdAt.toISOString();
       }
 
-      // 반환 객체에 phoneNumber 필드 추가 (올바른 구문)
-      return {
+      // 결과 객체 생성
+      const result = {
          // userRecord의 모든 필드를 복사
          ...(userRecord),
          // phoneNumber 필드 추가
          phoneNumber: phoneDoc.phoneNumber,
-         // 변환된 createdAt 사용 (혹시 userRecord에 Date 객체가 남아있을 경우 대비)
+         // 변환된 createdAt 사용
          createdAt: createdAtString,
       };
+      
+      // 메모리 해제
+      if (phoneDoc && phoneDoc.records) {
+        phoneDoc.records.length = 0;
+      }
+      
+      return result;
     },
   },
 };

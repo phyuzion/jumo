@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "npx pm2-runtime start server.js -i max"
+    "start": "npx pm2-runtime start server.js -i max --node-args='--expose-gc --max-old-space-size=8192'"
   },
   "dependencies": {
     "apollo-server-express": "^3.13.0",

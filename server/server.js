@@ -62,7 +62,7 @@ async function startServer() {
       ApolloServerPluginLandingPageDisabled() // Apollo Server v4 이상에서 랜딩 페이지 비활성화
     ],
     includeStacktraceInErrorResponses: false, // 에러 응답에 스택 트레이스 포함 안 함
-    csrfPrevention: true, // CSRF 방지 활성화
+    csrfPrevention: false, // CSRF 방지 활성화
     cache: 'bounded', // 캐시 설정
     context: async ({ req }) => {
       const authHeader = req.headers.authorization || '';
