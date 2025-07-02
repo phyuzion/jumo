@@ -51,6 +51,11 @@ module.exports = {
       let userName = '';
       let userRegion = '';
 
+      // 공지사항 작성 권한 체크 - 관리자만 가능
+      if (type === '공지사항' && !tokenData?.adminId) {
+        throw new ForbiddenError('공지사항은 관리자만 작성할 수 있습니다.');
+      }
+
       if (tokenData?.adminId) {
         // 관리자
         userId = 'KOLPON_ADMIN';
