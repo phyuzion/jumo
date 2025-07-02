@@ -18,7 +18,7 @@ class LocalNotificationService {
 
   // 초기화
   static Future<void> initialize() async {
-    const androidInit = AndroidInitializationSettings('app_icon');
+    const androidInit = AndroidInitializationSettings('app_icon_main');
     const initSettings = InitializationSettings(android: androidInit);
 
     // 알림 탭 콜백
@@ -133,7 +133,7 @@ class LocalNotificationService {
       importance: Importance.max,
       priority: Priority.high,
       playSound: true,
-      icon: 'app_icon',
+      icon: 'app_icon_main',
     );
     const details = NotificationDetails(android: androidDetails);
     await _plugin.show(id, title, body, details);

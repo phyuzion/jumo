@@ -80,7 +80,7 @@ class AppBackgroundService {
       // 2. 알림 초기화
       await flutterLocalNotificationsPlugin.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('app_icon'),
+          android: AndroidInitializationSettings('app_icon_main'),
           iOS: DarwinInitializationSettings(),
         ),
         onDidReceiveNotificationResponse: (details) {
