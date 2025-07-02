@@ -2,12 +2,16 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:mobile/controllers/app_controller.dart';
+import 'package:mobile/controllers/update_controller.dart';
 import 'package:mobile/repositories/notification_repository.dart';
 import 'package:mobile/services/native_default_dialer_methods.dart';
 import 'package:mobile/widgets/notification_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:mobile/utils/app_event_bus.dart';
+import 'package:mobile/utils/constants.dart';
+import 'package:fluttertoast/fluttertoast.dart';
+import 'package:mobile/services/local_notification_service.dart';
 import 'recent_calls_screen.dart';
 import 'contacts_screen.dart';
 import 'board_screen.dart';
@@ -70,6 +74,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           }
         },
       );
+
+      // 앱 시작 시 업데이트 확인
+      _checkForUpdates();
     });
   }
 
@@ -143,6 +150,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _searchFocusNode.unfocus();
       _loadNotificationCount();
       context.read<ContactsController>().syncContacts();
+
+      // 앱이 포그라운드로 돌아올 때 업데이트 확인
+      _checkForUpdates();
 
       // 현재 통화 상태 확인
       final callStateProvider = context.read<CallStateProvider>();
@@ -342,6 +352,69 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     } catch (e) {
       log('[HomeScreen] Error sending appInitialized signal: $e');
+    }
+  }
+
+  // 업데이트 확인 및 알림 표시 메서드
+  Future<void> _checkForUpdates() async {
+    try {
+      final updateController = UpdateController();
+      final serverVersion = await updateController.getServerVersion();
+
+      if (serverVersion.isNotEmpty && serverVersion != APP_VERSION) {
+        // 마지막 업데이트 알림 표시 시간 확인
+        final Box box = await Hive.openBox('app_settings');
+        final lastUpdateNotificationTime =
+            box.get('last_update_notification_time', defaultValue: 0) as int;
+        final now = DateTime.now().millisecondsSinceEpoch;
+
+        // 마지막 알림 후 24시간이 지났거나 처음 알림을 표시하는 경우에만 표시
+        if (now - lastUpdateNotificationTime > 24 * 60 * 60 * 1000) {
+          // 토스트 메시지 표시
+          Fluttertoast.showToast(
+            msg: "새로운 버전($serverVersion)이 있습니다. 현재 버전: $APP_VERSION",
+            toastLength: Toast.LENGTH_LONG,
+            gravity: ToastGravity.BOTTOM,
+            backgroundColor: Colors.red,
+            textColor: Colors.white,
+            fontSize: 16.0,
+          );
+
+          // 로컬 알림 표시
+          await LocalNotificationService.showNotification(
+            id: 999,
+            title: '앱 업데이트 필요',
+            body: '새로운 버전($serverVersion)이 있습니다. 설정 메뉴에서 업데이트하세요. 재설치를 위함입니다.',
+          );
+
+          // 알림 표시 시간 저장
+          await box.put('last_update_notification_time', now);
+        }
+
+        // NotificationRepository에 업데이트 알림 추가 (이전 알림이 있으면 덮어쓰기)
+        final notificationRepository = context.read<NotificationRepository>();
+
+        // 고정 ID 사용 (이전 업데이트 알림 덮어쓰기)
+        const String updateNotificationId = 'app_update_notification';
+
+        await notificationRepository.saveNotification({
+          'id': updateNotificationId,
+          'title': '앱 업데이트 필요',
+          'message':
+              '새로운 버전($serverVersion)이 있습니다. 현재 버전: $APP_VERSION\n재설치를 위함입니다.',
+          'timestamp': DateTime.now().toIso8601String(),
+          // 일주일 후 만료
+          'validUntil':
+              DateTime.now()
+                  .add(const Duration(days: 7))
+                  .millisecondsSinceEpoch,
+        });
+
+        // 알림 카운트 갱신
+        _loadNotificationCount();
+      }
+    } catch (e) {
+      log('[HomeScreen] Error checking for updates: $e');
     }
   }
 

@@ -16,6 +16,7 @@ import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
 import 'package:mobile/repositories/settings_repository.dart';
 import 'package:mobile/utils/constants.dart';
+import 'package:hive_ce/hive.dart';
 
 /// 공통 Endpoint
 const String kGraphQLEndpoint = 'https://jumo-vs8e.onrender.com/graphql';
@@ -35,6 +36,9 @@ class GraphQLClientManager {
       await getIt<AuthRepository>().setToken(token);
     }
   }
+
+  // 로그아웃 상태 플래그 추가
+  static bool _isLoggingOut = false;
 
   // ===============================
   // 1) 자동로그인 함수 (id/pw 재로그인)
@@ -112,10 +116,13 @@ class GraphQLClientManager {
   static Future<void> logout() async {
     log('[GraphQL] Logging out and clearing user data...');
     try {
-      // <<< AuthRepository 클리어 >>>
+      // <<< AuthRepository 완전히 클리어 >>>
       final authRepository = getIt<AuthRepository>();
       await authRepository.setLoginStatus(false);
-      log('[GraphQL] Skipping AuthRepository clearing on logout.');
+      // 저장된 ID/PW도 삭제하도록 수정
+      await authRepository.clearSavedCredentials(); // ID/PW 정보 삭제
+      await authRepository.clearToken(); // 토큰 삭제
+      log('[GraphQL] Cleared stored credentials and token via AuthRepository.');
 
       // <<< NotificationRepository 클리어 >>>
       try {
@@ -175,10 +182,75 @@ class GraphQLClientManager {
         log('[GraphQL] Error resetting blocking settings: $e');
       }
 
-      log('[GraphQL] Cleared auth data via AuthRepository.');
+      // <<< Hive 박스 완전 삭제 추가 - 열려있는 박스만 삭제 >>>
+      try {
+        // 각 박스가 열려있는 경우에만 삭제 시도
+        if (Hive.isBoxOpen('auth')) {
+          await Hive.box('auth').clear();
+          log('[GraphQL] Auth box cleared.');
+        }
+
+        if (Hive.isBoxOpen('notifications')) {
+          await Hive.box('notifications').clear();
+          log('[GraphQL] Notifications box cleared.');
+        }
+
+        if (Hive.isBoxOpen('display_noti_ids')) {
+          await Hive.box('display_noti_ids').clear();
+          log('[GraphQL] Display notification IDs box cleared.');
+        }
+
+        if (Hive.isBoxOpen('call_logs')) {
+          await Hive.box('call_logs').clear();
+          log('[GraphQL] Call logs box cleared.');
+        }
+
+        if (Hive.isBoxOpen('sms_logs')) {
+          await Hive.box('sms_logs').clear();
+          log('[GraphQL] SMS logs box cleared.');
+        }
+
+        if (Hive.isBoxOpen('blocked_numbers')) {
+          await Hive.box('blocked_numbers').clear();
+          log('[GraphQL] Blocked numbers box cleared.');
+        }
+
+        if (Hive.isBoxOpen('danger_numbers')) {
+          await Hive.box('danger_numbers').clear();
+          log('[GraphQL] Danger numbers box cleared.');
+        }
+
+        if (Hive.isBoxOpen('bomb_numbers')) {
+          await Hive.box('bomb_numbers').clear();
+          log('[GraphQL] Bomb numbers box cleared.');
+        }
+
+        if (Hive.isBoxOpen('blocked_history')) {
+          await Hive.box('blocked_history').clear();
+          log('[GraphQL] Blocked history box cleared.');
+        }
+
+        if (Hive.isBoxOpen('contacts')) {
+          await Hive.box('contacts').clear();
+          log('[GraphQL] Contacts box cleared.');
+        }
+
+        if (Hive.isBoxOpen('settings')) {
+          await Hive.box('settings').clear();
+          log('[GraphQL] Settings box cleared.');
+        }
+
+        log('[GraphQL] All open Hive boxes have been cleared.');
+      } catch (e) {
+        log('[GraphQL] Error clearing Hive boxes: $e');
+      }
+
       log('[GraphQL] All user-specific data cleared via repositories.');
     } catch (e) {
       log('[GraphQL] Error clearing data during logout: $e');
+    } finally {
+      // 로그아웃 상태 초기화
+      _isLoggingOut = false;
     }
     NavigationController.goToDecider();
   }

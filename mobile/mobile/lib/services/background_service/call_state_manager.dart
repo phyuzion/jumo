@@ -526,6 +526,43 @@ class CallStateManager {
       timer,
     ) async {
       try {
+        // 로그인 상태 확인 먼저 수행
+        bool isLoggedIn = false;
+        try {
+          // 로그인 상태 확인 요청 전송
+          _service.invoke('checkLoginStatus');
+
+          // 응답 대기
+          final completer = Completer<bool>();
+          StreamSubscription? subscription;
+
+          subscription = _service.on('responseLoginStatus').listen((event) {
+            final loggedIn = event?['isLoggedIn'] as bool? ?? false;
+            if (!completer.isCompleted) {
+              completer.complete(loggedIn);
+              subscription?.cancel();
+            }
+          });
+
+          // 짧은 타임아웃 설정
+          isLoggedIn = await completer.future.timeout(
+            const Duration(milliseconds: 500),
+            onTimeout: () {
+              subscription?.cancel();
+              return false; // 타임아웃 시 로그인되지 않은 것으로 간주
+            },
+          );
+        } catch (e) {
+          log('[CallStateManager] 로그인 상태 확인 중 오류: $e');
+          isLoggedIn = false;
+        }
+
+        // 로그인되지 않은 경우 통화 상태 체크 건너뛰기
+        if (!isLoggedIn) {
+          // log('[CallStateManager] 로그인되지 않음. 통화 상태 체크 건너뛰기.');
+          return;
+        }
+
         // 네이티브 통화 상태 확인
         final nativeCallState = await _getCurrentCallStateFromNative();
         if (nativeCallState == null) return;
@@ -787,7 +824,7 @@ class CallStateManager {
             android: AndroidNotificationDetails(
               FOREGROUND_SERVICE_CHANNEL_ID,
               'KOLPON 서비스 상태',
-              icon: 'ic_bg_service_small',
+              icon: 'app_icon_main',
               ongoing: true,
               autoCancel: false,
               importance: Importance.low,

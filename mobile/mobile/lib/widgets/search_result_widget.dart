@@ -245,6 +245,7 @@ class _SearchResultWidgetState extends State<SearchResultWidget> {
             fontWeight: FontWeight.bold,
             color: Colors.grey.shade700,
           ),
+          textAlign: TextAlign.right,
         ),
       );
     }

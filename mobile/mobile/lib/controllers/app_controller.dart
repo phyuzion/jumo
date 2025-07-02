@@ -9,6 +9,8 @@ import 'package:mobile/controllers/permission_controller.dart';
 import 'package:mobile/controllers/phone_state_controller.dart';
 import 'package:mobile/controllers/sms_controller.dart';
 import 'package:mobile/repositories/notification_repository.dart';
+import 'package:mobile/repositories/auth_repository.dart';
+import 'package:mobile/main.dart';
 import 'package:mobile/services/background_service_manager.dart';
 import 'package:mobile/services/local_notification_service.dart';
 import 'package:mobile/utils/app_event_bus.dart';
@@ -75,14 +77,8 @@ class AppController with ChangeNotifier {
       return;
     }
     try {
-      if (_phoneStateController != null) {
-        _phoneStateController!.startListening();
-        log('[AppController.initializeApp] Phone state listening started.');
-      } else {
-        log(
-          '[AppController.initializeApp] PhoneStateController is null, cannot start listening.',
-        );
-      }
+      // 로그인 전 단계이므로 phoneStateController 활성화하지 않음
+      // (이 코드는 triggerContactsLoadIfReady로 이동)
 
       await LocalNotificationService.initialize();
       await configureBackgroundService();
@@ -149,6 +145,23 @@ class AppController with ChangeNotifier {
         '[AppController.configureBackgroundService] Received removeExpiredNotifications event.',
       );
       await removeExpiredNotifications();
+    });
+
+    // 로그인 상태 확인 요청 처리 리스너 추가
+    service.on('checkLoginStatus').listen((event) async {
+      try {
+        // AuthRepository에서 로그인 상태 확인
+        final authRepository = getIt<AuthRepository>();
+        final bool isLoggedIn = await authRepository.getLoginStatus();
+        // 백그라운드 서비스에 응답
+        service.invoke('responseLoginStatus', {'isLoggedIn': isLoggedIn});
+      } catch (e) {
+        log(
+          '[AppController.configureBackgroundService] Error checking login status: $e',
+        );
+        // 오류 발생 시 기본값으로 로그아웃 상태 응답
+        service.invoke('responseLoginStatus', {'isLoggedIn': false});
+      }
     });
 
     // <<< 기본 전화 앱 상태 요청 처리 리스너 추가 >>>
@@ -355,8 +368,19 @@ class AppController with ChangeNotifier {
     bool callLogChanged = false;
 
     try {
-      // 1. 연락처 로드 (이전 Step 1)
+      // 로그인 성공 후 PhoneStateController 활성화 (여기로 이동)
+      if (_phoneStateController != null) {
+        _phoneStateController!.startListening();
+        log(
+          '[AppController.triggerContactsLoadIfReady] Phone state listening started.',
+        );
+      } else {
+        log(
+          '[AppController.triggerContactsLoadIfReady] PhoneStateController is null, cannot start listening.',
+        );
+      }
 
+      // 1. 연락처 로드 (이전 Step 1)
       if (contactsController.isSyncing) {
       } else if (contactsController.initialLoadAttempted) {
         await contactsController.syncContacts();

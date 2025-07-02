@@ -68,10 +68,14 @@ class _BoardScreenState extends State<BoardScreen> {
       ),
       // (1) BoardListView에 GlobalKey 전달
       body: BoardListView(key: _boardListKey, type: _selectedType),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _onTapCreate,
-        child: const Icon(Icons.add),
-      ),
+      // 익명 게시판일 때만 FAB 표시
+      floatingActionButton:
+          _selectedType == '익명'
+              ? FloatingActionButton(
+                onPressed: _onTapCreate,
+                child: const Icon(Icons.add),
+              )
+              : null,
 
       floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );

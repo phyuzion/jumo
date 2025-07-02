@@ -274,6 +274,121 @@ Future<void> _initializeNotificationChannels() async {
   }
 }
 
+// 앱 업데이트 또는 재설치 후 실행할 Hive 데이터베이스 초기화 함수
+Future<void> _resetHiveBoxesIfNeeded() async {
+  try {
+    // 앱 버전을 확인하기 위한 박스 열기 (이 박스만 삭제하지 않음)
+    final versionBox = await Hive.openBox('app_version');
+    final currentVersion = APP_VERSION;
+    final savedVersion = versionBox.get('version');
+
+    // 버전이 다르거나 처음 실행하는 경우
+    if (savedVersion != currentVersion) {
+      log('[main] App version changed or first run. Resetting Hive boxes.');
+
+      // 박스를 닫지 않고 바로 삭제 시도
+      // 이미 열려있는 박스는 삭제하지 않고 재사용
+      try {
+        if (!Hive.isBoxOpen('auth')) {
+          await Hive.deleteBoxFromDisk('auth');
+        }
+      } catch (e) {
+        log('[main] Error handling auth box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('notifications')) {
+          await Hive.deleteBoxFromDisk('notifications');
+        }
+      } catch (e) {
+        log('[main] Error handling notifications box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('display_noti_ids')) {
+          await Hive.deleteBoxFromDisk('display_noti_ids');
+        }
+      } catch (e) {
+        log('[main] Error handling display_noti_ids box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('call_logs')) {
+          await Hive.deleteBoxFromDisk('call_logs');
+        }
+      } catch (e) {
+        log('[main] Error handling call_logs box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('sms_logs')) {
+          await Hive.deleteBoxFromDisk('sms_logs');
+        }
+      } catch (e) {
+        log('[main] Error handling sms_logs box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('blocked_numbers')) {
+          await Hive.deleteBoxFromDisk('blocked_numbers');
+        }
+      } catch (e) {
+        log('[main] Error handling blocked_numbers box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('danger_numbers')) {
+          await Hive.deleteBoxFromDisk('danger_numbers');
+        }
+      } catch (e) {
+        log('[main] Error handling danger_numbers box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('bomb_numbers')) {
+          await Hive.deleteBoxFromDisk('bomb_numbers');
+        }
+      } catch (e) {
+        log('[main] Error handling bomb_numbers box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('blocked_history')) {
+          await Hive.deleteBoxFromDisk('blocked_history');
+        }
+      } catch (e) {
+        log('[main] Error handling blocked_history box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('contacts')) {
+          await Hive.deleteBoxFromDisk('contacts');
+        }
+      } catch (e) {
+        log('[main] Error handling contacts box: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('settings')) {
+          await Hive.deleteBoxFromDisk('settings');
+        }
+      } catch (e) {
+        log('[main] Error handling settings box: $e');
+      }
+
+      // 버전 저장
+      await versionBox.put('version', currentVersion);
+      log(
+        '[main] Hive boxes reset completed. Saved new version: $currentVersion',
+      );
+    } else {
+      log('[main] App version unchanged: $currentVersion. No reset needed.');
+    }
+  } catch (e) {
+    log('[main] Error during Hive boxes reset: $e');
+  }
+}
+
 void main() async {
   // Dart에서 비동기 작업 가능하도록
   WidgetsFlutterBinding.ensureInitialized();
@@ -284,6 +399,9 @@ void main() async {
   try {
     // Hive 초기화 및 어댑터 등록
     await initializeDependencies();
+
+    // 앱 업데이트/재설치 시 Hive 박스 초기화 (새로 추가)
+    await _resetHiveBoxesIfNeeded();
   } catch (e) {
     log('[main] Critical initialization failed: $e');
     runApp(
@@ -652,77 +770,112 @@ class _MyAppStatefulState extends State<MyAppStateful>
       log('[MyAppStateful] App resumed. Checking login state...');
       try {
         final authRepository = context.read<AuthRepository>();
-        authRepository.getLoginStatus().then((isLoggedIn) async {
-          if (isLoggedIn) {
-            // 로그인 상태인 경우 유효기간 체크
-            final validUntilStr = await authRepository.getUserValidUntil();
-            if (validUntilStr != null && validUntilStr.isNotEmpty) {
-              try {
-                // validUntil 문자열을 정수로 변환 (밀리초 타임스탬프)
-                final validUntilMs = int.tryParse(validUntilStr);
-                if (validUntilMs != null) {
-                  // UTC 기준으로 저장된 타임스탬프를 DateTime으로 변환
-                  final validUntilDate = DateTime.fromMillisecondsSinceEpoch(
-                    validUntilMs,
-                    isUtc: true,
-                  );
-                  final now = DateTime.now().toUtc();
+        authRepository
+            .getLoginStatus()
+            .then((isLoggedIn) async {
+              if (isLoggedIn) {
+                // 로그인 상태인 경우 유효기간 체크
+                final validUntilStr = await authRepository.getUserValidUntil();
+                if (validUntilStr != null && validUntilStr.isNotEmpty) {
+                  try {
+                    // validUntil 문자열을 정수로 변환 (밀리초 타임스탬프)
+                    final validUntilMs = int.tryParse(validUntilStr);
+                    if (validUntilMs != null) {
+                      // UTC 기준으로 저장된 타임스탬프를 DateTime으로 변환
+                      final validUntilDate =
+                          DateTime.fromMillisecondsSinceEpoch(
+                            validUntilMs,
+                            isUtc: true,
+                          );
+                      final now = DateTime.now().toUtc();
 
-                  log(
-                    '[MyAppStateful] Checking validUntil: $validUntilDate, now: $now',
-                  );
-
-                  // 현재 시간이 유효기간을 지났으면 로그아웃
-                  if (now.isAfter(validUntilDate)) {
-                    log('[MyAppStateful] Account expired. Logging out...');
-                    await GraphQLClientManager.logout();
-
-                    // 로그아웃 후 DeciderScreen으로 이동
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('계정 유효기간이 만료되었습니다. 다시 로그인해주세요.'),
-                          backgroundColor: Color(0xFF450a02),
-                        ),
+                      log(
+                        '[MyAppStateful] Checking validUntil: $validUntilDate, now: $now',
                       );
-                      Navigator.of(
-                        context,
-                      ).pushNamedAndRemoveUntil('/decider', (route) => false);
+
+                      // 현재 시간이 유효기간을 지났으면 로그아웃
+                      if (now.isAfter(validUntilDate)) {
+                        log('[MyAppStateful] Account expired. Logging out...');
+
+                        // 로그아웃 처리 - 직접 로그인 상태만 변경
+                        await authRepository.setLoginStatus(false);
+                        await authRepository.clearToken();
+
+                        await GraphQLClientManager.logout();
+
+                        // 로그아웃 후 DeciderScreen으로 이동
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('계정 유효기간이 만료되었습니다. 다시 로그인해주세요.'),
+                              backgroundColor: Color(0xFF450a02),
+                            ),
+                          );
+                          Navigator.of(context).pushNamedAndRemoveUntil(
+                            '/decider',
+                            (route) => false,
+                          );
+                        }
+                        return; // 로그아웃 후 아래 코드 실행하지 않음
+                      }
                     }
-                    return; // 로그아웃 후 아래 코드 실행하지 않음
+                  } catch (e) {
+                    log('[MyAppStateful] Error checking validUntil: $e');
                   }
                 }
-              } catch (e) {
-                log('[MyAppStateful] Error checking validUntil: $e');
+
+                log(
+                  '[MyAppStateful] User is logged in. Refreshing contacts...',
+                );
+                final contactsCtrl = context.read<ContactsController>();
+                contactsCtrl.syncContacts(forceFullSync: false);
+
+                // SMS Observer 상태 확인 및 복구 추가
+                log('[MyAppStateful] Checking SMS observer status...');
+                try {
+                  final smsController = context.read<SmsController>();
+                  smsController.ensureObserverActive();
+                } catch (e) {
+                  log('[MyAppStateful] Error checking SMS observer: $e');
+                }
+
+                log('[MyAppStateful] Refreshing recent history...');
+                context.read<RecentHistoryProvider>().refresh();
+              } else {
+                log(
+                  '[MyAppStateful] User is not logged in. Skipping contacts refresh.',
+                );
               }
-            }
-
-            log('[MyAppStateful] User is logged in. Refreshing contacts...');
-            final contactsCtrl = context.read<ContactsController>();
-            contactsCtrl.syncContacts(forceFullSync: false);
-
-            // SMS Observer 상태 확인 및 복구 추가
-            log('[MyAppStateful] Checking SMS observer status...');
-            try {
-              final smsController = context.read<SmsController>();
-              smsController.ensureObserverActive();
-            } catch (e) {
-              log('[MyAppStateful] Error checking SMS observer: $e');
-            }
-
-            log('[MyAppStateful] Refreshing recent history...');
-            context.read<RecentHistoryProvider>().refresh();
-          } else {
-            log(
-              '[MyAppStateful] User is not logged in. Skipping contacts refresh.',
-            );
-          }
-        });
+            })
+            .catchError((e) {
+              log('[MyAppStateful] Error in getLoginStatus: $e');
+              // 박스가 닫혀있는 경우 재초기화 시도
+              _reinitializeAuthRepository();
+            });
       } catch (e) {
         log(
           '[MyAppStateful] Error checking login state or refreshing contacts: $e',
         );
       }
+    }
+  }
+
+  // 박스가 닫혀있는 경우 재초기화를 위한 메서드
+  Future<void> _reinitializeAuthRepository() async {
+    try {
+      log('[MyAppStateful] Attempting to reinitialize auth repository...');
+      // auth 박스 다시 열기
+      if (!Hive.isBoxOpen('auth')) {
+        final authBox = await Hive.openBox('auth');
+        final authRepository = HiveAuthRepository(authBox);
+        if (getIt.isRegistered<AuthRepository>()) {
+          getIt.unregister<AuthRepository>();
+        }
+        getIt.registerSingleton<AuthRepository>(authRepository);
+        log('[MyAppStateful] Auth repository reinitialized successfully.');
+      }
+    } catch (e) {
+      log('[MyAppStateful] Failed to reinitialize auth repository: $e');
     }
   }
 

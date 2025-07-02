@@ -9,6 +9,8 @@ import 'package:mobile/repositories/auth_repository.dart'; // <<< 추가
 import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:provider/provider.dart';
+import 'package:mobile/graphql/user_api.dart'; // 추가: UserApi import
+import 'package:mobile/graphql/client.dart'; // 추가: GraphQLClientManager import
 
 class DeciderScreen extends StatefulWidget {
   const DeciderScreen({super.key});
@@ -51,22 +53,57 @@ class _DeciderScreenState extends State<DeciderScreen> {
       setState(() => _permissionsGranted = true);
       log('[DeciderScreen] All essential permissions granted.');
 
-      // 2. 권한 OK -> 로그인 상태 확인
-      final bool isLoggedIn = await authRepository.getLoginStatus();
-      if (!mounted) return;
+      // 2. 권한 OK -> 저장된 로그인 정보 확인하여 강제로 새 로그인 시도
+      final credentials = await authRepository.getSavedCredentials();
+      final savedId = credentials['savedLoginId'];
+      final savedPw = credentials['password'];
+      final myNumber = await authRepository.getMyNumber();
 
-      if (isLoggedIn) {
-        log(
-          '[DeciderScreen] User is logged in. Triggering contacts load and navigating to home.',
-        );
-        // 로그인 상태이고 모든 권한이 있으므로, 연락처 로드 시작
-        // triggerContactsLoadIfReady는 내부적으로 contactsController.initialLoadAttempted 등을 체크함
-        await appController.triggerContactsLoadIfReady();
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, '/home');
+      // 로그인 정보가 있으면 무조건 새로 로그인 시도
+      if (savedId != null &&
+          savedId.isNotEmpty &&
+          savedPw != null &&
+          savedPw.isNotEmpty &&
+          myNumber != null &&
+          myNumber.isNotEmpty) {
+        log('[DeciderScreen] Stored credentials found. Forcing new login...');
+
+        try {
+          // UserApi를 통해 새로운 로그인 시도
+          final loginResult = await UserApi.userLogin(
+            loginId: savedId,
+            password: savedPw,
+            phoneNumber: myNumber,
+          );
+
+          // 로그인 성공 확인
+          if (loginResult != null &&
+              loginResult['user'] is Map &&
+              loginResult['accessToken'] != null) {
+            log('[DeciderScreen] Forced login successful. Navigating to home.');
+
+            if (!mounted) return;
+            // 로그인 성공 시 연락처 로드 시작
+            await appController.triggerContactsLoadIfReady();
+            Navigator.pushReplacementNamed(context, '/home');
+          } else {
+            log(
+              '[DeciderScreen] Forced login failed. Invalid response format.',
+            );
+            Navigator.pushReplacementNamed(context, '/login');
+          }
+        } catch (e) {
+          // 로그인 실패 - 계정 만료 등의 이유
+          log('[DeciderScreen] Forced login failed with error: $e');
+          // 로그인 실패 시 기존 토큰과 로그인 상태 초기화
+          await GraphQLClientManager.logout();
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, '/login');
+        }
       } else {
+        // 저장된 로그인 정보가 없음
         log(
-          '[DeciderScreen] User is NOT logged in. Navigating to login screen.',
+          '[DeciderScreen] No stored credentials. Navigating to login screen.',
         );
         Navigator.pushReplacementNamed(context, '/login');
       }

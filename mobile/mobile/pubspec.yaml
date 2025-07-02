@@ -1,5 +1,5 @@
 name: mobile
-description: "A new Flutter project."
+description: "KOLPON"
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
 version: 1.0.0+1
@@ -31,6 +31,7 @@ dependencies:
   app_installer: ^1.3.1
   shared_preferences: ^2.5.3
   build_runner: ^2.4.15
+  hive_ce: ^2.10.1
   hive_ce_flutter: ^2.2.0
   hive_ce_generator: ^1.8.2
   dio: ^5.8.0+1

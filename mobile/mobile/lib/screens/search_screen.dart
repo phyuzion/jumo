@@ -42,6 +42,8 @@ class _SearchScreenState extends State<SearchScreen> {
         log('[SearchScreen] 새로운 SearchRecordsController 인스턴스 생성');
       }
 
+      bool hasInitialQuery = false;
+
       final args = ModalRoute.of(context)?.settings.arguments;
       if (args is Map<String, dynamic>) {
         final initialNum = args['number'] as String?;
@@ -49,19 +51,32 @@ class _SearchScreenState extends State<SearchScreen> {
           final normalizedNum = normalizePhone(initialNum);
           _textCtrl.text = normalizedNum;
           _onSubmit(normalizedNum);
+          hasInitialQuery = true;
+          // 검색어가 제공된 경우 포커스 해제
+          _focusNode.unfocus();
         }
       } else if (args is String) {
         final normalizedNum = normalizePhone(args);
         _textCtrl.text = normalizedNum;
         _onSubmit(normalizedNum);
+        hasInitialQuery = true;
+        // 검색어가 제공된 경우 포커스 해제
+        _focusNode.unfocus();
       }
-      _focusNode.requestFocus();
+
+      // 검색어가 없는 경우에만 포커스 요청
+      if (!hasInitialQuery) {
+        _focusNode.requestFocus();
+      }
     });
   }
 
   void _onSubmit(String num) async {
     final normalizedNum = normalizePhone(num.trim());
     if (normalizedNum.isEmpty) return;
+
+    // 검색 시작 시 키보드 포커스 해제
+    _focusNode.unfocus();
 
     if (!mounted) return;
     setState(() {

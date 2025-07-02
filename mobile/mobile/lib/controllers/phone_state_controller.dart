@@ -38,9 +38,6 @@ class PhoneStateController with WidgetsBindingObserver {
       log('[PhoneStateController][CRITICAL] 검색 데이터 리셋 요청 수신');
       appEventBus.fire(CallSearchResetEvent(''));
     });
-
-    // 정기적인 통화 상태 체크 타이머 시작
-    _startCallStateCheckTimer();
   }
 
   StreamSubscription<PhoneState>? _phoneStateSubscription;

@@ -500,63 +500,53 @@ class _SettingsScreenState extends State<SettingsScreen>
           // <<< 만료 알림 위젯 추가 (null 아닐 경우) >>>
           if (expiryWarningWidget != null) expiryWarningWidget,
 
-          // (1) 업데이트 알림 ListTile 수정
-          if (_updateAvailable)
-            ListTile(
-              // isThreeLine: true, // subtitle이 여러 줄이 될 수 있음을 명시 (선택적)
-              title: const Text(
-                '새로운 버전 설치 가능!',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.blue,
-                ),
+          // (1) 앱 다운로드 버튼 (항상 표시)
+          ListTile(
+            title: Text(
+              '앱 다운로드',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: _updateAvailable ? Colors.blue : Colors.black,
               ),
-              subtitle: Column(
-                // <<< subtitle에 Column 사용
-                crossAxisAlignment: CrossAxisAlignment.start, // 텍스트 왼쪽 정렬
-                children: [
-                  Text(
-                    // <<< 기존 subtitle 텍스트
-                    '서버 버전: $_serverVersion / 현재 버전: $APP_VERSION\n보안 이슈로 설치가 안될 경우 [직접 다운로드]로 설치하세요.',
-                  ),
-                  const SizedBox(height: 8), // 텍스트와 버튼 사이 간격
-                  Row(
-                    // <<< 버튼들을 담을 Row
-                    mainAxisAlignment: MainAxisAlignment.end, // 버튼들을 오른쪽으로 정렬
-                    children: [
-                      ElevatedButton(
-                        // <<< 업데이트 버튼
-                        onPressed: _onTapUpdateInstall,
-                        // 버튼 크기 조절 (선택적)
-                        style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          textStyle: TextStyle(fontSize: 13),
-                        ),
-                        child: const Text('업데이트'),
-                      ),
-                      const SizedBox(width: 8), // 버튼 사이 간격
-                      TextButton(
-                        // <<< 직접 다운로드 버튼
-                        onPressed: _onTapDirectDownload,
-                        // 버튼 크기 조절 (선택적)
-                        style: TextButton.styleFrom(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          textStyle: TextStyle(fontSize: 13),
-                        ),
-                        child: const Text('직접 다운로드'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              // trailing 제거
             ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '서버 버전: $_serverVersion / 현재 버전: $APP_VERSION${_updateAvailable ? '\n업데이트가 필요합니다.' : ''}',
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _onTapUpdateInstall,
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: TextStyle(fontSize: 13),
+                      ),
+                      child: const Text('업데이트'),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _onTapDirectDownload,
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        textStyle: TextStyle(fontSize: 13),
+                      ),
+                      child: const Text('직접 다운로드'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
           ListTile(
             leading: const Icon(Icons.phone_android),
             title: const Text('내 휴대폰번호'),
@@ -940,8 +930,27 @@ class _SettingsScreenState extends State<SettingsScreen>
                             child: const Text('취소'),
                           ),
                           TextButton(
-                            onPressed: () {
+                            onPressed: () async {
                               Navigator.pop(context);
+
+                              try {
+                                // 백그라운드 서비스 종료
+                                final appController =
+                                    context.read<AppController>();
+                                log(
+                                  '[SettingsScreen] Stopping background service before app restart...',
+                                );
+                                await appController.stopBackgroundService();
+                                log(
+                                  '[SettingsScreen] Background service stopped. Restarting app...',
+                                );
+                              } catch (e) {
+                                log(
+                                  '[SettingsScreen] Error stopping background service: $e',
+                                );
+                                // 오류가 발생해도 앱 재시작 진행
+                              }
+
                               // restart_app 패키지를 사용하여 앱 재시작
                               Restart.restartApp(
                                 notificationTitle: '앱 재시작 중',

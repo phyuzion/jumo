@@ -119,7 +119,7 @@ class CallTimer {
             android: AndroidNotificationDetails(
               FOREGROUND_SERVICE_CHANNEL_ID,
               'KOLPON 서비스 상태',
-              icon: 'ic_bg_service_small',
+              icon: 'app_icon_main',
               ongoing: true,
               autoCancel: false,
               importance: Importance.low,
