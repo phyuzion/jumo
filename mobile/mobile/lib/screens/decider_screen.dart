@@ -57,7 +57,9 @@ class _DeciderScreenState extends State<DeciderScreen> {
       final credentials = await authRepository.getSavedCredentials();
       final savedId = credentials['savedLoginId'];
       final savedPw = credentials['password'];
-      final myNumber = await authRepository.getMyNumber();
+      
+      // 전화번호를 항상 디바이스에서 직접 가져옴
+      final myNumber = await NativeMethods.getMyPhoneNumber();
 
       // 로그인 정보가 있으면 무조건 새로 로그인 시도
       if (savedId != null &&
@@ -81,6 +83,24 @@ class _DeciderScreenState extends State<DeciderScreen> {
               loginResult['user'] is Map &&
               loginResult['accessToken'] != null) {
             log('[DeciderScreen] Forced login successful. Navigating to home.');
+
+            // 사용자 정보 AuthRepository에 저장
+            final userData = loginResult['user'] as Map<String, dynamic>;
+            final token = loginResult['accessToken'] as String?;
+
+            // 토큰 저장
+            if (token != null) await authRepository.setToken(token);
+            
+            // 사용자 정보 저장
+            await authRepository.setUserId(userData['id'] ?? '');
+            await authRepository.setUserName(userData['name'] ?? '');
+            await authRepository.setUserType(userData['userType'] ?? '');
+            await authRepository.setLoginStatus(true);
+            await authRepository.setUserValidUntil(userData['validUntil'] ?? '');
+            await authRepository.setUserRegion(userData['region'] ?? '');
+            await authRepository.setUserGrade(userData['grade'] ?? '');
+
+            log('[DeciderScreen] User info saved to AuthRepository after login.');
 
             if (!mounted) return;
             // 로그인 성공 시 연락처 로드 시작

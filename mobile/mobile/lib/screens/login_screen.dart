@@ -62,8 +62,6 @@ class _LoginScreenState extends State<LoginScreen> {
       if (rawNumber.isNotEmpty) {
         final normalizedNumber = normalizePhone(rawNumber);
         log('[LoginScreen] My number loaded: $normalizedNumber');
-        // AuthRepository 사용하여 저장
-        await _authRepository.setMyNumber(normalizedNumber); // <<< 수정
         // 상태 업데이트
         setState(() {
           _myNumber = normalizedNumber;
@@ -71,34 +69,16 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       } else {
         log('[LoginScreen] Failed to get phone number (empty).');
-        // 저장된 번호가 있는지 확인 (AuthRepository 사용)
-        final savedNumber = await _authRepository.getMyNumber(); // <<< 추가
-        if (!mounted) return;
         setState(() {
-          if (savedNumber != null && savedNumber.isNotEmpty) {
-            _myNumber = savedNumber;
-            log('[LoginScreen] Loaded saved number: $savedNumber');
-          } else {
-            _myNumber = '번호 확인 실패';
-            log('[LoginScreen] No saved number found either.');
-          }
+          _myNumber = '번호 확인 실패';
           _isNumberLoading = false;
         });
       }
     } catch (e) {
       log('[LoginScreen] Error getting phone number: $e');
       if (mounted) {
-        // 오류 시에도 저장된 번호 확인
-        final savedNumber = await _authRepository.getMyNumber(); // <<< 추가
-        if (!mounted) return;
         setState(() {
-          if (savedNumber != null && savedNumber.isNotEmpty) {
-            _myNumber = savedNumber;
-            log('[LoginScreen] Loaded saved number after error: $savedNumber');
-          } else {
-            _myNumber = '번호 확인 오류';
-            log('[LoginScreen] No saved number found after error.');
-          }
+          _myNumber = '번호 확인 오류';
           _isNumberLoading = false;
         });
       }
@@ -112,7 +92,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (savedId != null) _loginIdCtrl.text = savedId;
     if (savedPw != null) _passwordCtrl.text = savedPw;
-    // _rememberMe = (savedId != null && savedPw != null); // <<< 제거
     if (mounted) {
       setState(() {}); // 비동기 작업 후 상태 업데이트
     }
@@ -143,7 +122,6 @@ class _LoginScreenState extends State<LoginScreen> {
           log(
             '[LoginScreen][OnLoginPressed] Refreshed phone number: $normalizedNewNumber',
           );
-          await _authRepository.setMyNumber(normalizedNewNumber); // 저장소에도 업데이트
           setState(() {
             _myNumber = normalizedNewNumber; // 내부 상태 업데이트
             _isNumberLoading = false; // 로딩 완료

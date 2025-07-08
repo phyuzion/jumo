@@ -41,7 +41,12 @@ class PhoneInCallService : InCallService() {
                     Call.STATE_DIALING -> "DIALING"
                     Call.STATE_ACTIVE -> "ACTIVE"
                     Call.STATE_HOLDING -> "HOLDING"
-                    Call.STATE_DISCONNECTED -> "DISCONNECTED"
+                    Call.STATE_DISCONNECTED -> {
+                        // 통화가 종료된 경우 즉시 IDLE 상태로 반환
+                        // 이렇게 하면 앱이 다시 활성화될 때 종료된 통화를 활성 통화로 잘못 처리하지 않음
+                        activeCalls.remove(lastCall) // 통화 목록에서 제거
+                        "IDLE"
+                    }
                     Call.STATE_CONNECTING -> "CONNECTING"
                     Call.STATE_DISCONNECTING -> "DISCONNECTING"
                     Call.STATE_NEW -> "NEW" // 일반적으로 볼 일 없음

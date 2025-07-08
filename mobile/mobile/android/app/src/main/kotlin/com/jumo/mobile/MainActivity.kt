@@ -49,6 +49,10 @@ class MainActivity : FlutterFragmentActivity() {
             Log.d(TAG, "기본 전화앱 설정 완료")
             // 기본 전화앱으로 설정된 후 통화 상태 초기화
             NativeBridge.resetCallState()
+            // 화면 잠금 플래그 비활성화
+            disableLockScreenFlags()
+            // 인코밍 콜 관련 변수 초기화
+            pendingIncomingNumber = null
             methodResultForDialer?.success(true)
         } else {
             Log.d(TAG, "기본 전화앱 설정 거부")
@@ -59,6 +63,11 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // 시작 시 기본적으로 화면 잠금 플래그 비활성화
+        disableLockScreenFlags()
+        
+        // 인텐트 확인 및 처리
         checkIntentForCall(intent)
     }
 
@@ -82,6 +91,28 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        
+        // 앱이 다시 활성화될 때 통화 상태 확인
+        try {
+            val callDetails = PhoneInCallService.getCurrentCallDetails()
+            val state = callDetails["state"] as String? ?: "IDLE"
+            
+            // 수신 전화 또는 통화 중인 경우 화면 잠금 플래그 활성화
+            if (state == "RINGING" || state == "ACTIVE" || state == "DIALING" || state == "HOLDING") {
+                Log.d(TAG, "onResume: 통화 관련 상태 감지($state), 화면 잠금 플래그 활성화")
+                enableLockScreenFlags()
+            } else {
+                Log.d(TAG, "onResume: 통화 중이 아님($state), 화면 잠금 플래그 비활성화")
+                disableLockScreenFlags()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "onResume: 통화 상태 확인 중 오류", e)
+            disableLockScreenFlags()
+        }
+    }
+
     private fun checkIntentForCall(intent: Intent?){
         if (intent == null) return
 
@@ -96,11 +127,13 @@ class MainActivity : FlutterFragmentActivity() {
         } else if (intent.action == "REJECT_CALL") {
             Log.d(TAG, "Reject call action from notification")
             PhoneInCallService.rejectCall()
+            disableLockScreenFlags()
             return
         }
 
         if (intent.getBooleanExtra("incoming_call", false)) {
             Log.d(TAG, "Incoming call intent received")
+            // 수신 전화일 때 화면 잠금 플래그 활성화
             enableLockScreenFlags()
             val number = intent.getStringExtra("incoming_number") ?: ""
             if (!flutterAppInitialized) {
@@ -112,20 +145,37 @@ class MainActivity : FlutterFragmentActivity() {
             }
         } else if (intent.getBooleanExtra("on_call", false)) {
             Log.d(TAG, "On Call intent received")
+            // 통화 중에도 화면 잠금 플래그 활성화
+            enableLockScreenFlags()
             val onCallNumber = intent.getStringExtra("on_call_number") ?: ""
             val onCallConnected = intent.getBooleanExtra("on_call_connected", false)
             NativeBridge.notifyOnCall(onCallNumber, onCallConnected) 
         } else if (intent.getBooleanExtra("call_ended", false)) {
             Log.d(TAG, "Call ended intent received")
+            // 통화 종료 시 화면 잠금 플래그 비활성화
+            disableLockScreenFlags()
             val endedNumber = intent.getStringExtra("call_ended_number") ?: ""
             val reason = intent.getStringExtra("call_ended_reason") ?: ""
             NativeBridge.notifyCallEnded(endedNumber, reason) 
+        } else {
+            // 통화 관련 인텐트가 아닌 경우 화면 잠금 플래그 비활성화
+            disableLockScreenFlags()
         }
         handleDialIntent(intent)
     }
 
     private fun enableLockScreenFlags() {
+        Log.d(TAG, "Enabling lock screen flags for incoming call")
         window.addFlags(
+            WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+        )
+    }
+
+    private fun disableLockScreenFlags() {
+        Log.d(TAG, "Disabling lock screen flags")
+        window.clearFlags(
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
                     WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON

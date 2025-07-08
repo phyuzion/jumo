@@ -12,7 +12,7 @@ class NotificationApi {
         message
         validUntil
         createdAt
-        targetUserId
+        targetPhoneNumber
       }
     }
   ''';

@@ -466,8 +466,8 @@ class CallStateProvider with ChangeNotifier {
 
       if (_callState == CallState.idle || _callState == CallState.ended) {
         // 현재 앱이 foreground에서 실행 중이고 전화가 감지된 경우
-        // Native 통화 상태에 따라 결정 (기본값은 ACTIVE로 설정)
-        newState = CallState.active;
+        // Native 통화 상태에 따라 결정 (기본값은 INCOMING으로 설정)
+        newState = CallState.incoming;
 
         // 번호는 이벤트에서 온 번호로 설정
         updateCallState(
@@ -495,11 +495,14 @@ class CallStateProvider with ChangeNotifier {
   void resetState() {
     log('[CallStateProvider][CRITICAL] 전체 상태 명시적 초기화');
 
-    // 이전 통화 관련 변수만 초기화 (상태는 유지)
+    // 이전 상태 로깅
     if (_callState != CallState.idle) {
-      log('[CallStateProvider] 통화 중 상태에서 리셋 - 현재 상태: $_callState');
+      log('[CallStateProvider] 통화 중 상태에서 리셋 - 이전 상태: $_callState');
     }
 
+    // 상태를 명시적으로 IDLE로 설정
+    _callState = CallState.idle;
+    
     // 이름 조회 관련 변수 초기화
     _nameFetchedAttemptedForNumbers.clear();
     _currentlyFetchingNameForNumber = null;

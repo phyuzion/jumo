@@ -2,7 +2,6 @@ import 'package:hive_ce/hive.dart';
 
 // Hive 박스 키 정의 (필요에 따라 수정)
 const String _authTokenKey = 'authToken';
-const String _myNumberKey = 'myNumber';
 const String _savedLoginIdKey = 'savedLoginId';
 const String _savedPasswordKey = 'savedPassword';
 const String _userIdKey = 'userId';
@@ -26,12 +25,6 @@ abstract class AuthRepository {
 
   /// 로그인 상태인지 확인합니다. (로그인 상태 값 기반)
   Future<bool> getLoginStatus();
-
-  /// 내 전화번호를 저장합니다.
-  Future<void> setMyNumber(String number);
-
-  /// 저장된 내 전화번호를 가져옵니다.
-  Future<String?> getMyNumber();
 
   /// 로그인 자격증명(ID, Password)을 저장합니다.
   Future<void> saveCredentials(String id, String password);
@@ -118,16 +111,6 @@ class HiveAuthRepository implements AuthRepository {
     return Future.value(
       _authBox.get(_loginStatusKey, defaultValue: false) as bool,
     );
-  }
-
-  @override
-  Future<void> setMyNumber(String number) async {
-    await _authBox.put(_myNumberKey, number);
-  }
-
-  @override
-  Future<String?> getMyNumber() async {
-    return Future.value(_authBox.get(_myNumberKey) as String?);
   }
 
   @override

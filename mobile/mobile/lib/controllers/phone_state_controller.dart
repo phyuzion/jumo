@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:developer';
 import 'package:flutter/material.dart';
+import 'package:mobile/main.dart';
+import 'package:mobile/repositories/auth_repository.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:mobile/providers/call_state_provider.dart';
 import 'package:mobile/controllers/call_log_controller.dart';
@@ -58,29 +60,37 @@ class PhoneStateController with WidgetsBindingObserver {
   Timer? _callStateCheckTimer;
   DateTime? _lastCallStateCheckTime;
 
+  // 로그인 상태 확인 후 타이머 시작
+  Future<void> _checkLoginAndStartTimer() async {
+    try {
+      final authRepository = getIt<AuthRepository>();
+      final isLoggedIn = await authRepository.getLoginStatus();
+
+      if (isLoggedIn) {
+        log('[PhoneStateController] 로그인 상태 확인: 로그인됨, 타이머 시작');
+        _startCallStateCheckTimer();
+      } else {
+        log('[PhoneStateController] 로그인 상태 확인: 로그인되지 않음, 타이머 시작하지 않음');
+      }
+    } catch (e) {
+      log('[PhoneStateController] 로그인 상태 확인 중 오류: $e');
+    }
+  }
+
   void startListening() {
     _phoneStateSubscription?.cancel();
     _phoneStateSubscription = PhoneState.stream.listen((event) async {
-      // log(
-      //   '[PhoneStateController][Stream] Received event: ${event.status}, Number: ${event.number}',
-      // );
       final isDef = await NativeDefaultDialerMethods.isDefaultDialer();
       if (!isDef) {
         await _handlePhoneStateEvent(event.status, event.number);
-      } else {
-        // log(
-        //   '[PhoneStateController][Stream] Default dialer is active, ignoring event from phone_state package.',
-        // );
       }
     });
     log(
       '[PhoneStateController.startListening] Listening to phone state stream.',
     );
 
-    // 통화 상태 체크 타이머가 실행 중이 아니면 시작
-    if (_callStateCheckTimer == null || !_callStateCheckTimer!.isActive) {
-      _startCallStateCheckTimer();
-    }
+    // 로그인 상태 확인 후 타이머 시작
+    _checkLoginAndStartTimer();
   }
 
   void stopListening() {
@@ -140,7 +150,7 @@ class PhoneStateController with WidgetsBindingObserver {
           callerName: updatedName,
         );
         log(
-          '[PhoneStateController] 수신 전화 노티피케이션 갱신 성공 (${_incomingCallNotificationCount}/20)',
+          '[PhoneStateController] 수신 전화 노티피케이션 갱신 성공 ($_incomingCallNotificationCount/20)',
         );
         _incomingCallNotificationCount++;
       } catch (e) {
@@ -367,7 +377,7 @@ class PhoneStateController with WidgetsBindingObserver {
         log('[PhoneStateController] 수신 전화 노티피케이션 표시 시도: $normalizedNumber');
         // 연락처 이름 가져오기
         String callerName = await contactsController.getContactName(
-          normalizedNumber!,
+          normalizedNumber,
         );
         await LocalNotificationService.showIncomingCallNotification(
           phoneNumber: normalizedNumber,
@@ -436,7 +446,7 @@ class PhoneStateController with WidgetsBindingObserver {
     if (stateMethod.isNotEmpty) {
       notifyServiceCallState(
         stateMethod,
-        normalizedNumber!,
+        normalizedNumber,
         callerName,
         connected: isConnected,
         reason: reason ?? (newState == CallState.ended ? 'missed' : ''),
@@ -518,9 +528,10 @@ class PhoneStateController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // log('[PhoneStateController.didChangeAppLifecycleState] State: $state');
     if (state == AppLifecycleState.resumed) {
       syncInitialCallState();
+      // 앱이 재개될 때 로그인 상태 확인 후 타이머 시작/중지
+      _checkLoginAndStartTimer();
     }
   }
 
@@ -536,10 +547,12 @@ class PhoneStateController with WidgetsBindingObserver {
       final state = callDetails['state'] as String? ?? 'IDLE';
       final number = callDetails['number'] as String?;
 
-      // 전화번호가 없거나 IDLE 상태면 처리할 필요 없음
-      if (number == null || number.isEmpty || state == 'IDLE') {
+      // 활성 통화 상태인 경우에만 처리 (ACTIVE, RINGING, DIALING, HOLDING)
+      // 그 외 상태(IDLE, DISCONNECTED 등)는 모두 무시
+      if (number == null || number.isEmpty || 
+          !(state == 'ACTIVE' || state == 'RINGING' || state == 'DIALING' || state == 'HOLDING')) {
         log(
-          '[PhoneStateController] No active call detected in initial state check.',
+          '[PhoneStateController] No active call detected or ignoring non-active state: $state',
         );
         return;
       }
@@ -675,13 +688,39 @@ class PhoneStateController with WidgetsBindingObserver {
   }
 
   // 정기적인 통화 상태 체크 타이머 시작
-  void _startCallStateCheckTimer() {
+  void _startCallStateCheckTimer() async {
+    // 먼저 로그인 상태 확인
+    final authRepository = getIt<AuthRepository>();
+    final isLoggedIn = await authRepository.getLoginStatus();
+
+    if (!isLoggedIn) {
+      log('[PhoneStateController] 로그인되지 않은 상태에서 타이머 시작 요청, 무시함');
+      // 기존 타이머가 있으면 정지
+      if (_callStateCheckTimer?.isActive ?? false) {
+        _callStateCheckTimer!.cancel();
+        _callStateCheckTimer = null;
+        log('[PhoneStateController] 로그인되지 않아 정기 통화 상태 체크 타이머 정지');
+      }
+      return;
+    }
+
+    // 이미 실행 중인 타이머가 있으면 취소
     _callStateCheckTimer?.cancel();
 
     // 2초마다 현재 통화 상태 체크
     _callStateCheckTimer = Timer.periodic(const Duration(seconds: 2), (
       _,
     ) async {
+      // 현재 로그인 상태 재확인
+      final stillLoggedIn = await authRepository.getLoginStatus();
+      if (!stillLoggedIn) {
+        // 로그인 상태가 아니면 타이머 중지
+        _callStateCheckTimer?.cancel();
+        _callStateCheckTimer = null;
+        log('[PhoneStateController] 로그인 상태가 변경되어 정기 통화 상태 체크 타이머 정지');
+        return;
+      }
+
       final now = DateTime.now();
 
       // 마지막 체크 이후 너무 짧은 시간이 지났으면 스킵 (최소 1.5초)

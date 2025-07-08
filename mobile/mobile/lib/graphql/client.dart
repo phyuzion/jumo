@@ -15,6 +15,7 @@ import 'package:mobile/repositories/sms_log_repository.dart';
 import 'package:mobile/repositories/blocked_number_repository.dart';
 import 'package:mobile/repositories/blocked_history_repository.dart';
 import 'package:mobile/repositories/settings_repository.dart';
+import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/utils/constants.dart';
 import 'package:hive_ce/hive.dart';
 
@@ -37,83 +38,94 @@ class GraphQLClientManager {
     }
   }
 
-  // 로그아웃 상태 플래그 추가
-  static bool _isLoggingOut = false;
-
-  // ===============================
-  // 1) 자동로그인 함수 (id/pw 재로그인)
+  /// 1) 자동로그인 함수 (id/pw 재로그인)
   static Future<void> tryAutoLogin() async {
     final authRepository = getIt<AuthRepository>();
     final credentials = await authRepository.getSavedCredentials();
     final savedId = credentials['savedLoginId'];
     final savedPw = credentials['password'];
-    final myNumber = await authRepository.getMyNumber();
 
     if (savedId == null ||
         savedId.isEmpty ||
         savedPw == null ||
-        savedPw.isEmpty ||
-        myNumber == null ||
-        myNumber.isEmpty) {
+        savedPw.isEmpty) {
       log('[GraphQL] No saved credentials found for auto-login.');
-    } else {
-      try {
-        final loginResult = await UserApi.userLogin(
-          loginId: savedId,
-          password: savedPw,
-          phoneNumber: myNumber,
-        );
-        log('[GraphQL] tryAutoLogin: Re-login API call success.');
+      return;
+    }
+    
+    try {
+      // 전화번호 가져오기 - 항상 디바이스에서 직접 읽어옴
+      final String? myNumber = await NativeMethods.getMyPhoneNumber();
+      if (myNumber == null || myNumber.isEmpty) {
+        log('[GraphQL] No phone number retrieved from device for auto-login.');
+        return;
+      }
+      
+      final loginResult = await UserApi.userLogin(
+        loginId: savedId,
+        password: savedPw,
+        phoneNumber: myNumber,
+      );
+      log('[GraphQL] tryAutoLogin: Re-login API call success.');
 
-        if (loginResult != null && loginResult['user'] is Map) {
-          final userData = loginResult['user'] as Map<String, dynamic>;
-          final token = loginResult['accessToken'] as String?;
+      if (loginResult != null && loginResult['user'] is Map) {
+        final userData = loginResult['user'] as Map<String, dynamic>;
+        final token = loginResult['accessToken'] as String?;
 
-          if (token != null) await authRepository.setToken(token);
-          await authRepository.setUserId(userData['id'] ?? '');
-          await authRepository.setUserName(userData['name'] ?? '');
-          await authRepository.setUserType(userData['userType'] ?? '');
-          await authRepository.setLoginStatus(true);
-          await authRepository.setUserValidUntil(userData['validUntil'] ?? '');
-          await authRepository.setUserRegion(userData['region'] ?? '');
-          await authRepository.setUserGrade(userData['grade'] ?? '');
+        if (token != null) await authRepository.setToken(token);
+        await authRepository.setUserId(userData['id'] ?? '');
+        await authRepository.setUserName(userData['name'] ?? '');
+        await authRepository.setUserType(userData['userType'] ?? '');
+        await authRepository.setLoginStatus(true);
+        await authRepository.setUserValidUntil(userData['validUntil'] ?? '');
+        await authRepository.setUserRegion(userData['region'] ?? '');
+        await authRepository.setUserGrade(userData['grade'] ?? '');
 
-          log('[GraphQL] User info saved via AuthRepository after auto-login.');
+        log('[GraphQL] User info saved via AuthRepository after auto-login.');
 
-          // 자동 로그인 성공 시 디바이스 정보 저장 (비동기로 실행하고 결과를 기다리지 않음)
-          try {
-            log(
-              '[GraphQLClientManager.tryAutoLogin] Saving device info after auto-login',
-            );
-            SettingApi.saveDeviceInfo(appVersion: APP_VERSION)
-                .then((success) {
-                  log(
-                    '[GraphQLClientManager.tryAutoLogin] Device info saved: $success',
-                  );
-                })
-                .catchError((e) {
-                  log(
-                    '[GraphQLClientManager.tryAutoLogin] Error saving device info: $e',
-                  );
-                });
-          } catch (e) {
-            log(
-              '[GraphQLClientManager.tryAutoLogin] Error initiating device info save: $e',
-            );
-          }
-        } else {
+        // 자동 로그인 성공 시 디바이스 정보 저장 (비동기로 실행하고 결과를 기다리지 않음)
+        try {
           log(
-            '[GraphQL] Auto-login successful but user data format is unexpected.',
+            '[GraphQLClientManager.tryAutoLogin] Saving device info after auto-login',
+          );
+          SettingApi.saveDeviceInfo(appVersion: APP_VERSION)
+              .then((success) {
+                log(
+                  '[GraphQLClientManager.tryAutoLogin] Device info saved: $success',
+                );
+              })
+              .catchError((e) {
+                log(
+                  '[GraphQLClientManager.tryAutoLogin] Error saving device info: $e',
+                );
+              });
+        } catch (e) {
+          log(
+            '[GraphQLClientManager.tryAutoLogin] Error initiating device info save: $e',
           );
         }
-      } catch (e) {
-        log('[GraphQL] tryAutoLogin failed during API call or saving: $e');
+      } else {
+        log(
+          '[GraphQL] Auto-login successful but user data format is unexpected.',
+        );
       }
+    } catch (e) {
+      log('[GraphQL] tryAutoLogin failed during API call or saving: $e');
     }
   }
 
+  // 로그아웃 중인지 추적하는 정적 변수
+  static bool _isLoggingOut = false;
+
   /// 로그아웃 (AuthRepository 및 다른 Box clear)
   static Future<void> logout() async {
+    // 이미 로그아웃 중이면 중복 호출 방지
+    if (_isLoggingOut) {
+      log('[GraphQL] 이미 로그아웃 중입니다. 중복 호출 방지.');
+      return;
+    }
+
+    _isLoggingOut = true;
     log('[GraphQL] Logging out and clearing user data...');
     try {
       // <<< AuthRepository 완전히 클리어 >>>
@@ -340,7 +352,7 @@ class GraphQLClientManager {
   ) async {
     final authRepository = getIt<AuthRepository>();
     await authRepository.saveCredentials(id, pw);
-    await authRepository.setMyNumber(myNumber);
+    // 전화번호 저장 로직 제거
     log('[GraphQL] Saved login credentials via AuthRepository.');
   }
 

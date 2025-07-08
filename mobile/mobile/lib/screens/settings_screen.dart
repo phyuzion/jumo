@@ -20,6 +20,7 @@ import 'dart:developer';
 import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:restart_app/restart_app.dart';
 //import 'package:system_alert_window/system_alert_window.dart';
+import 'package:mobile/services/native_methods.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -179,8 +180,10 @@ class _SettingsScreenState extends State<SettingsScreen>
   Future<void> _loadUserInfo() async {
     final authRepository = context.read<AuthRepository>();
 
+    // 전화번호는 디바이스에서 직접 가져옴
+    final phoneNumber = await NativeMethods.getMyPhoneNumber();
+
     final results = await Future.wait([
-      authRepository.getMyNumber(),
       authRepository.getSavedCredentials(),
       authRepository.getUserName(),
       authRepository.getUserRegion(),
@@ -190,13 +193,13 @@ class _SettingsScreenState extends State<SettingsScreen>
 
     if (!mounted) return;
 
-    _phoneNumber = (results[0] as String?) ?? '(정보 없음)';
-    final credentials = results[1] as Map<String, String?>;
+    _phoneNumber = phoneNumber.isNotEmpty ? phoneNumber : '(정보 없음)';
+    final credentials = results[0] as Map<String, String?>;
     _loginId = credentials['savedLoginId'] ?? '(정보 없음)';
-    _userName = (results[2] as String?) ?? '(정보 없음)';
-    _userRegion = (results[3] as String?) ?? '(정보 없음)';
-    _userGrade = (results[4] as String?) ?? '일반';
-    _rawValidUntil = (results[5] as String?) ?? ''; // <<< 원본 문자열 저장
+    _userName = (results[1] as String?) ?? '(정보 없음)';
+    _userRegion = (results[2] as String?) ?? '(정보 없음)';
+    _userGrade = (results[3] as String?) ?? '일반';
+    _rawValidUntil = (results[4] as String?) ?? ''; // <<< 원본 문자열 저장
     _validUntil = formatDateString(_rawValidUntil); // 포맷된 문자열 저장
   }
 

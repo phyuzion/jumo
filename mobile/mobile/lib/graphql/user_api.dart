@@ -5,11 +5,11 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'client.dart';
 import 'setting_api.dart'; // SettingApi 추가
-import 'package:mobile/utils/constants.dart'; // APP_VERSION 상수 사용
+import 'package:mobile/utils/constants.dart'; // APP_VERSION 상수와 normalizePhone 함수 사용
 
 /// 사용자 관련 API 모음
 class UserApi {
-  // <<< 생성자 및 멤버 변수 제거 >>>
+  // 전화번호 형식 정규화 함수 제거 - constants.dart의 normalizePhone 함수 사용
 
   // ==================== 1) userLogin ====================
   static const String _userLoginMutation = r'''
@@ -39,7 +39,10 @@ class UserApi {
     required String password,
     required String phoneNumber,
   }) async {
-    log('[UserApi.userLogin] loginId=$loginId, phone=$phoneNumber');
+    // 전화번호 정규화 - constants.dart의 normalizePhone 함수 사용
+    final normalizedPhone = normalizePhone(phoneNumber);
+    
+    log('[UserApi.userLogin] loginId=$loginId, phone=$phoneNumber (normalized=$normalizedPhone)');
     final client = GraphQLClientManager.client;
 
     final options = MutationOptions(
@@ -47,7 +50,7 @@ class UserApi {
       variables: {
         'loginId': loginId,
         'password': password,
-        'phoneNumber': phoneNumber,
+        'phoneNumber': normalizedPhone, // 정규화된 전화번호 사용
       },
     );
 
