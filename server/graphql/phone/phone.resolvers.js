@@ -378,9 +378,7 @@ module.exports = {
         if (todayDocs) {
           todayDocs.length = 0;
         }
-        if (formattedTodayRecords) {
-          formattedTodayRecords.length = 0;
-        }
+        // formattedTodayRecords는 결과 객체에 포함되므로 해제하지 않음
         
         return {
           id: normalizedPhoneNumber, // 임시 ID
@@ -424,9 +422,7 @@ module.exports = {
       if (finalFilteredRecords) {
         finalFilteredRecords.length = 0;
       }
-      if (formattedTodayRecords) {
-        formattedTodayRecords.length = 0;
-      }
+      // formattedTodayRecords는 결과 객체에 포함되므로 해제하지 않음
       
       return result;
     },
