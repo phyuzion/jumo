@@ -70,11 +70,12 @@ object ContactManager {
             ContactsContract.CommonDataKinds.StructuredName.GIVEN_NAME,
             ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME,
             ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME,
-            ContactsContract.CommonDataKinds.Phone.NUMBER
+            ContactsContract.CommonDataKinds.Phone.NUMBER,
+            ContactsContract.CommonDataKinds.Note.NOTE // 메모 필드 추가
         )
 
-        // 기본 selection: 이름 또는 전화번호 데이터 타입
-        var selection = "(${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ?)"
+        // 기본 selection: 이름, 전화번호, 메모 데이터 타입
+        var selection = "(${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ? OR ${ContactsContract.Data.MIMETYPE} = ?)"
         
         // 추가 필터링 조건
         selection += " AND ${ContactsContract.Data.IN_VISIBLE_GROUP} = 1" // 사용자에게 보이는 연락처만
@@ -86,7 +87,8 @@ object ContactManager {
 
         val selectionArgsList = mutableListOf<String>(
             ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE,
-            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE
+            ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE,
+            ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE  // 메모 타입 추가
         )
 
         if (lastSyncTimestampEpochMillis != null && lastSyncTimestampEpochMillis > 0) {
@@ -117,6 +119,7 @@ object ContactManager {
                 val middleNameCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.MIDDLE_NAME)
                 val familyNameCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.StructuredName.FAMILY_NAME)
                 val phoneNumberCol = it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER)
+                val noteCol = it.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE) // 메모 컬럼 인덱스
 
                 val currentChunkContacts = mutableListOf<Map<String, Any?>>()
                 val contactsAggregator = mutableMapOf<String, MutableMap<String, Any?>>() // 현재 CONTACT_ID의 데이터를 모으는 맵
@@ -149,6 +152,7 @@ object ContactManager {
                             "middleName" to "",
                             "lastName" to "",
                             "phoneNumber" to "",
+                            "memo" to "", // 메모 필드 추가
                             "lastUpdated" to it.getLong(lastUpdatedCol)
                         )
                     }
@@ -166,6 +170,14 @@ object ContactManager {
                             val number = it.getString(phoneNumberCol) ?: ""
                             if (contactEntry["phoneNumber"] == "" && number.isNotEmpty()) { // 첫 번째 유효한 번호만 저장
                                 contactEntry["phoneNumber"] = number
+                            }
+                        }
+                        ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE -> {
+                            if (noteCol != -1) { // 컬럼이 존재하는 경우에만 처리
+                                val note = it.getString(noteCol) ?: ""
+                                if (note.isNotEmpty()) {
+                                    contactEntry["memo"] = note
+                                }
                             }
                         }
                     }
@@ -204,7 +216,8 @@ object ContactManager {
         firstName: String,
         middleName: String,
         lastName: String,
-        phoneNumber: String
+        phoneNumber: String,
+        memo: String = "" // 메모 파라미터 추가 (기본값은 빈 문자열)
     ): String {
         val contentResolver: ContentResolver = context.contentResolver
         lateinit var contactIdToUse: String
@@ -284,6 +297,53 @@ object ContactManager {
         )
         if (updatedRows == 0) { 
             contentResolver.insert(ContactsContract.Data.CONTENT_URI, phoneValues)
+        }
+        
+        // 메모 저장 (항상 메모 필드 처리, 비어있으면 삭제)
+        val noteValues = ContentValues().apply {
+            put(ContactsContract.Data.RAW_CONTACT_ID, currentRawContactId)
+            put(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)
+            put(ContactsContract.CommonDataKinds.Note.NOTE, memo)
+        }
+        
+        // 기존 메모 조회
+        var existingMemo = ""
+        val memoCursor = contentResolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Note.NOTE),
+            "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(currentRawContactId, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE),
+            null
+        )
+        
+        memoCursor?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val noteColIdx = cursor.getColumnIndex(ContactsContract.CommonDataKinds.Note.NOTE)
+                if (noteColIdx != -1) {
+                    existingMemo = cursor.getString(noteColIdx) ?: ""
+                }
+            }
+        }
+        
+        if (memo.isEmpty() && existingMemo.isNotEmpty()) {
+            // 메모가 비어있고 기존 메모가 있으면 삭제
+            contentResolver.delete(
+                ContactsContract.Data.CONTENT_URI,
+                "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                arrayOf(currentRawContactId, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)
+            )
+        } else if (memo.isNotEmpty()) {
+            // 메모가 있으면 업데이트 또는 삽입
+            updatedRows = contentResolver.update(
+                ContactsContract.Data.CONTENT_URI,
+                noteValues,
+                "${ContactsContract.Data.RAW_CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} = ?",
+                arrayOf(currentRawContactId, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)
+            )
+            
+            if (updatedRows == 0) {
+                contentResolver.insert(ContactsContract.Data.CONTENT_URI, noteValues)
+            }
         }
         
         return contactIdToUse

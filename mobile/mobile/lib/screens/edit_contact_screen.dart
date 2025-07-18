@@ -48,6 +48,8 @@ class _EditContactScreenState extends State<EditContactScreen> {
 
     _nameCtrl.text = widget.initialName ?? '';
     _phoneCtrl.text = widget.initialPhone ?? '';
+    // 메모 필드 초기화
+    _memoCtrl.text = widget.initialContactModel?.memo ?? '';
     _checkBlockedStatus();
 
     if (!isNew && widget.initialPhone != null) {
@@ -65,8 +67,10 @@ class _EditContactScreenState extends State<EditContactScreen> {
       );
       if (record != null && mounted) {
         setState(() {
-          _memoCtrl.text = record['memo'] as String? ?? '';
-          _type = record['type'] as int? ?? 0;
+          // 메모 필드 설정 (필요시 추가)
+          if (record['memo'] != null) {
+            _memoCtrl.text = record['memo'];
+          }
         });
       }
     } catch (e) {
@@ -111,6 +115,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
     _showLoadingDialog();
 
     try {
+      // 1. 먼저 네이티브 연락처 저장 (로컬)
       String? deviceContactId;
       final bool isUpdateOperation =
           widget.initialContactId != null &&
@@ -135,6 +140,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
           middleName: middleName,
           lastName: lastName,
           phoneNumber: phone,
+          memo: memo,
         );
       } else {
         // 신규: id 없이 upsertContact 호출
@@ -144,6 +150,7 @@ class _EditContactScreenState extends State<EditContactScreen> {
           middleName: middleName,
           lastName: lastName,
           phoneNumber: phone,
+          memo: memo,
         );
       }
 

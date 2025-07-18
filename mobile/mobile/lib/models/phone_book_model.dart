@@ -96,6 +96,7 @@ class PhoneBookModel {
       rawContactId: map['rawId']?.toString(),
       name: map['displayName']?.toString() ?? '',
       phoneNumber: map['phoneNumber']?.toString() ?? '',
+      memo: map['memo']?.toString() ?? '',
       createdAt: parsedCreatedAt,
       // memo, type, updatedAt 등은 fromMap에서는 기본값 또는 null 처리
     );

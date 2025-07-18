@@ -81,6 +81,7 @@ object NativeBridge {
                         val middleName = call.argument<String>("middleName") ?: ""
                         val lastName = call.argument<String>("lastName") ?: ""
                         val phoneNumber = call.argument<String>("phoneNumber") ?: ""
+                        val memo = call.argument<String>("memo") ?: ""
 
                         val contactId = ContactManager.upsertContact(
                             JumoApp.context,
@@ -89,7 +90,8 @@ object NativeBridge {
                             firstName,
                             middleName,
                             lastName,
-                            phoneNumber
+                            phoneNumber,
+                            memo
                         )
                         result.success(contactId)
                     } catch (e: Exception) {

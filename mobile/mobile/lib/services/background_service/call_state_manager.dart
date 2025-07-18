@@ -43,6 +43,37 @@ class CallStateManager {
   }
 
   void _setupEventListeners() {
+    // 기본 다이얼러 설정 변경 이벤트 처리
+    _service.on('defaultDialerChanged').listen((event) async {
+      final bool isDefault = event?['isDefault'] as bool? ?? false;
+      log('[CallStateManager][CRITICAL] 기본 다이얼러 설정 변경: isDefault=$isDefault - 상태 초기화');
+      
+      // 상태 완전히 초기화
+      _clearCallState();
+      
+      // 인코밍 콜 알림 갱신 타이머 정지
+      _stopIncomingCallRefreshTimer();
+      
+      // 수신 전화 노티피케이션 취소
+      try {
+        await LocalNotificationService.cancelNotification(CALL_STATUS_NOTIFICATION_ID);
+        log('[CallStateManager] 기본 다이얼러 변경으로 수신 전화 노티피케이션 취소 성공');
+      } catch (e) {
+        log('[CallStateManager] 기본 다이얼러 변경으로 수신 전화 노티피케이션 취소 실패: $e');
+      }
+      
+      // 타이머 중지
+      _callTimer.stopCallTimer();
+      
+      // 포그라운드 알림 업데이트
+      await _updateForegroundNotification('노쇼방지', '', 'idle');
+      
+      // UI에 상태 초기화 알림
+      if (_uiInitialized) {
+        _updateUiCallState('ended', '', '', false, 0, 'default_dialer_change');
+      }
+    });
+    
     // UI 초기화 완료 신호를 처리하는 리스너
     _service.on('appInitialized').listen((event) async {
       log('[CallStateManager] Received appInitialized signal from main app');

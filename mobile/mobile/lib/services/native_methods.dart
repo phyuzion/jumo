@@ -159,6 +159,7 @@ class NativeMethods {
     required String middleName,
     required String lastName,
     required String phoneNumber,
+    String? memo,
   }) async {
     try {
       final String result = await _methodChannel.invokeMethod('upsertContact', {
@@ -168,6 +169,7 @@ class NativeMethods {
         'middleName': middleName,
         'lastName': lastName,
         'phoneNumber': phoneNumber,
+        'memo': memo,
       });
       return result;
     } on PlatformException catch (e) {

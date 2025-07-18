@@ -48,6 +48,9 @@ List<PhoneBookModel> _parseNativeContacts(
       parsedCreatedAt = DateTime.tryParse(lastUpdatedValue);
     }
 
+    // 메모 필드 가져오기
+    String memo = (c['memo'] ?? '').toString().trim();
+
     result.add(
       PhoneBookModel(
         contactId: c['id']?.toString() ?? '',
@@ -57,6 +60,7 @@ List<PhoneBookModel> _parseNativeContacts(
         // firstName: firstName,
         // lastName: lastName,
         phoneNumber: normPhone,
+        memo: memo, // 메모 필드 추가
         createdAt: parsedCreatedAt,
       ),
     );
@@ -294,6 +298,10 @@ class ContactsController with ChangeNotifier {
                 'phoneNumber': normalizePhone(contact.phoneNumber),
                 'name': contact.name,
               };
+              // 메모 필드 추가 (서버 API가 이제 지원함)
+              if (contact.memo != null && contact.memo!.isNotEmpty) {
+                serverMap['memo'] = contact.memo;
+              }
               if (contact.createdAt != null) {
                 serverMap['createdAt'] =
                     contact.createdAt!.toUtc().toIso8601String();
@@ -345,10 +353,11 @@ class ContactsController with ChangeNotifier {
         bool phoneChanged =
             normalizePhone(originalContact.phoneNumber) !=
             normalizePhone(contactInCurrent.phoneNumber);
+        bool memoChanged = originalContact.memo != contactInCurrent.memo; // 메모 변경 감지
         bool timestampChanged =
             (originalContact.createdAt?.millisecondsSinceEpoch ?? 0) !=
             (contactInCurrent.createdAt?.millisecondsSinceEpoch ?? 0);
-        if (nameChanged || phoneChanged || timestampChanged) {
+        if (nameChanged || phoneChanged || memoChanged || timestampChanged) {
           delta.add(contactInCurrent);
         }
       }
