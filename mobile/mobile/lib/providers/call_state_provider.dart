@@ -40,9 +40,6 @@ class CallStateProvider with ChangeNotifier {
   String? _ringingCallNumber;
   String? _ringingCallerName;
 
-  // 이전 통화 상태 정보 저장용 변수 (불필요한 업데이트 방지)
-  Map<String, dynamic>? _lastCallDetails;
-  
   Timer? _endedStateTimer;
   int _endedCountdownSeconds = 10;
 
@@ -111,17 +108,6 @@ class CallStateProvider with ChangeNotifier {
     try {
       final callDetails = await NativeMethods.getCurrentCallState();
       log('[CallStateProvider] 통화 상태 정보: $callDetails');
-
-      // 이전 상태와 동일한지 확인
-      if (_lastCallDetails != null &&
-          _areCallDetailsEqual(_lastCallDetails!, callDetails)) {
-        // 로그를 줄이기 위해 주석 처리
-        // log('[CallStateProvider] 통화 상태 변경 없음, 업데이트 스킵');
-        return; // 상태 변경이 없으면 여기서 종료
-      }
-
-      // 상태가 변경되었으면 현재 상태를 저장
-      _lastCallDetails = Map<String, dynamic>.from(callDetails);
 
       // 수신 중인 통화 정보 업데이트
       final ringingNumber = callDetails['ringing_number'] as String?;
@@ -201,17 +187,6 @@ class CallStateProvider with ChangeNotifier {
     } catch (e) {
       log('[CallStateProvider] 통화 상태 동기화 오류: $e');
     }
-  }
-  
-  // 두 통화 상태 정보가 동일한지 비교하는 함수
-  bool _areCallDetailsEqual(Map<String, dynamic> prev, Map<String, dynamic> current) {
-    // 주요 상태 필드 비교
-    return prev['active_state'] == current['active_state'] && 
-           prev['active_number'] == current['active_number'] &&
-           prev['holding_state'] == current['holding_state'] &&
-           prev['holding_number'] == current['holding_number'] &&
-           prev['ringing_state'] == current['ringing_state'] &&
-           prev['ringing_number'] == current['ringing_number'];
   }
 
   // 대기 중인 통화 수락 함수

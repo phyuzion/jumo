@@ -59,9 +59,6 @@ class PhoneStateController with WidgetsBindingObserver {
   // 통화 상태 정기 체크 타이머 추가
   Timer? _callStateCheckTimer;
   DateTime? _lastCallStateCheckTime;
-  
-  // 이전 통화 상태 정보 저장용 변수 (불필요한 업데이트 방지)
-  Map<String, dynamic>? _lastCallDetails;
 
   // 로그인 상태 확인 후 타이머 시작
   Future<void> _checkLoginAndStartTimer() async {
@@ -742,24 +739,12 @@ class PhoneStateController with WidgetsBindingObserver {
         final callDetails = await NativeMethods.getCurrentCallState();
         log('[PhoneStateController] 정기 통화 상태 체크 결과: $callDetails');
 
-        // 이전 상태와 현재 상태 비교, 동일하면 처리 스킵
-        if (_lastCallDetails != null && _areCallDetailsEqual(_lastCallDetails!, callDetails)) {
-          // log('[PhoneStateController] 통화 상태 변경 없음, 정기 체크 스킵');
-          return;
-        }
-
-        // 상태가 변경되었으면 현재 상태 저장
-        _lastCallDetails = Map<String, dynamic>.from(callDetails);
-
-        // 필요한 값 추출 (기존 코드와의 호환성 유지)
-        final String? activeNumber = callDetails['active_number'] as String?;
-        final String? activeState = callDetails['active_state'] as String?;
-        final String? ringingNumber = callDetails['ringing_number'] as String?;
-        final String? ringingState = callDetails['ringing_state'] as String?;
+        final state = callDetails['state'] as String? ?? 'IDLE';
+        final number = callDetails['number'] as String?;
 
         // RINGING 상태이고 전화번호가 있는 경우
-        if (ringingNumber != null && ringingNumber.isNotEmpty && ringingState == 'RINGING') {
-          final normalizedNumber = normalizePhone(ringingNumber);
+        if (state == 'RINGING' && number != null && number.isNotEmpty) {
+          final normalizedNumber = normalizePhone(number);
 
           // 차단된 번호인지 확인 (이 부분이 먼저 실행되도록 수정)
           bool isBlocked = false;
@@ -827,7 +812,7 @@ class PhoneStateController with WidgetsBindingObserver {
           }
         }
         // RINGING이 아닌데 노티피케이션 표시 중이면 취소
-        else if (ringingState != 'RINGING' && _incomingCallRefreshTimer != null) {
+        else if (state != 'RINGING' && _incomingCallRefreshTimer != null) {
           log('[PhoneStateController] 정기 체크: RINGING 아님, 노티피케이션 정리');
           _stopIncomingCallRefreshTimer();
           try {
@@ -838,18 +823,18 @@ class PhoneStateController with WidgetsBindingObserver {
           }
 
           // ACTIVE 상태로 변경된 경우
-          if ((activeState == 'ACTIVE' || activeState == 'DIALING') &&
-              activeNumber != null &&
-              activeNumber.isNotEmpty) {
+          if ((state == 'ACTIVE' || state == 'DIALING') &&
+              number != null &&
+              number.isNotEmpty) {
             log('[PhoneStateController] 정기 체크: 통화 활성화 감지');
-            final normalizedNumber = normalizePhone(activeNumber);
+            final normalizedNumber = normalizePhone(number);
 
             // 백그라운드 서비스에 통화 시작 알림
             notifyServiceCallState(
               'onCall',
               normalizedNumber,
               '',
-              connected: activeState == 'ACTIVE',
+              connected: state == 'ACTIVE',
             );
           }
         }
@@ -859,15 +844,5 @@ class PhoneStateController with WidgetsBindingObserver {
     });
 
     log('[PhoneStateController] 정기 통화 상태 체크 타이머 시작 (2초 간격)');
-  }
-
-  bool _areCallDetailsEqual(Map<String, dynamic> prev, Map<String, dynamic> current) {
-    // 현재 통화 상태가 이전 상태와 동일한지 확인
-    return prev['active_number'] == current['active_number'] &&
-           prev['active_state'] == current['active_state'] &&
-           prev['holding_number'] == current['holding_number'] &&
-           prev['holding_state'] == current['holding_state'] &&
-           prev['ringing_number'] == current['ringing_number'] &&
-           prev['ringing_state'] == current['ringing_state'];
   }
 }
