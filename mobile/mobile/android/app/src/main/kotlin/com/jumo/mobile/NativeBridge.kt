@@ -48,6 +48,16 @@ object NativeBridge {
                 "toggleMute" -> { PhoneInCallService.toggleMute(call.argument<Boolean>("muteOn") ?: false); result.success(true) }
                 "toggleHold" -> { PhoneInCallService.toggleHold(call.argument<Boolean>("holdOn") ?: false); result.success(true) }
                 "toggleSpeaker" -> { PhoneInCallService.toggleSpeaker(call.argument<Boolean>("speakerOn") ?: false); result.success(true) }
+                "switchCalls" -> { 
+                    Log.d("NativeBridge", "switchCalls 호출됨") 
+                    PhoneInCallService.switchActiveAndHoldingCalls()
+                    result.success(true) 
+                }
+                "endAndAcceptWaitingCall" -> {
+                    Log.d("NativeBridge", "endAndAcceptWaitingCall 호출됨")
+                    PhoneInCallService.endCurrentAndAcceptRinging()
+                    result.success(true)
+                }
                 "getMyPhoneNumber" -> { result.success(getMyPhoneNumberFromTelephony()) }
                 "openSmsApp" -> { 
                     val number = call.argument<String>("phoneNumber") ?: ""

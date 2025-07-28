@@ -549,143 +549,142 @@ class PhoneStateController with WidgetsBindingObserver {
         '[PhoneStateController] Initial call state from native: $callDetails',
       );
 
-      final state = callDetails['state'] as String? ?? 'IDLE';
-      final number = callDetails['number'] as String?;
+      // 활성 통화, 대기 통화, 수신 통화 확인
+      final activeNumber = callDetails['active_number'] as String?;
+      final activeState = callDetails['active_state'] as String?;
+      final holdingNumber = callDetails['holding_number'] as String?; 
+      final holdingState = callDetails['holding_state'] as String?;
+      final ringingNumber = callDetails['ringing_number'] as String?;
+      final ringingState = callDetails['ringing_state'] as String?;
 
-      // 활성 통화 상태인 경우에만 처리 (ACTIVE, RINGING, DIALING, HOLDING)
-      // 그 외 상태(IDLE, DISCONNECTED 등)는 모두 무시
-      if (number == null || number.isEmpty || 
-          !(state == 'ACTIVE' || state == 'RINGING' || state == 'DIALING' || state == 'HOLDING')) {
+      // 활성 통화나 대기 통화, 수신 통화가 없으면 종료
+      if ((activeNumber == null || activeNumber.isEmpty || activeState != 'ACTIVE') &&
+          (holdingNumber == null || holdingNumber.isEmpty || holdingState != 'HOLDING') &&
+          (ringingNumber == null || ringingNumber.isEmpty || ringingState != 'RINGING')) {
         log(
-          '[PhoneStateController] No active call detected or ignoring non-active state: $state',
+          '[PhoneStateController] No active/holding/ringing calls detected',
         );
         return;
       }
 
-      // 통화 상태에 따라 적절한 이벤트 발생
-      final normalizedNumber = normalizePhone(number);
-      String callerName = '';
+      // 수신 통화가 있으면 처리
+      if (ringingNumber != null && ringingNumber.isNotEmpty && ringingState == 'RINGING') {
+        final normalizedNumber = normalizePhone(ringingNumber);
+        log(
+          '[PhoneStateController] Detected RINGING call on app start/resume: $normalizedNumber',
+        );
 
-      // 전화 상태에 따른 처리
-      switch (state) {
-        case 'RINGING':
-          log(
-            '[PhoneStateController] Detected RINGING call on app start/resume: $normalizedNumber',
-          );
-
-          // 차단된 번호인지 확인 (이 부분이 먼저 실행되도록 수정)
-          bool isBlocked = false;
-          try {
-            isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
-              normalizedNumber,
-              addHistory: false, // 이미 진행 중인 전화이므로 기록 남기지 않음
-            );
-          } catch (e) {
-            log('[PhoneStateController] Error checking block status: $e');
-          }
-
-          if (isBlocked) {
-            log(
-              '[PhoneStateController] Call from $normalizedNumber is BLOCKED.',
-            );
-            try {
-              await NativeMethods.rejectCall();
-            } catch (e) {
-              log('[PhoneStateController] Error rejecting call: $e');
-            }
-            return; // 차단된 번호라면 여기서 처리 종료
-          }
-
-          // 차단되지 않은 번호인 경우에만 발신자 정보 초기화 이벤트 트리거
-          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
-
-          // 수신 전화 노티피케이션 표시 및 타이머 시작
-          try {
-            log(
-              '[PhoneStateController] 앱 시작/재개 시 수신 전화 노티피케이션 표시 시도: $normalizedNumber',
-            );
-            // 연락처 이름 가져오기
-            callerName = await contactsController.getContactName(
-              normalizedNumber,
-            );
-            await LocalNotificationService.showIncomingCallNotification(
-              phoneNumber: normalizedNumber,
-              callerName: callerName,
-            );
-            log('[PhoneStateController] 수신 전화 노티피케이션 표시 성공');
-
-            // 노티피케이션 갱신 타이머 시작
-            _startIncomingCallRefreshTimer(normalizedNumber, callerName);
-          } catch (e) {
-            log('[PhoneStateController] 수신 전화 노티피케이션 표시 오류: $e');
-          }
-
-          // 통화 상태 알림을 백그라운드 서비스에 전송
-          notifyServiceCallState(
-            'onIncomingNumber',
+        // 차단된 번호인지 확인
+        bool isBlocked = false;
+        try {
+          isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
             normalizedNumber,
-            callerName,
+            addHistory: false, // 이미 진행 중인 전화이므로 기록 남기지 않음
           );
-          break;
+        } catch (e) {
+          log('[PhoneStateController] Error checking block status: $e');
+        }
 
-        case 'ACTIVE':
-        case 'DIALING':
+        if (isBlocked) {
           log(
-            '[PhoneStateController] Detected ACTIVE/DIALING call on app start/resume: $normalizedNumber',
+            '[PhoneStateController] Call from $normalizedNumber is BLOCKED.',
           );
-
-          // 발신자 정보 초기화 이벤트 트리거
-          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
-
-          // 통화 중이므로 인코밍 콜 노티피케이션 취소 및 타이머 정지
-          _stopIncomingCallRefreshTimer();
           try {
-            await LocalNotificationService.cancelNotification(9876);
-            log('[PhoneStateController] 활성 통화 상태에서 수신 전화 노티피케이션 취소');
+            await NativeMethods.rejectCall();
           } catch (e) {
-            log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+            log('[PhoneStateController] Error rejecting call: $e');
           }
+          return; // 차단된 번호라면 여기서 처리 종료
+        }
 
-          // 통화 상태 알림을 백그라운드 서비스에 전송
-          notifyServiceCallState(
-            'onCall',
-            normalizedNumber,
-            callerName,
-            connected: state == 'ACTIVE',
-          );
-          break;
+        // 차단되지 않은 번호인 경우에만 발신자 정보 초기화 이벤트 트리거
+        appEventBus.fire(CallSearchResetEvent(normalizedNumber));
 
-        case 'HOLDING':
+        // 수신 전화 노티피케이션 표시 및 타이머 시작
+        try {
           log(
-            '[PhoneStateController] Detected HOLDING call on app start/resume: $normalizedNumber',
+            '[PhoneStateController] 앱 시작/재개 시 수신 전화 노티피케이션 표시 시도: $normalizedNumber',
           );
-
-          // 발신자 정보 초기화 이벤트 트리거
-          appEventBus.fire(CallSearchResetEvent(normalizedNumber));
-
-          // 통화 중이므로 인코밍 콜 노티피케이션 취소 및 타이머 정지
-          _stopIncomingCallRefreshTimer();
-          try {
-            await LocalNotificationService.cancelNotification(9876);
-            log('[PhoneStateController] 홀드 상태에서 수신 전화 노티피케이션 취소');
-          } catch (e) {
-            log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
-          }
-
-          // 홀드 상태는 ACTIVE 상태로 간주하고 connected = true로 설정
-          notifyServiceCallState(
-            'onCall',
+          // 연락처 이름 가져오기
+          String callerName = await contactsController.getContactName(
             normalizedNumber,
-            callerName,
-            connected: true,
           );
-          break;
+          await LocalNotificationService.showIncomingCallNotification(
+            phoneNumber: normalizedNumber,
+            callerName: callerName,
+          );
+          log('[PhoneStateController] 수신 전화 노티피케이션 표시 성공');
 
-        default:
-          log(
-            '[PhoneStateController] Unhandled call state: $state for number: $normalizedNumber',
-          );
-          break;
+          // 노티피케이션 갱신 타이머 시작
+          _startIncomingCallRefreshTimer(normalizedNumber, callerName);
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 표시 오류: $e');
+        }
+
+        // 통화 상태 알림을 백그라운드 서비스에 전송
+        notifyServiceCallState(
+          'onIncomingNumber',
+          normalizedNumber,
+          '',
+        );
+        return;  // 수신 통화 처리 후 종료
+      }
+
+      // 활성 통화가 있으면 처리
+      if (activeNumber != null && activeNumber.isNotEmpty && activeState == 'ACTIVE') {
+        final normalizedNumber = normalizePhone(activeNumber);
+        log(
+          '[PhoneStateController] Detected ACTIVE call on app start/resume: $normalizedNumber',
+        );
+
+        // 발신자 정보 초기화 이벤트 트리거
+        appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+        // 통화 중이므로 인코밍 콜 노티피케이션 취소 및 타이머 정지
+        _stopIncomingCallRefreshTimer();
+        try {
+          await LocalNotificationService.cancelNotification(9876);
+          log('[PhoneStateController] 활성 통화 상태에서 수신 전화 노티피케이션 취소');
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+        }
+
+        // 통화 상태 알림을 백그라운드 서비스에 전송
+        notifyServiceCallState(
+          'onCall',
+          normalizedNumber,
+          '',
+          connected: true,
+        );
+        return;  // 활성 통화 처리 후 종료
+      }
+
+      // 대기 통화가 있으면 처리
+      if (holdingNumber != null && holdingNumber.isNotEmpty && holdingState == 'HOLDING') {
+        final normalizedNumber = normalizePhone(holdingNumber);
+        log(
+          '[PhoneStateController] Detected HOLDING call on app start/resume: $normalizedNumber',
+        );
+
+        // 발신자 정보 초기화 이벤트 트리거
+        appEventBus.fire(CallSearchResetEvent(normalizedNumber));
+
+        // 통화 중이므로 인코밍 콜 노티피케이션 취소 및 타이머 정지
+        _stopIncomingCallRefreshTimer();
+        try {
+          await LocalNotificationService.cancelNotification(9876);
+          log('[PhoneStateController] 홀드 상태에서 수신 전화 노티피케이션 취소');
+        } catch (e) {
+          log('[PhoneStateController] 수신 전화 노티피케이션 취소 오류: $e');
+        }
+
+        // 홀드 상태는 ACTIVE 상태로 간주하고 connected = true로 설정
+        notifyServiceCallState(
+          'onCall',
+          normalizedNumber,
+          '',
+          connected: true,
+        );
       }
     } catch (e) {
       log('[PhoneStateController] Error syncing initial call state: $e');

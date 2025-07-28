@@ -18,3 +18,10 @@ class CallSearchResetEvent {
   final String phoneNumber;
   CallSearchResetEvent(this.phoneNumber);
 }
+
+/// 통화 상태 변경 이벤트
+class CallStateChangedEvent {
+  final String state;
+  final String? number;
+  CallStateChangedEvent({required this.state, this.number});
+}

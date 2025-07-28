@@ -28,33 +28,105 @@ class PhoneInCallService : InCallService() {
         fun toggleMute(mute: Boolean) { instance?.toggleMuteCall(mute) }
         fun toggleHold(hold: Boolean) { instance?.toggleHoldTopCall(hold) }
         fun toggleSpeaker(speaker: Boolean) { instance?.toggleSpeakerCall(speaker) }
-
-        // <<< 추가: 현재 통화 정보 반환 메서드 >>>
-        fun getCurrentCallDetails(): Map<String, Any?> {
-            val lastCall = activeCalls.lastOrNull()
-            return if (lastCall == null) {
-                mapOf("state" to "IDLE", "number" to null)
+        
+        // 통화 전환 메서드
+        fun switchActiveAndHoldingCalls() {
+            Log.d("PhoneInCallService", "[switchActiveAndHoldingCalls] 통화 전환 시도")
+            val activeCall = activeCalls.find { it.state == Call.STATE_ACTIVE }
+            val holdingCall = activeCalls.find { it.state == Call.STATE_HOLDING }
+            
+            if (activeCall != null && holdingCall != null) {
+                Log.d("PhoneInCallService", "[switchActiveAndHoldingCalls] 활성 통화 대기로 전환, 대기 통화 활성화")
+                activeCall.hold()
+                holdingCall.unhold()
             } else {
-                val number = lastCall.details.handle?.schemeSpecificPart
-                val stateString = when (lastCall.state) {
-                    Call.STATE_RINGING -> "RINGING"
-                    Call.STATE_DIALING -> "DIALING"
+                Log.d("PhoneInCallService", "[switchActiveAndHoldingCalls] 전환 가능한 통화 없음: 활성=$activeCall, 대기=$holdingCall")
+            }
+        }
+        
+        // 현재 통화 끊고 수신 통화 받기 메서드 추가
+        fun endCurrentAndAcceptRinging() {
+            Log.d("PhoneInCallService", "[endCurrentAndAcceptRinging] 현재 통화 종료 후 수신 통화 수락 시도")
+            
+            // 활성 통화와 수신 통화 찾기
+            val activeCall = activeCalls.find { it.state == Call.STATE_ACTIVE }
+            val ringingCall = activeCalls.find { it.state == Call.STATE_RINGING }
+            
+            if (activeCall != null && ringingCall != null) {
+                try {
+                    Log.d("PhoneInCallService", "[endCurrentAndAcceptRinging] 활성 통화 종료 시작: ${activeCall.details.handle?.schemeSpecificPart}")
+                    
+                    // 먼저 수신 통화 객체를 저장
+                    val callToAccept = ringingCall
+                    
+                    // 활성 통화 종료
+                    activeCall.disconnect()
+                    
+                    // 잠시 대기 후 수신 통화 수락
+                    Thread.sleep(300)  // 300ms 대기
+                    
+                    if (callToAccept.state == Call.STATE_RINGING) {
+                        Log.d("PhoneInCallService", "[endCurrentAndAcceptRinging] 수신 통화 응답: ${callToAccept.details.handle?.schemeSpecificPart}")
+                        callToAccept.answer(VideoProfile.STATE_AUDIO_ONLY)
+                    } else {
+                        Log.d("PhoneInCallService", "[endCurrentAndAcceptRinging] 수신 통화가 더 이상 RINGING 상태가 아님: ${callToAccept.state}")
+                    }
+                } catch (e: Exception) {
+                    Log.e("PhoneInCallService", "[endCurrentAndAcceptRinging] 오류 발생: ${e.message}")
+                }
+            } else {
+                Log.d("PhoneInCallService", "[endCurrentAndAcceptRinging] 필요한 통화 없음: 활성=$activeCall, 수신=$ringingCall")
+            }
+        }
+
+        // 현재 통화 정보 반환 메서드 (완전히 새로 구현)
+        fun getCurrentCallDetails(): Map<String, Any?> {
+            val callMap = mutableMapOf<String, Any?>()
+            
+            // 통화 상태 초기화 (IDLE)
+            callMap["active_state"] = "IDLE"
+            callMap["holding_state"] = "IDLE"
+            callMap["ringing_state"] = "IDLE"
+            
+            // 활성 통화 검색
+            val activeCall = activeCalls.find { it.state == Call.STATE_ACTIVE }
+            if (activeCall != null) {
+                callMap["active_number"] = activeCall.details.handle?.schemeSpecificPart
+                callMap["active_state"] = "ACTIVE"
+                Log.d("PhoneInCallService", "[getCurrentCallDetails] 활성 통화: ${callMap["active_number"]}")
+            }
+            
+            // 대기 중인 통화 검색
+            val holdingCall = activeCalls.find { it.state == Call.STATE_HOLDING }
+            if (holdingCall != null) {
+                callMap["holding_number"] = holdingCall.details.handle?.schemeSpecificPart
+                callMap["holding_state"] = "HOLDING"
+                Log.d("PhoneInCallService", "[getCurrentCallDetails] 대기 통화: ${callMap["holding_number"]}")
+            }
+            
+            // 수신 중인 통화 검색
+            val ringingCall = activeCalls.find { it.state == Call.STATE_RINGING }
+            if (ringingCall != null) {
+                callMap["ringing_number"] = ringingCall.details.handle?.schemeSpecificPart
+                callMap["ringing_state"] = "RINGING"
+                Log.d("PhoneInCallService", "[getCurrentCallDetails] 수신 통화: ${callMap["ringing_number"]}")
+            }
+            
+            // 모든 통화 상태 로깅 (디버깅용)
+            activeCalls.forEachIndexed { index, call ->
+                val state = when(call.state) {
                     Call.STATE_ACTIVE -> "ACTIVE"
                     Call.STATE_HOLDING -> "HOLDING"
-                    Call.STATE_DISCONNECTED -> {
-                        // 통화가 종료된 경우 즉시 IDLE 상태로 반환
-                        // 이렇게 하면 앱이 다시 활성화될 때 종료된 통화를 활성 통화로 잘못 처리하지 않음
-                        activeCalls.remove(lastCall) // 통화 목록에서 제거
-                        "IDLE"
-                    }
-                    Call.STATE_CONNECTING -> "CONNECTING"
-                    Call.STATE_DISCONNECTING -> "DISCONNECTING"
-                    Call.STATE_NEW -> "NEW" // 일반적으로 볼 일 없음
-                    Call.STATE_SELECT_PHONE_ACCOUNT -> "SELECT_PHONE_ACCOUNT" // 일반적으로 볼 일 없음
-                    else -> "UNKNOWN"
+                    Call.STATE_RINGING -> "RINGING"
+                    Call.STATE_DIALING -> "DIALING"
+                    Call.STATE_DISCONNECTED -> "DISCONNECTED"
+                    else -> "OTHER(${call.state})"
                 }
-                mapOf("state" to stateString, "number" to number)
+                val number = call.details.handle?.schemeSpecificPart ?: "unknown"
+                Log.d("PhoneInCallService", "[getCurrentCallDetails] 통화[$index]: 번호=$number, 상태=$state")
             }
+            
+            return callMap
         }
     }
 

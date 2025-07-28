@@ -61,15 +61,57 @@ class NativeMethods {
     });
   }
 
+  // 통화 전환 기능 추가
+  static Future<void> switchCalls() async {
+    try {
+      await _methodChannel.invokeMethod('switchCalls');
+      log('[NativeMethods] 통화 전환 요청 성공');
+    } catch (e) {
+      log('[NativeMethods] 통화 전환 요청 실패: $e');
+      rethrow;
+    }
+  }
+  
+  // 현재 통화 끊고 수신 통화 받기 기능 추가
+  static Future<void> endAndAcceptWaitingCall() async {
+    try {
+      await _methodChannel.invokeMethod('endAndAcceptWaitingCall');
+      log('[NativeMethods] 현재 통화 종료 후 수신 통화 수락 요청 성공');
+    } catch (e) {
+      log('[NativeMethods] 현재 통화 종료 후 수신 통화 수락 요청 실패: $e');
+      rethrow;
+    }
+  }
+
   static Future<Map<String, dynamic>> getCurrentCallState() async {
     try {
       final result = await _methodChannel.invokeMapMethod<String, dynamic>(
         'getCurrentCallState',
       );
-      return result ?? {'state': 'IDLE', 'number': null, 'connectedTime': null};
+      if (result == null) {
+        log('[NativeMethods] getCurrentCallState 결과 없음, 기본값 반환');
+        return {
+          'active_state': 'IDLE',
+          'active_number': null,
+          'holding_state': 'IDLE',
+          'holding_number': null,
+          'ringing_state': 'IDLE',
+          'ringing_number': null
+        };
+      }
+
+      log('[NativeMethods] getCurrentCallState 결과: $result');
+      return result;
     } catch (e) {
       log('[NativeMethods] Error calling getCurrentCallState: $e');
-      return {'state': 'IDLE', 'number': null, 'connectedTime': null};
+      return {
+        'active_state': 'IDLE',
+        'active_number': null,
+        'holding_state': 'IDLE',
+        'holding_number': null,
+        'ringing_state': 'IDLE',
+        'ringing_number': null
+      };
     }
   }
 
