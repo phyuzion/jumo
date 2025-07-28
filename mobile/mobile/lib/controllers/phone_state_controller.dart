@@ -195,6 +195,11 @@ class PhoneStateController with WidgetsBindingObserver {
         number = args;
       }
     }
+        // 기본 전화 앱으로 설정될 때 발생하는 onCallEnded 이벤트는 무시
+    if (method == 'onCallEnded' && reason == 'default_dialer_change') {
+      log('[PhoneStateController] 기본 전화 앱 설정 변경으로 인한 onCallEnded 이벤트 무시');
+      return;
+    }
 
     switch (method) {
       case 'onIncomingNumber':

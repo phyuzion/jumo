@@ -19,6 +19,13 @@ class NavigationController {
         '[NavigationController] Received native event ${call.method}. Is default: $isDefault',
       );
 
+      // 기본 전화 앱 설정 변경으로 인한 상태 초기화 이벤트는 별도 처리
+      if (call.method == 'onResetCallState') {
+        log('[NavigationController] 기본 전화 앱 설정 변경으로 인한 상태 초기화 이벤트 수신');
+        // 이 이벤트는 PhoneStateController로 전달하지 않음
+        return;
+      }
+
       try {
         phoneStateController.handleNativeEvent(
           call.method,

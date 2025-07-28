@@ -89,9 +89,6 @@ class HiveCallLogRepository implements CallLogRepository {
         await _callLogsBox.putAll(
           entriesToPut.cast<String, Map<dynamic, dynamic>>(),
         );
-        log(
-          '[HiveCallLogRepository] Saved ${entriesToPut.length} call logs (24시간 이내 전체 덮어쓰기).',
-        );
       }
     } catch (e, s) {
       log('[HiveCallLogRepository] Error saving call logs: $e', stackTrace: s);

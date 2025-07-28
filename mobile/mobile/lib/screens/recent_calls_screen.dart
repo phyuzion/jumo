@@ -13,6 +13,7 @@ import 'package:mobile/services/native_methods.dart';
 import 'package:mobile/widgets/custom_expansion_tile.dart';
 import 'dart:developer';
 import 'package:mobile/providers/recent_history_provider.dart';
+import 'package:mobile/providers/call_state_provider.dart';
 
 class RecentCallsScreen extends StatefulWidget {
   const RecentCallsScreen({super.key});
@@ -67,6 +68,18 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
   Widget build(BuildContext context) {
     final recentHistoryProvider = context.watch<RecentHistoryProvider>();
     final recentHistory = recentHistoryProvider.recentHistoryList;
+    
+    // CallStateProvider 가져오기
+    final callStateProvider = context.watch<CallStateProvider>();
+    final currentCallState = callStateProvider.callState;
+    final currentNumber = callStateProvider.number;
+    final currentCallerName = callStateProvider.callerName;
+    
+    // 현재 통화 중인지 확인 (incoming 또는 active 상태)
+    final isActiveCall = currentCallState == CallState.active || currentCallState == CallState.incoming;
+    
+    // 통화 종료 상태는 표시하지 않음
+    final shouldShowCurrentCall = isActiveCall && currentNumber.isNotEmpty;
 
     final contacts = context.select((ContactsController cc) {
       return cc.contacts;
@@ -103,13 +116,26 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
         child:
             isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : recentHistory.isEmpty
+                : recentHistory.isEmpty && !shouldShowCurrentCall
                 ? Center(child: Text('최근 통화/문자 기록이 없습니다.'))
                 : ListView.builder(
                   controller: _scrollController,
-                  itemCount: recentHistory.length,
+                  itemCount: recentHistory.length + (shouldShowCurrentCall ? 1 : 0),
                   itemBuilder: (context, index) {
-                    final item = recentHistory[index];
+                    // 현재 통화 중인 항목 표시 (맨 위에 표시)
+                    if (shouldShowCurrentCall && index == 0) {
+                      return _buildActiveCallItem(
+                        context, 
+                        currentNumber, 
+                        currentCallerName, 
+                        currentCallState,
+                        contactCache
+                      );
+                    }
+                    
+                    // 기존 통화 기록 항목 인덱스 조정
+                    final historyIndex = shouldShowCurrentCall ? index - 1 : index;
+                    final item = recentHistory[historyIndex];
                     final historyType =
                         item['historyType'] as String? ?? 'call';
 
@@ -184,11 +210,11 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                           ),
                         CustomExpansionTile(
                           key: ValueKey('${number}_$ts'),
-                          isExpanded: index == _expandedIndex,
+                          isExpanded: historyIndex == _expandedIndex,
                           onTap: () {
                             setState(() {
                               _expandedIndex =
-                                  index == _expandedIndex ? null : index;
+                                  historyIndex == _expandedIndex ? null : historyIndex;
                             });
                           },
                           leading: leadingIconWidget,
@@ -256,6 +282,67 @@ class _RecentCallsScreenState extends State<RecentCallsScreen>
                         ),
                       ],
                     );
+                  },
+                ),
+      ),
+    );
+  }
+  
+  // 현재 통화 중인 항목 위젯 생성
+  Widget _buildActiveCallItem(
+    BuildContext context, 
+    String number, 
+    String callerName, 
+    CallState callState,
+    Map<String, PhoneBookModel> contactCache
+  ) {
+    final normalizedNumber = normalizePhone(number);
+    final contact = contactCache[normalizedNumber];
+    final displayName = callerName.isNotEmpty ? callerName : (contact?.name ?? number);
+    
+    // 통화 상태에 따른 아이콘 및 색상 설정
+    IconData iconData;
+    Color iconColor;
+    String statusText;
+    
+    if (callState == CallState.incoming) {
+      iconData = Icons.call_received;
+      iconColor = Colors.green;
+      statusText = "수신 중";
+    } else {
+      iconData = Icons.call;
+      iconColor = Colors.blue;
+      statusText = "통화 중";
+    }
+    
+    return Container(
+      margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+      decoration: BoxDecoration(
+        color: iconColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: iconColor, width: 1),
+      ),
+      child: ListTile(
+        leading: Icon(iconData, color: iconColor, size: 28),
+        title: Text(
+          displayName,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: iconColor,
+          ),
+        ),
+        subtitle: Text(
+          statusText,
+          style: TextStyle(
+            color: iconColor,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        trailing: _buildActionButton(
+          icon: Icons.search,
+          color: Colors.orange,
+          onPressed: () {
+            _onTapSearch(number);
                   },
                 ),
       ),

@@ -368,18 +368,6 @@ class AppController with ChangeNotifier {
     bool callLogChanged = false;
 
     try {
-      // 로그인 성공 후 PhoneStateController 활성화 (여기로 이동)
-      if (_phoneStateController != null) {
-        _phoneStateController!.startListening();
-        log(
-          '[AppController.triggerContactsLoadIfReady] Phone state listening started.',
-        );
-      } else {
-        log(
-          '[AppController.triggerContactsLoadIfReady] PhoneStateController is null, cannot start listening.',
-        );
-      }
-
       // 1. 연락처 로드 (이전 Step 1)
       if (contactsController.isSyncing) {
       } else if (contactsController.initialLoadAttempted) {
@@ -400,9 +388,7 @@ class AppController with ChangeNotifier {
         final smsPermissionStatus = await Permission.sms.status;
         if (smsPermissionStatus.isGranted) {
           // ContentObserver 상태 확인 및 복구 로직 추가
-          log(
-            '[AppController.triggerContactsLoadIfReady] Checking SMS observer status...',
-          );
+          
           await _smsController!.ensureObserverActive();
 
           // 백그라운드로 실행하며 결과를 기다리지 않음 (void 반환 타입)

@@ -163,10 +163,6 @@ class SmsController with ChangeNotifier {
       final List<Map<String, dynamic>> currentStoredLogs =
           await _smsLogRepository.getAllSmsLogs();
 
-      log(
-        '[SmsController.syncMessages] 로컬 저장소에서 ${currentStoredLogs.length}개 메시지 로드됨',
-      );
-
       final Map<String, Map<String, dynamic>> existingMsgMap = {
         for (var msg in currentStoredLogs) _generateSmsKey(msg): msg,
       };
@@ -174,10 +170,6 @@ class SmsController with ChangeNotifier {
       // 항상 하루치 데이터 가져오기 (더 안전하고 신뢰성 높음)
       final DateTime now = DateTime.now();
       final DateTime oneDayAgo = now.subtract(_messageLookbackPeriod);
-
-      log(
-        '[SmsController.syncMessages] 하루치 데이터 가져오기: ${oneDayAgo.toString()} ~ ${now.toString()}',
-      );
 
       final List<Map<String, dynamic>> newMessages =
           await _fetchMessagesFromNative(oneDayAgo, now);
@@ -240,9 +232,6 @@ class SmsController with ChangeNotifier {
             );
 
             await _uploadMessagesToServer(msgsToUploadFilteredType);
-            log(
-              '[SmsController.syncMessages] ${msgsToUploadFilteredType.length}개 새 메시지를 서버에 업로드',
-            );
           }
         }
 
@@ -282,10 +271,6 @@ class SmsController with ChangeNotifier {
       final int queryFromTimestamp = since.millisecondsSinceEpoch;
       final int queryUntilTimestamp = until.millisecondsSinceEpoch;
 
-      log(
-        '[SmsController._fetchMessagesFromNative] 메시지 조회: ${DateTime.fromMillisecondsSinceEpoch(queryFromTimestamp)} ~ ${DateTime.fromMillisecondsSinceEpoch(queryUntilTimestamp)}',
-      );
-
       List<dynamic>? nativeMsgListDyn;
       try {
         nativeMsgListDyn = await _methodChannel
@@ -310,13 +295,9 @@ class SmsController with ChangeNotifier {
               return Map<String, dynamic>.from(item as Map);
             }).toList();
 
-        log(
-          '[SmsController._fetchMessagesFromNative] ${result.length}개 메시지를 네이티브에서 가져옴',
-        );
         return result;
       }
 
-      log('[SmsController._fetchMessagesFromNative] 네이티브에서 가져온 메시지 없음');
       return [];
     } on PlatformException catch (e) {
       log(

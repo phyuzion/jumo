@@ -140,7 +140,7 @@ object NativeBridge {
     fun resetCallState() {
         Log.d("NativeBridge", "resetCallState: 통화 상태 명시적 초기화")
         // IDLE 상태로 명시적 초기화
-        methodChannel?.invokeMethod("onCallEnded", mapOf("number" to "", "reason" to "default_dialer_change"))
+        methodChannel?.invokeMethod("onResetCallState", null)
     }
 }
 
