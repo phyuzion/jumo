@@ -6,6 +6,7 @@ import 'package:flutter_broadcasts_4m/flutter_broadcasts.dart';
 import 'package:mobile/services/background_service/service_constants.dart';
 import 'package:mobile/services/background_service/call_timer.dart';
 import 'package:mobile/services/local_notification_service.dart';
+import 'package:mobile/utils/app_event_bus.dart'; // 추가
 
 // 수신 전화 노티피케이션 ID
 const int CALL_STATUS_NOTIFICATION_ID = 9876;
@@ -28,6 +29,12 @@ class CallStateManager {
   bool _isFirstCheck = true;
   String _lastCheckedCallState = 'IDLE';
   String _lastCheckedCallNumber = '';
+  
+  // 이벤트 버스 구독
+  StreamSubscription? _callStateSyncSubscription;
+  
+  // 마지막으로 수신한 통화 상태
+  Map<String, dynamic>? _lastReceivedCallDetails;
 
   // 인코밍 콜 알림 주기적 갱신을 위한 타이머
   Timer? _incomingCallRefreshTimer;
@@ -39,7 +46,209 @@ class CallStateManager {
   Future<void> initialize() async {
     _setupEventListeners();
     _setupBroadcastReceiver();
-    _startCallStateCheckTimer();
+    
+    // 이벤트 버스 구독 설정
+    _setupEventBusSubscription();
+    
+    // 이제 이벤트를 통해 상태를 받으므로 직접적인 타이머 체크는 필요 없음
+    // _startCallStateCheckTimer();
+  }
+  
+  // 이벤트 버스 구독 설정
+  void _setupEventBusSubscription() {
+    _callStateSyncSubscription = appEventBus.on<CallStateSyncEvent>().listen(
+      (event) => _handleCallStateSyncEvent(event),
+    );
+    log('[CallStateManager] 통화 상태 동기화 이벤트 구독 시작');
+  }
+  
+  // 통화 상태 이벤트 핸들러
+  void _handleCallStateSyncEvent(CallStateSyncEvent event) {
+    try {
+      final callDetails = event.callDetails;
+      
+      // 이전 상태와 동일하면 처리 생략
+      if (_areCallDetailsEqual(_lastReceivedCallDetails, callDetails)) {
+        return;
+      }
+      
+      // 새 상태 저장
+      _lastReceivedCallDetails = Map<String, dynamic>.from(callDetails);
+      
+      // 직접적인 타이머 체크 중단
+      if (_callStateCheckTimer?.isActive ?? false) {
+        _callStateCheckTimer!.cancel();
+        _callStateCheckTimer = null;
+        log('[CallStateManager] 직접 통화 상태 체크 타이머 정지 (이벤트 기반으로 전환)');
+      }
+      
+      // 필요한 상태 처리
+      _processCallStateDetails(callDetails);
+    } catch (e) {
+      log('[CallStateManager] 통화 상태 이벤트 처리 중 오류: $e');
+    }
+  }
+  
+  // 통화 상태 정보 처리
+  void _processCallStateDetails(Map<String, dynamic> callDetails) {
+    final activeState = callDetails['active_state'] as String? ?? 'IDLE';
+    final activeNumber = callDetails['active_number'] as String?;
+    final holdingState = callDetails['holding_state'] as String? ?? 'IDLE';
+    final holdingNumber = callDetails['holding_number'] as String?;
+    final ringingState = callDetails['ringing_state'] as String? ?? 'IDLE';
+    final ringingNumber = callDetails['ringing_number'] as String?;
+    
+    // 통화 존재 여부 확인
+    final bool hasActiveCall = activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty;
+    final bool hasHoldingCall = holdingState == 'HOLDING' && holdingNumber != null && holdingNumber.isNotEmpty;
+    final bool hasRingingCall = ringingState == 'RINGING' && ringingNumber != null && ringingNumber.isNotEmpty;
+    
+    log('[CallStateManager] 통화 상태 처리: 활성=$hasActiveCall, 대기=$hasHoldingCall, 수신=$hasRingingCall');
+    
+    // 활성 통화 처리
+    if (hasActiveCall) {
+      _handleActiveCall(activeNumber!);
+    }
+    // 수신 중인 통화 처리
+    else if (hasRingingCall) {
+      _handleRingingCall(ringingNumber!);
+    }
+    // 대기 중인 통화만 있는 경우
+    else if (hasHoldingCall) {
+      _handleHoldingCall(holdingNumber!);
+    }
+    // 모든 통화가 없는 경우
+    else if (_cachedCallActive) {
+      _handleNoCallState();
+    }
+  }
+  
+  // 활성 통화 처리
+  void _handleActiveCall(String number) {
+    // 기존 상태 초기화
+    _clearCallState();
+    
+    // 새 상태 설정
+    _cachedCallActive = true;
+    _cachedCallNumber = number;
+    _cachedCallState = 'active';
+    
+    // 타이머가 실행 중이 아닐 때만 시작
+    if (!_callTimer.isActive) {
+      _callTimer.startCallTimer(number, '');
+    }
+    
+    // UI에 알림
+    if (_uiInitialized) {
+      _updateUiCallState(
+        'active',
+        number,
+        '',
+        true,
+        _callTimer.ongoingSeconds,
+        'event_active_call',
+      );
+    }
+    
+    // 포그라운드 알림 업데이트
+    _updateForegroundNotification('통화 중', number, 'active:$number');
+  }
+  
+  // 수신 통화 처리
+  void _handleRingingCall(String number) {
+    // 캐싱된 인코밍 콜이 같은 번호면 처리 생략
+    if (_cachedCallState == 'incoming' && _cachedCallNumber == number) {
+      return;
+    }
+    
+    log('[CallStateManager][CRITICAL] 이벤트에서 새 인코밍 콜 감지: $number - 모든 상태 초기화');
+    
+    // 철저한 상태 초기화
+    _thoroughCallStateReset(number);
+    
+    // UI에 알림
+    if (_uiInitialized) {
+      _updateUiCallState(
+        'incoming',
+        number,
+        '',
+        false,
+        0,
+        'event_incoming_call',
+      );
+    }
+    
+    // 포그라운드 알림 업데이트
+    _updateForegroundNotification('전화 수신 중', '발신: $number', 'incoming:$number');
+  }
+  
+  // 대기 통화 처리
+  void _handleHoldingCall(String number) {
+    // 대기 통화가 있는 경우 처리
+    if (!_cachedCallActive || _cachedCallNumber != number) {
+      _cachedCallActive = true;
+      _cachedCallNumber = number;
+      _cachedCallState = 'holding';
+      
+      // UI에 알림
+      if (_uiInitialized) {
+        _updateUiCallState(
+          'active', // 홀드는 active 상태로 간주
+          number,
+          '',
+          true,
+          _callTimer.ongoingSeconds,
+          'event_holding_call',
+        );
+      }
+      
+      // 포그라운드 알림 업데이트
+      _updateForegroundNotification('통화 대기 중', number, 'active:$number');
+    }
+  }
+  
+  // 모든 통화가 없는 상태 처리
+  void _handleNoCallState() {
+    log('[CallStateManager] 모든 통화 없음, 상태 초기화');
+    
+    // 상태 초기화
+    _clearCallState();
+    
+    // 타이머 중지
+    _callTimer.stopCallTimer();
+    
+    // UI에 ended 상태 알림
+    if (_uiInitialized) {
+      _updateUiCallState(
+        'ended',
+        '',
+        '',
+        false,
+        0,
+        'event_no_calls',
+      );
+    }
+    
+    // 포그라운드 알림 업데이트
+    _updateForegroundNotification('KOLPON', '', 'idle');
+  }
+  
+  // 두 통화 상태가 동일한지 비교
+  bool _areCallDetailsEqual(Map<String, dynamic>? oldDetails, Map<String, dynamic>? newDetails) {
+    // 둘 중 하나라도 null이면 동일하지 않음
+    if (oldDetails == null || newDetails == null) {
+      return false;
+    }
+    
+    // 핵심 상태 필드 비교
+    final fields = ['active_state', 'active_number', 'holding_state', 'holding_number', 'ringing_state', 'ringing_number'];
+    for (final field in fields) {
+      if (oldDetails[field] != newDetails[field]) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   void _setupEventListeners() {
@@ -67,10 +276,10 @@ class CallStateManager {
       
       // 포그라운드 알림 업데이트
       await _updateForegroundNotification('KOLPON', '', 'idle');
-      
-      // UI에 상태 초기화 알림
+          
+            // UI에 상태 초기화 알림 (ended 대신 idle로 변경하여 EndCallContents가 표시되지 않도록 함)
       if (_uiInitialized) {
-        _updateUiCallState('ended', '', '', false, 0, 'default_dialer_change');
+        _updateUiCallState('idle', '', '', false, 0, 'default_dialer_change');
       }
     });
     
@@ -837,6 +1046,25 @@ class CallStateManager {
     });
 
     return await completer.future;
+  }
+
+  // 리소스 해제 메서드
+  void dispose() {
+    // 타이머 정리
+    _callStateCheckTimer?.cancel();
+    _callStateCheckTimer = null;
+    
+    // 이벤트 구독 해제
+    _callStateSyncSubscription?.cancel();
+    _callStateSyncSubscription = null;
+    
+    // 인코밍 콜 타이머 정리
+    _stopIncomingCallRefreshTimer();
+    
+    // 콜 타이머 정리
+    _callTimer.stopCallTimer();
+    
+    log('[CallStateManager] 모든 리소스 해제 완료');
   }
 
   Future<void> _updateForegroundNotification(

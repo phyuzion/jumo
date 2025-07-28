@@ -25,3 +25,11 @@ class CallStateChangedEvent {
   final String? number;
   CallStateChangedEvent({required this.state, this.number});
 }
+
+/// 통화 상태 동기화 이벤트 (각 컴포넌트 간 상태 공유용)
+class CallStateSyncEvent {
+  final Map<String, dynamic> callDetails;
+  final DateTime timestamp;
+
+  CallStateSyncEvent(this.callDetails) : timestamp = DateTime.now();
+}

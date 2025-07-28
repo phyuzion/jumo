@@ -110,6 +110,11 @@ class CallStateProvider with ChangeNotifier {
   Future<void> syncCallState() async {
     try {
       final callDetails = await NativeMethods.getCurrentCallState();
+      
+      // 앱 전체에서 getCurrentCallState 중복 호출을 방지하기 위해
+      // 이벤트 버스로 결과 전파
+      appEventBus.fire(CallStateSyncEvent(callDetails));
+      
       log('[CallStateProvider] 통화 상태 정보: $callDetails');
 
       // 이전 상태와 현재 상태 비교
@@ -138,9 +143,10 @@ class CallStateProvider with ChangeNotifier {
       
       log('[CallStateProvider] 통화 상태 분석: 활성=$hasActiveCall, 대기=$hasHoldingCall, 수신=$hasRingingCall');
 
-      // 수신 중인 통화 정보 업데이트
+      // 수신 중인 통화 정보 업데이트 (항상 최신 상태 유지)
       if (hasRingingCall) {
-        if (_ringingCallNumber != ringingNumber) {
+        // 항상 정확한 정보 유지를 위해 업데이트 조건을 완화
+        if (_ringingCallNumber != ringingNumber || _ringingCallerName == null) {
           _ringingCallNumber = ringingNumber;
           _ringingCallerName = await contactsController.getContactName(ringingNumber!);
           log('[CallStateProvider] 수신 중인 통화 정보 업데이트: $_ringingCallNumber, $_ringingCallerName');
@@ -154,6 +160,10 @@ class CallStateProvider with ChangeNotifier {
               callerName: _ringingCallerName ?? ''
             );
           }
+        }
+        // 로그는 유지하되 상태 변경은 하지 않음
+        else {
+          log('[CallStateProvider] 수신 중인 통화 정보 유지: $_ringingCallNumber, $_ringingCallerName');
         }
       } else {
         // 수신 통화가 없으면 관련 상태 정리
@@ -831,6 +841,12 @@ class CallStateProvider with ChangeNotifier {
     _duration = 0;
     _isConnected = false;
     _callEndReason = '';
+    
+    // 대기 및 수신 통화 정보 초기화
+    _holdingCallNumber = null;
+    _holdingCallerName = null;
+    _ringingCallNumber = null;
+    _ringingCallerName = null;
 
     // 버튼 상태 초기화
     resetButtonStates();

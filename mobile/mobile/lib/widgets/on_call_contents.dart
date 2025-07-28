@@ -48,6 +48,7 @@ class _OnCallContentsState extends State<OnCallContents> {
     
     // 이벤트 구독 로직 수정 - 타입 오류 해결
     _callStateSubscription = appEventBus.on<CallStateChangedEvent>().listen((event) {
+      // 상태 변경 이벤트 발생 시 즉시 체크
       _checkWaitingCall();
     });
     
@@ -64,7 +65,7 @@ class _OnCallContentsState extends State<OnCallContents> {
   // 통화 상태 체크 타이머 시작
   void _startCallCheckTimer() {
     _callCheckTimer?.cancel();
-    _callCheckTimer = Timer.periodic(const Duration(milliseconds: 500), (_) {
+    _callCheckTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
       _checkWaitingCall();
     });
     log('[OnCallContents] 통화 상태 체크 타이머 시작');
@@ -76,21 +77,31 @@ class _OnCallContentsState extends State<OnCallContents> {
     
     final callStateProvider = Provider.of<CallStateProvider>(context, listen: false);
     final ringingNumber = callStateProvider.ringingCallNumber;
+    final currentState = callStateProvider.callState;
     
-    if (ringingNumber != null && ringingNumber.isNotEmpty) {
+    // CallState.active 상태이고 ringingNumber가 있으면 무조건 다이얼로그 표시
+    final bool shouldShowDialog = currentState == CallState.active && 
+                                 ringingNumber != null && 
+                                 ringingNumber.isNotEmpty;
+    
+    if (shouldShowDialog) {
       if (!_isShowingWaitingCallDialog || _ringingNumber != ringingNumber) {
         // 새로운 수신 통화가 있으면 다이얼로그 표시
         _ringingNumber = ringingNumber;
         _ringingCallerName = callStateProvider.ringingCallerName;
+        
+        // 다이얼로그 표시 상태 변경 (setState 호출 전에 log 기록)
+        log('[OnCallContents] 수신 통화 감지: $_ringingNumber, 다이얼로그 표시');
+        
+        // 상태 업데이트 및 다이얼로그 표시
         if (mounted) {
           setState(() {
             _isShowingWaitingCallDialog = true;
           });
         }
-        log('[OnCallContents] 수신 통화 감지: $_ringingNumber, 다이얼로그 표시');
       }
     } else if (_isShowingWaitingCallDialog) {
-      // 수신 통화가 없는데 다이얼로그가 표시 중이면 숨김
+      // 수신 통화가 없거나 active 상태가 아닌데 다이얼로그가 표시 중이면 숨김
       if (mounted) {
         setState(() {
           _isShowingWaitingCallDialog = false;
@@ -98,7 +109,7 @@ class _OnCallContentsState extends State<OnCallContents> {
           _ringingCallerName = null;
         });
       }
-      log('[OnCallContents] 수신 통화 없음, 다이얼로그 숨김');
+      log('[OnCallContents] 수신 통화 없음 또는 active 상태 아님, 다이얼로그 숨김');
     }
   }
 

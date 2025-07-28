@@ -68,20 +68,32 @@ class _CallWaitingDialogState extends State<CallWaitingDialog> {
   void _checkWaitingCallStatus(CallStateProvider provider) {
     if (!mounted) return;
     
+    // 현재 수신 중인 전화번호와 표시해야 할 전화번호가 일치하는지 확인
     final ringingCallNumber = provider.ringingCallNumber;
-    final hasRingingCall = ringingCallNumber != null && ringingCallNumber.isNotEmpty;
+    final currentCallState = provider.callState;
     
-    // 간단한 디버그 로그
-    log('[CallWaitingDialog] 수신 통화 확인: ${hasRingingCall ? ringingCallNumber : "없음"}');
+    // 기본 조건: 수신 전화가 없거나, 또는 현재 전화번호와 다르거나, 또는 Active 상태가 아니면 팝업 닫기
+    bool shouldDismiss = false;
     
-    // 수신 중인 통화가 없거나 통화 상태가 종료되면 팝업 닫기
-    if (!hasRingingCall && widget.onDismiss != null) {
-      log('[CallWaitingDialog] 수신 중인 통화 없음, 팝업 닫기');
-      widget.onDismiss!();
+    // 1. 수신 전화가 없는 경우
+    if (ringingCallNumber == null || ringingCallNumber.isEmpty) {
+      shouldDismiss = true;
+      log('[CallWaitingDialog] 수신 중인 통화 없음');
+    }
+    // 2. 현재 표시 중인 전화번호와 수신 전화번호가 다른 경우
+    else if (widget.phoneNumber != ringingCallNumber) {
+      shouldDismiss = true;
+      log('[CallWaitingDialog] 현재 표시($widget.phoneNumber)와 다른 전화번호($ringingCallNumber) 감지');
+    }
+    // 3. 통화 상태가 active가 아닌 경우
+    else if (currentCallState != CallState.active) {
+      shouldDismiss = true;
+      log('[CallWaitingDialog] 통화 상태가 active가 아님: $currentCallState');
     }
     
-    if ((provider.callState == CallState.idle || provider.callState == CallState.ended) && widget.onDismiss != null) {
-      log('[CallWaitingDialog] 통화가 종료되어 팝업 닫기');
+    // 다이얼로그를 닫아야 하면 onDismiss 호출
+    if (shouldDismiss && widget.onDismiss != null) {
+      log('[CallWaitingDialog] 조건에 따라 팝업 닫기');
       widget.onDismiss!();
     }
   }
