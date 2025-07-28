@@ -17,6 +17,10 @@ class SearchRecordsController extends ChangeNotifier {
   String _callerName = '';
   bool _searchInProgress = false;
 
+  // 중복 검색 방지를 위한 변수
+  DateTime _lastSearchTime = DateTime.now();
+  int _searchDuplicateThrottleMs = 2000; // 2초 내 동일 번호 검색 방지
+
   // 이벤트 리스너
   StreamSubscription? _resetEventSubscription;
 
@@ -67,6 +71,18 @@ class SearchRecordsController extends ChangeNotifier {
 
     final String normalizedPhone = normalizePhone(rawPhone);
     log('[SearchRecordsController] 전화번호 검색 시작: $normalizedPhone');
+
+    // 중복 검색 방지: 2초 내에 같은 번호로 검색 시도하면 캐시된 결과 반환
+    final now = DateTime.now();
+    final timeSinceLastSearch = now.difference(_lastSearchTime).inMilliseconds;
+    if (normalizedPhone == _phoneNumber && 
+        timeSinceLastSearch < _searchDuplicateThrottleMs &&
+        _searchResult != null) {
+      log('[SearchRecordsController] 최근 동일 번호 검색 중복 감지 ($timeSinceLastSearch ms). 캐시된 결과 반환: $_callerName');
+      return _searchResult;
+    }
+
+    _lastSearchTime = now;
 
     // 검색 상태 업데이트
     _searchInProgress = true;

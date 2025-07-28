@@ -40,6 +40,9 @@ class CallStateProvider with ChangeNotifier {
   String? _ringingCallNumber;
   String? _ringingCallerName;
 
+  // 마지막으로 조회한 통화 상태 정보 (깊은 비교용)
+  Map<String, dynamic>? _lastCallDetails;
+
   Timer? _endedStateTimer;
   int _endedCountdownSeconds = 10;
 
@@ -109,16 +112,42 @@ class CallStateProvider with ChangeNotifier {
       final callDetails = await NativeMethods.getCurrentCallState();
       log('[CallStateProvider] 통화 상태 정보: $callDetails');
 
-      // 수신 중인 통화 정보 업데이트
+      // 이전 상태와 현재 상태 비교
+      if (_areCallDetailsEqual(_lastCallDetails, callDetails)) {
+        log('[CallStateProvider] 통화 상태 변경 없음. UI 업데이트 생략');
+        return; // 상태 변경이 없으면 함수 종료
+      }
+
+      // 상태가 변경되었으면 마지막 상태 업데이트
+      _lastCallDetails = Map<String, dynamic>.from(callDetails);
+      log('[CallStateProvider] 통화 상태 변경 감지. 처리 시작');
+
+      // 활성 통화, 대기 통화, 수신 통화 정보 추출
+      final activeState = callDetails['active_state'] as String? ?? 'IDLE';
+      final activeNumber = callDetails['active_number'] as String?;
+      final holdingState = callDetails['holding_state'] as String? ?? 'IDLE';
+      final holdingNumber = callDetails['holding_number'] as String?;
+      final ringingState = callDetails['ringing_state'] as String? ?? 'IDLE';
       final ringingNumber = callDetails['ringing_number'] as String?;
-      if (ringingNumber != null && ringingNumber.isNotEmpty) {
+      
+      // 통화 존재 여부 확인
+      final bool hasActiveCall = activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty;
+      final bool hasHoldingCall = holdingState == 'HOLDING' && holdingNumber != null && holdingNumber.isNotEmpty;
+      final bool hasRingingCall = ringingState == 'RINGING' && ringingNumber != null && ringingNumber.isNotEmpty;
+      final bool hasAnyCall = hasActiveCall || hasHoldingCall || hasRingingCall;
+      
+      log('[CallStateProvider] 통화 상태 분석: 활성=$hasActiveCall, 대기=$hasHoldingCall, 수신=$hasRingingCall');
+
+      // 수신 중인 통화 정보 업데이트
+      if (hasRingingCall) {
         if (_ringingCallNumber != ringingNumber) {
           _ringingCallNumber = ringingNumber;
-          _ringingCallerName = await contactsController.getContactName(ringingNumber);
+          _ringingCallerName = await contactsController.getContactName(ringingNumber!);
           log('[CallStateProvider] 수신 중인 통화 정보 업데이트: $_ringingCallNumber, $_ringingCallerName');
           
-          // 수신 중인 통화가 있으면 상태 업데이트
-          if (_callState != CallState.incoming) {
+          // 수신 중인 통화가 있고 현재 CallState가 active나 ended가 아니면 incoming 상태로 업데이트
+          // (이미 활성 통화 중이라면 대기 통화로 처리됨)
+          if (_callState != CallState.incoming && _callState != CallState.active) {
             await updateCallState(
               state: CallState.incoming, 
               number: ringingNumber, 
@@ -127,28 +156,27 @@ class CallStateProvider with ChangeNotifier {
           }
         }
       } else {
+        // 수신 통화가 없으면 관련 상태 정리
         _ringingCallNumber = null;
         _ringingCallerName = null;
       }
 
       // 대기 중인 통화 정보 업데이트
-      final holdingNumber = callDetails['holding_number'] as String?;
-      if (holdingNumber != null && holdingNumber.isNotEmpty) {
+      if (hasHoldingCall) {
         if (_holdingCallNumber != holdingNumber) {
           _holdingCallNumber = holdingNumber;
-          _holdingCallerName = await contactsController.getContactName(holdingNumber);
+          _holdingCallerName = await contactsController.getContactName(holdingNumber!);
           log('[CallStateProvider] 대기 중인 통화 정보 업데이트: $_holdingCallNumber, $_holdingCallerName');
         }
       } else {
+        // 대기 통화가 없으면 관련 상태 정리
         _holdingCallNumber = null;
         _holdingCallerName = null;
       }
 
       // 활성 통화 정보 업데이트
-      final activeNumber = callDetails['active_number'] as String?;
-      final activeState = callDetails['active_state'] as String?;
-      
-      if (activeNumber != null && activeNumber.isNotEmpty && activeState == 'ACTIVE') {
+      if (hasActiveCall) {
+        // 현재 번호와 다르거나 상태가 active가 아닌 경우 상태 업데이트
         if (_number != activeNumber || _callState != CallState.active) {
           log('[CallStateProvider] 활성 통화 변경: $_number -> $activeNumber');
           
@@ -161,22 +189,48 @@ class CallStateProvider with ChangeNotifier {
           // 활성 통화 정보 업데이트
           await updateCallState(
             state: CallState.active,
-            number: activeNumber,
+            number: activeNumber!,
             isConnected: true,
           );
         }
-      } else if (_callState == CallState.active && activeState != 'ACTIVE') {
-        // 활성 통화가 없을 때 상태 처리
-        final holdingState = callDetails['holding_state'] as String?;
-        
-        // 대기 중인 통화나 수신 통화가 있으면 active 상태 유지
-        if ((holdingNumber != null && holdingNumber.isNotEmpty && holdingState == 'HOLDING') || 
-            (ringingNumber != null && ringingNumber.isNotEmpty)) {
+      } 
+      // 활성 통화가 없을 때 상태 처리
+      else if (_callState == CallState.active) {
+        // 대기 중인 통화나 수신 통화가 있으면 현재 상태 유지
+        if (hasHoldingCall || hasRingingCall) {
           log('[CallStateProvider] 활성 통화는 없지만 대기/수신 통화가 있어 상태 유지');
-        } else {
-          // 활성/대기/수신 통화가 모두 없는 경우에만 idle로 변경
-          log('[CallStateProvider] 모든 통화 없음, idle 상태로 변경');
-          await updateCallState(state: CallState.idle);
+        } 
+        // 모든 통화가 없으면 ended 상태로 전환 (idle 직행은 하지 않음)
+        else {
+          log('[CallStateProvider] 모든 통화 없음, ended 상태로 변경');
+          await updateCallState(
+            state: CallState.ended,
+            number: _number,
+            reason: 'sync_all_calls_ended'
+          );
+        }
+      } 
+      // 통화가 끝난 상태에서 새로운 통화 발생
+      else if (_callState == CallState.ended && hasAnyCall) {
+        log('[CallStateProvider] 통화 종료 상태에서 새로운 통화 감지. 상태 복구');
+        
+        // 활성 통화가 있으면 active 상태로, 수신 통화가 있으면 incoming 상태로 업데이트
+        if (hasActiveCall) {
+          await updateCallState(
+            state: CallState.active,
+            number: activeNumber!,
+            isConnected: true,
+          );
+        } else if (hasRingingCall) {
+          await updateCallState(
+            state: CallState.incoming,
+            number: ringingNumber!,
+          );
+        } else if (hasHoldingCall) {
+          // 대기 통화만 있는 경우 활성화
+          log('[CallStateProvider] 대기 통화만 존재. 활성화 시도');
+          await NativeMethods.switchCalls();
+          // 이후 다음 동기화에서 상태 업데이트됨
         }
       }
       
@@ -187,6 +241,24 @@ class CallStateProvider with ChangeNotifier {
     } catch (e) {
       log('[CallStateProvider] 통화 상태 동기화 오류: $e');
     }
+  }
+
+  // 두 통화 상태가 동일한지 비교하는 헬퍼 메서드
+  bool _areCallDetailsEqual(Map<String, dynamic>? oldDetails, Map<String, dynamic>? newDetails) {
+    // 둘 중 하나라도 null이면 동일하지 않음
+    if (oldDetails == null || newDetails == null) {
+      return false;
+    }
+    
+    // 핵심 상태 필드 비교
+    final fields = ['active_state', 'active_number', 'holding_state', 'holding_number', 'ringing_state', 'ringing_number'];
+    for (final field in fields) {
+      if (oldDetails[field] != newDetails[field]) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   // 대기 중인 통화 수락 함수
@@ -290,10 +362,17 @@ class CallStateProvider with ChangeNotifier {
       );
       
       // 번호가 변경되었으면 발신자 이름도 명시적으로 초기화
-      if (_callerName.isNotEmpty && callerName.isEmpty) {
-        _callerName = '';
-        log('[CallStateProvider] Phone number changed, reset caller name to empty');
-      }
+      _callerName = ''; // 항상 이름 초기화 (조건 제거)
+      log('[CallStateProvider] Phone number changed, reset caller name to empty');
+    }
+
+    // 이름 조회 시도
+    if ((state == CallState.incoming || state == CallState.active) &&
+        _callerName.isEmpty &&
+        number.isNotEmpty &&
+        !_nameFetchedAttemptedForNumbers.contains(number) &&
+        _currentlyFetchingNameForNumber != number) {
+      _fetchAndUpdateCallerName(number);
     }
 
     // <<< 상태 변경 확인 로직 (stateTransitioned, needsCoreUpdate 등 계산) >>>
@@ -548,10 +627,51 @@ class CallStateProvider with ChangeNotifier {
   void _startEndedStateTimer() {
     _cancelEndedStateTimer();
     _endedCountdownSeconds = 10;
-    _endedStateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    _endedStateTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (_callState != CallState.ended) {
         timer.cancel();
         _endedStateTimer = null;
+        return;
+      }
+
+      // 타이머가 동작하기 전에 활성/대기/수신 통화가 있는지 확인
+      final callDetails = await NativeMethods.getCurrentCallState();
+      final activeState = callDetails['active_state'] as String? ?? 'IDLE';
+      final activeNumber = callDetails['active_number'] as String?;
+      final holdingState = callDetails['holding_state'] as String? ?? 'IDLE';
+      final holdingNumber = callDetails['holding_number'] as String?;
+      final ringingState = callDetails['ringing_state'] as String? ?? 'IDLE';
+      final ringingNumber = callDetails['ringing_number'] as String?;
+      
+      // 활성, 대기, 수신 통화 중 하나라도 있으면 ended 상태 타이머 취소
+      final bool hasAnyCall = 
+          (activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty) ||
+          (holdingState == 'HOLDING' && holdingNumber != null && holdingNumber.isNotEmpty) ||
+          (ringingState == 'RINGING' && ringingNumber != null && ringingNumber.isNotEmpty);
+      
+      if (hasAnyCall) {
+        log('[CallStateProvider] 활성/대기/수신 통화가 있어 ended 상태에서 복구합니다.');
+        timer.cancel();
+        _endedStateTimer = null;
+        
+        // 활성 통화가 있으면 active 상태로, 없으면 대기 또는 수신 통화 상태로 업데이트
+        if (activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty) {
+          await updateCallState(
+            state: CallState.active,
+            number: activeNumber,
+            isConnected: true,
+          );
+        } else if (holdingState == 'HOLDING' && holdingNumber != null && holdingNumber.isNotEmpty) {
+          // 대기 통화가 있으면 활성화
+          await NativeMethods.switchCalls(); // 대기 통화를 활성화
+          await syncCallState();
+        } else if (ringingState == 'RINGING' && ringingNumber != null && ringingNumber.isNotEmpty) {
+          // 수신 통화가 있으면 incoming 상태로 업데이트
+          await updateCallState(
+            state: CallState.incoming,
+            number: ringingNumber,
+          );
+        }
         return;
       }
 

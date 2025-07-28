@@ -478,9 +478,9 @@ class PhoneStateController with WidgetsBindingObserver {
     bool? connected,
     String? reason,
   }) {
-    // log(
-    //   '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected, reason=$reason',
-    // );
+    log(
+      '[PhoneStateController][notifyServiceCallState] Method called: stateMethod=$stateMethod, number=$number, name=$callerName, connected=$connected, reason=$reason',
+    );
 
     final service = FlutterBackgroundService();
     String state;
@@ -495,16 +495,17 @@ class PhoneStateController with WidgetsBindingObserver {
         state = 'active';
         break;
       case 'onCallEnded':
-        state = 'ended';
-        break;
+        // 통화 종료 이벤트 발생 전에 현재 통화 상태 확인
+        _checkCallStateBeforeEnding(service, number, callerName, reasonValue);
+        return; // 비동기 처리를 위해 여기서 반환
       default:
         state = 'unknown';
     }
 
     if (state == 'unknown') {
-      // log(
-      //   '[PhoneStateController][notifyServiceCallState] Unknown stateMethod $stateMethod, not invoking service.',
-      // );
+      log(
+        '[PhoneStateController][notifyServiceCallState] Unknown stateMethod $stateMethod, not invoking service.',
+      );
       return;
     }
 
@@ -516,18 +517,95 @@ class PhoneStateController with WidgetsBindingObserver {
       'reason': reasonValue,
     };
 
-    // log(
-    //   '[PhoneStateController][notifyServiceCallState] Invoking service with callStateChanged. Payload: $payload',
-    // );
+    log(
+      '[PhoneStateController][notifyServiceCallState] Invoking service with callStateChanged. Payload: $payload',
+    );
     try {
       service.invoke('callStateChanged', payload);
-      // log(
-      //   '[PhoneStateController][notifyServiceCallState] Successfully invoked service with callStateChanged.',
-      // );
+      log(
+        '[PhoneStateController][notifyServiceCallState] Successfully invoked service with callStateChanged.',
+      );
     } catch (e) {
       log(
         '[PhoneStateController][notifyServiceCallState] Error invoking service: $e',
       );
+    }
+  }
+
+  // 통화 종료 이벤트 발생 전 현재 통화 상태 확인 메서드
+  Future<void> _checkCallStateBeforeEnding(
+    FlutterBackgroundService service,
+    String number,
+    String callerName,
+    String reason,
+  ) async {
+    try {
+      // 현재 통화 상태를 네이티브 측에서 가져옴
+      final callDetails = await NativeMethods.getCurrentCallState();
+      
+      // 활성/대기/수신 통화 확인
+      final activeState = callDetails['active_state'] as String? ?? 'IDLE';
+      final activeNumber = callDetails['active_number'] as String?;
+      final holdingState = callDetails['holding_state'] as String? ?? 'IDLE';
+      final holdingNumber = callDetails['holding_number'] as String?;
+      final ringingState = callDetails['ringing_state'] as String? ?? 'IDLE';
+      final ringingNumber = callDetails['ringing_number'] as String?;
+      
+      // 통화 존재 여부 확인
+      final hasActiveCall = activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty;
+      final hasHoldingCall = holdingState == 'HOLDING' && holdingNumber != null && holdingNumber.isNotEmpty;
+      final hasRingingCall = ringingState == 'RINGING' && ringingNumber != null && ringingNumber.isNotEmpty;
+      
+      log(
+        '[PhoneStateController] 통화 종료 전 상태 확인: 활성=$hasActiveCall, 대기=$hasHoldingCall, 수신=$hasRingingCall',
+      );
+      
+      // 활성/대기/수신 통화 중 하나라도 있으면 ended 이벤트를 발생시키지 않음
+      if (hasActiveCall || hasHoldingCall || hasRingingCall) {
+        log(
+          '[PhoneStateController] 다른 통화가 있어 ended 이벤트를 무시합니다.',
+        );
+        return;
+      }
+      
+      // 통화가 없는 경우에만 ended 이벤트 발생
+      final payload = {
+        'state': 'ended',
+        'number': number,
+        'callerName': callerName,
+        'connected': false,
+        'reason': reason,
+      };
+      
+      try {
+        service.invoke('callStateChanged', payload);
+        log(
+          '[PhoneStateController] 모든 통화가 없어 ended 이벤트를 발생시킵니다.',
+        );
+      } catch (e) {
+        log(
+          '[PhoneStateController] Error invoking service with callStateChanged: $e',
+        );
+      }
+    } catch (e) {
+      log('[PhoneStateController] Error checking call state before ending: $e');
+      
+      // 오류 발생 시 안전하게 ended 이벤트 발생
+      final payload = {
+        'state': 'ended',
+        'number': number,
+        'callerName': callerName,
+        'connected': false,
+        'reason': reason + ' (check_error)',
+      };
+      
+      try {
+        service.invoke('callStateChanged', payload);
+      } catch (e) {
+        log(
+          '[PhoneStateController] Error invoking service with callStateChanged: $e',
+        );
+      }
     }
   }
 
@@ -711,6 +789,9 @@ class PhoneStateController with WidgetsBindingObserver {
     // 이미 실행 중인 타이머가 있으면 취소
     _callStateCheckTimer?.cancel();
 
+    // 마지막 통화 상태 저장용 변수 추가
+    Map<String, dynamic>? lastCallDetails;
+
     // 2초마다 현재 통화 상태 체크
     _callStateCheckTimer = Timer.periodic(const Duration(seconds: 2), (
       _,
@@ -737,7 +818,31 @@ class PhoneStateController with WidgetsBindingObserver {
 
       try {
         final callDetails = await NativeMethods.getCurrentCallState();
+        
+        // 이전 상태와 현재 상태 비교 (핵심 필드만)
+        bool stateChanged = lastCallDetails == null;
+        if (!stateChanged) {
+          final fields = ['active_state', 'active_number', 'holding_state', 
+                         'holding_number', 'ringing_state', 'ringing_number'];
+          for (final field in fields) {
+            if (lastCallDetails![field] != callDetails[field]) {
+              stateChanged = true;
+              break;
+            }
+          }
+        }
+        
+        // 상태 변경이 없으면 로그만 남기고 종료
+        if (!stateChanged) {
+          // log('[PhoneStateController] 정기 통화 상태 체크: 변경 없음, 처리 건너뜀');
+          return;
+        }
+        
+        // 상태가 변경되었으면 로그 남기기
         log('[PhoneStateController] 정기 통화 상태 체크 결과: $callDetails');
+        
+        // 상태 업데이트
+        lastCallDetails = Map<String, dynamic>.from(callDetails);
 
         final state = callDetails['state'] as String? ?? 'IDLE';
         final number = callDetails['number'] as String?;

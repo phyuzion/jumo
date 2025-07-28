@@ -66,7 +66,7 @@ class CallStateManager {
       _callTimer.stopCallTimer();
       
       // 포그라운드 알림 업데이트
-      await _updateForegroundNotification('노쇼방지', '', 'idle');
+      await _updateForegroundNotification('KOLPON', '', 'idle');
       
       // UI에 상태 초기화 알림
       if (_uiInitialized) {
@@ -119,7 +119,7 @@ class CallStateManager {
           _updateUiCallState(
             'incoming',
             _cachedCallNumber,
-            _cachedCallerName,
+            '', // 빈 문자열로 변경
             false,
             0,
             'cached_incoming_after_ui_init',
@@ -131,7 +131,7 @@ class CallStateManager {
         _updateUiCallState(
           'active',
           _cachedCallNumber,
-          _cachedCallerName,
+          '', // 빈 문자열로 변경
           true,
           _callTimer.ongoingSeconds,
           'cached_state_after_ui_init',
@@ -194,7 +194,7 @@ class CallStateManager {
           _updateUiCallState(
             'incoming',
             _cachedCallNumber,
-            _cachedCallerName,
+            '', // 빈 문자열로 변경
             false,
             0,
             'cached_incoming_state_response',
@@ -206,7 +206,7 @@ class CallStateManager {
         _updateUiCallState(
           'active',
           _cachedCallNumber,
-          _cachedCallerName,
+          '', // 빈 문자열로 변경
           true,
           _callTimer.ongoingSeconds,
           'cached_state_check_response',
@@ -241,7 +241,7 @@ class CallStateManager {
               _updateUiCallState(
                 'active',
                 number,
-                '',
+                '', // 빈 문자열로 변경
                 true,
                 0,
                 'special_number_check_response',
@@ -398,7 +398,7 @@ class CallStateManager {
         _updateUiCallState(
           state,
           number,
-          callerName,
+          '', // 빈 문자열로 변경
           isConnected,
           _callTimer.ongoingSeconds,
           reason,
@@ -515,7 +515,7 @@ class CallStateManager {
               _updateUiCallState(
                 'incoming',
                 incomingNumber,
-                contactName, // 가져온 연락처 이름 전달
+                '', // 빈 문자열로 변경
                 false,
                 0,
                 'broadcast_receiver_ringing_reset',
@@ -725,7 +725,7 @@ class CallStateManager {
               _updateUiCallState(
                 'incoming',
                 number,
-                '',
+                '', // 빈 문자열로 변경
                 false,
                 0,
                 'periodic_check_reset',
@@ -762,7 +762,7 @@ class CallStateManager {
               _updateUiCallState(
                 'ended',
                 _lastCheckedCallNumber,
-                '',
+                '', // 빈 문자열로 변경
                 false,
                 0,
                 'periodic_check_ended',
@@ -878,7 +878,29 @@ class CallStateManager {
     bool connected,
     int duration,
     String reason,
-  ) {
+  ) async {
+    // active 상태인 경우에만 네이티브에서 최신 정보 확인
+    if (state == 'active') {
+      try {
+        final nativeState = await _getCurrentCallStateFromNative();
+        if (nativeState != null) {
+          final activeState = nativeState['active_state'] as String? ?? 'IDLE';
+          final activeNumber = nativeState['active_number'] as String?;
+          
+          // 네이티브에서 활성 통화 번호가 있으면 그것을 사용
+          if (activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty) {
+            if (number != activeNumber) {
+              log('[CallStateManager] Correcting number before UI update: $number -> $activeNumber');
+              number = activeNumber;
+            }
+          }
+        }
+      } catch (e) {
+        log('[CallStateManager] Error checking native call state before UI update: $e');
+      }
+    }
+    
+    // UI 업데이트 메시지 전송
     _service.invoke('updateUiCallState', {
       'state': state,
       'number': number,

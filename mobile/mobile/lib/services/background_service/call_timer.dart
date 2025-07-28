@@ -42,48 +42,73 @@ class CallTimer {
       final nativeCallDetails = await _getCurrentCallStateFromNative();
       if (nativeCallDetails == null) return;
 
-      final String nativeState =
-          nativeCallDetails['state'] as String? ?? 'UNKNOWN';
+      // 기존 코드: 단일 'state' 필드만 확인
+      // final String nativeState = nativeCallDetails['state'] as String? ?? 'UNKNOWN';
+      
+      // 개선된 코드: active_state, holding_state, ringing_state를 모두 확인
+      final String activeState = nativeCallDetails['active_state'] as String? ?? 'IDLE';
+      final String holdingState = nativeCallDetails['holding_state'] as String? ?? 'IDLE';
+      final String ringingState = nativeCallDetails['ringing_state'] as String? ?? 'IDLE';
+      
+      final String activeNumber = nativeCallDetails['active_number'] as String? ?? '';
+      final String holdingNumber = nativeCallDetails['holding_number'] as String? ?? '';
+      final String ringingNumber = nativeCallDetails['ringing_number'] as String? ?? '';
+      
+      // 활성 통화, 대기 통화, 수신 통화 중 하나라도 있으면 타이머 계속 유지
+      final bool hasAnyCall = 
+          (activeState == 'ACTIVE' && activeNumber.isNotEmpty) ||
+          (holdingState == 'HOLDING' && holdingNumber.isNotEmpty) ||
+          (ringingState == 'RINGING' && ringingNumber.isNotEmpty);
 
-      if (nativeState.toUpperCase() != 'ACTIVE' &&
-          nativeState.toUpperCase() != 'DIALING') {
+      if (!hasAnyCall) {
+        // 모든 통화가 없는 경우에만 타이머 중지
         log(
-          '[CallTimer][TimerTickDebug] Native state is $nativeState. Call seems ended. Stopping timer.',
+          '[CallTimer] No active, holding, or ringing calls detected. Stopping timer.',
         );
         stopCallTimer(); // 타이머 중지
 
         // UI에 통화 종료 상태 알림
         _service.invoke('updateUiCallState', {
           'state': 'ended',
-          'number': _currentNumber,
-          'callerName': _currentCallerName,
+          'number': _currentNumber, // 여기에 number 추가
+          'callerName': '', // 빈 문자열로 변경
           'connected': false,
           'duration': _ongoingSeconds,
-          'reason': 'sync_ended_native_not_active ($nativeState)',
+          'reason': 'sync_ended_no_calls_detected',
         });
 
         // 백그라운드 서비스의 'callStateChanged' 리스너에게도 'ended' 상태를 알림
         _service.invoke('callStateChanged', {
           'state': 'ended',
           'number': _currentNumber,
-          'callerName': _currentCallerName,
+          'callerName': '', // 빈 문자열로 변경
           'connected': false,
-          'reason': 'sync_ended_native_not_active ($nativeState)',
+          'reason': 'sync_ended_no_calls_detected',
         });
       } else {
-        // 네이티브 상태가 ACTIVE 또는 DIALING임. UI에 'active' 상태 및 시간 업데이트
+        // 활성, 대기, 수신 통화가 있으면 타이머 유지 및 로그 출력
         log(
-          '[CallTimer][TimerTickDebug] Native state is $nativeState. Timer continues for $_currentNumber. Duration: $_ongoingSeconds',
+          '[CallTimer] Call detected: active=$activeState, holding=$holdingState, ringing=$ringingState. Timer continues. Duration: $_ongoingSeconds',
         );
 
         // 포그라운드 알림 업데이트
         await _updateForegroundNotification();
+        
+        // 네이티브 활성 번호가 있으면 캐싱된 정보 업데이트
+        if (activeState == 'ACTIVE' && activeNumber.isNotEmpty) {
+          // 번호가 바뀐 경우에만 로그 출력
+          if (_currentNumber != activeNumber) {
+            log('[CallTimer] Active call number changed: $_currentNumber -> $activeNumber');
+            _currentNumber = activeNumber;
+            // 이름 조회 로직 제거
+          }
+        }
 
-        // UI에 'active' 상태 업데이트
+        // UI에 'active' 상태 업데이트 - 네이티브에서 받은 activeNumber 사용
         _service.invoke('updateUiCallState', {
           'state': 'active',
-          'number': _currentNumber,
-          'callerName': _currentCallerName,
+          'number': activeNumber.isNotEmpty ? activeNumber : _currentNumber,
+          'callerName': '', // 빈 문자열로 변경
           'connected': true,
           'duration': _ongoingSeconds,
           'reason': '',
