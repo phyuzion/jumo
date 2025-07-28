@@ -54,9 +54,9 @@ class CallTimer {
       final String holdingNumber = nativeCallDetails['holding_number'] as String? ?? '';
       final String ringingNumber = nativeCallDetails['ringing_number'] as String? ?? '';
       
-      // 활성 통화, 대기 통화, 수신 통화 중 하나라도 있으면 타이머 계속 유지
+      // 활성 통화, 대기 통화, 수신 통화, 발신 통화 중 하나라도 있으면 타이머 계속 유지
       final bool hasAnyCall = 
-          (activeState == 'ACTIVE' && activeNumber.isNotEmpty) ||
+          ((activeState == 'ACTIVE' || activeState == 'DIALING') && activeNumber.isNotEmpty) ||
           (holdingState == 'HOLDING' && holdingNumber.isNotEmpty) ||
           (ringingState == 'RINGING' && ringingNumber.isNotEmpty);
 
@@ -105,11 +105,12 @@ class CallTimer {
         }
 
         // UI에 'active' 상태 업데이트 - 네이티브에서 받은 activeNumber 사용
+        final bool isDialing = activeState == 'DIALING';
         _service.invoke('updateUiCallState', {
           'state': 'active',
           'number': activeNumber.isNotEmpty ? activeNumber : _currentNumber,
           'callerName': '', // 빈 문자열로 변경
-          'connected': true,
+          'connected': !isDialing, // DIALING이면 연결되지 않은 상태로 표시
           'duration': _ongoingSeconds,
           'reason': '',
         });

@@ -98,8 +98,9 @@ class CallStateManager {
     final ringingState = callDetails['ringing_state'] as String? ?? 'IDLE';
     final ringingNumber = callDetails['ringing_number'] as String?;
     
-    // 통화 존재 여부 확인
-    final bool hasActiveCall = activeState == 'ACTIVE' && activeNumber != null && activeNumber.isNotEmpty;
+    // 통화 존재 여부 확인 (DIALING도 활성 통화로 간주)
+    final bool hasActiveCall = (activeState == 'ACTIVE' || activeState == 'DIALING') && 
+        activeNumber != null && activeNumber.isNotEmpty;
     final bool hasHoldingCall = holdingState == 'HOLDING' && holdingNumber != null && holdingNumber.isNotEmpty;
     final bool hasRingingCall = ringingState == 'RINGING' && ringingNumber != null && ringingNumber.isNotEmpty;
     
@@ -843,7 +844,7 @@ class CallStateManager {
           if (state.toUpperCase() == 'ACTIVE' ||
               state.toUpperCase() == 'DIALING') {
             log(
-              '[CallStateManager][CallStateCheck] Active call detected: $number',
+              '[CallStateManager][CallStateCheck] Active call detected: $number (state: ${state.toUpperCase()})',
             );
 
             // 기존 상태 완전히 초기화
@@ -861,6 +862,8 @@ class CallStateManager {
             // 타이머가 실행 중이 아닐 때만 시작 (통화 시간 리셋 방지)
             if (!_callTimer.isActive) {
               log('[CallStateManager][CallStateCheck] Starting call timer');
+              // DIALING 상태면 false로 연결 상태 전달
+              final isConnected = state.toUpperCase() != 'DIALING';
               _callTimer.startCallTimer(number, '');
             }
           } else if (state.toUpperCase() == 'RINGING') {

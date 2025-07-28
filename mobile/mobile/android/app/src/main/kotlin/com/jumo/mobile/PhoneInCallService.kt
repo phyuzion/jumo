@@ -88,12 +88,12 @@ class PhoneInCallService : InCallService() {
             callMap["holding_state"] = "IDLE"
             callMap["ringing_state"] = "IDLE"
             
-            // 활성 통화 검색
-            val activeCall = activeCalls.find { it.state == Call.STATE_ACTIVE }
+            // 활성 통화 검색 (DIALING 상태도 ACTIVE로 간주)
+            val activeCall = activeCalls.find { it.state == Call.STATE_ACTIVE || it.state == Call.STATE_DIALING }
             if (activeCall != null) {
                 callMap["active_number"] = activeCall.details.handle?.schemeSpecificPart
-                callMap["active_state"] = "ACTIVE"
-                Log.d("PhoneInCallService", "[getCurrentCallDetails] 활성 통화: ${callMap["active_number"]}")
+                callMap["active_state"] = if (activeCall.state == Call.STATE_DIALING) "DIALING" else "ACTIVE"
+                Log.d("PhoneInCallService", "[getCurrentCallDetails] 활성 통화: ${callMap["active_number"]} (상태: ${callMap["active_state"]})")
             }
             
             // 대기 중인 통화 검색

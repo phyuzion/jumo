@@ -186,9 +186,10 @@ class CallStateProvider with ChangeNotifier {
 
       // 활성 통화 정보 업데이트
       if (hasActiveCall) {
+        final bool isDialing = activeState == 'DIALING';
         // 현재 번호와 다르거나 상태가 active가 아닌 경우 상태 업데이트
         if (_number != activeNumber || _callState != CallState.active) {
-          log('[CallStateProvider] 활성 통화 변경: $_number -> $activeNumber');
+          log('[CallStateProvider] 활성 통화 변경: $_number -> $activeNumber (발신 상태: $isDialing)');
           
           // 전화번호가 바뀌면 이름을 명시적으로 초기화 (이전 이름 제거)
           if (_number != activeNumber) {
@@ -200,7 +201,7 @@ class CallStateProvider with ChangeNotifier {
           await updateCallState(
             state: CallState.active,
             number: activeNumber!,
-            isConnected: true,
+            isConnected: !isDialing,  // DIALING 상태면 아직 연결되지 않은 것으로 처리
           );
         }
       } 
