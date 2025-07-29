@@ -33,3 +33,15 @@ class CallStateSyncEvent {
 
   CallStateSyncEvent(this.callDetails) : timestamp = DateTime.now();
 }
+
+/// 대기 통화 이벤트 (활성 통화가 있는 상태에서 새 전화 수신)
+class CallWaitingEvent {
+  final String activeNumber;
+  final String waitingNumber;
+  final DateTime timestamp;
+
+  CallWaitingEvent({
+    required this.activeNumber,
+    required this.waitingNumber,
+  }) : timestamp = DateTime.now();
+}

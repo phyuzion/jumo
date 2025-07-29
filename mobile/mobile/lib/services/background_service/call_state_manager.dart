@@ -106,11 +106,17 @@ class CallStateManager {
     
     log('[CallStateManager] 통화 상태 처리: 활성=$hasActiveCall, 대기=$hasHoldingCall, 수신=$hasRingingCall');
     
+    // 중요: 활성 통화와 수신 통화가 모두 있는 경우 = 대기 통화 상황
+    if (hasActiveCall && hasRingingCall) {
+      _handleWaitingCall(activeNumber!, ringingNumber!);
+      return;
+    }
+    
     // 활성 통화 처리
     if (hasActiveCall) {
       _handleActiveCall(activeNumber!);
     }
-    // 수신 중인 통화 처리
+    // 수신 중인 통화 처리 (활성 통화가 없을 때만 인코밍으로 처리)
     else if (hasRingingCall) {
       _handleRingingCall(ringingNumber!);
     }
@@ -206,6 +212,49 @@ class CallStateManager {
       // 포그라운드 알림 업데이트
       _updateForegroundNotification('통화 대기 중', number, 'active:$number');
     }
+  }
+  
+  // 대기 통화 처리 메서드 추가
+  void _handleWaitingCall(String activeNumber, String waitingNumber) {
+    log('[CallStateManager] 대기 통화 상황 감지: 활성=$activeNumber, 대기=$waitingNumber');
+    
+    // 기존 대기 통화와 동일하면 무시
+    if (_cachedCallState == 'waiting_call' && 
+        _cachedCallNumber == activeNumber && 
+        _cachedCallerName == waitingNumber) {
+      return;
+    }
+    
+    // 캐싱된 상태 업데이트
+    _cachedCallActive = true;
+    _cachedCallNumber = activeNumber;   // 활성 통화 번호 유지
+    _cachedCallState = 'waiting_call';  // 특별한 상태로 마킹
+    _cachedCallerName = waitingNumber;  // 대기 통화 번호를 callerName 필드에 임시 저장
+    
+    // UI에 알림 - 중요: 특별한 'waiting_call' 이벤트 발송
+    if (_uiInitialized) {
+      // 활성 통화에 대한 정보는 유지하면서, waiting_call 타입으로 알림
+      _service.invoke('callWaitingDetected', {
+        'active_number': activeNumber,
+        'waiting_number': waitingNumber
+      });
+      
+      // 기존 방식으로도 알림 (하위 호환성)
+      _updateUiCallState(
+        'active',         // 상태는 active로 유지
+        activeNumber,     // 활성 통화 번호
+        waitingNumber,    // 대기 통화 번호를 callerName으로
+        true,
+        _callTimer.ongoingSeconds,
+        'waiting_call',   // reason에 waiting_call 표시
+      );
+    }
+    
+    // 포그라운드 알림 업데이트 - 대기 통화 표시
+    _updateForegroundNotification('통화 중 (전화 대기)', '$activeNumber / $waitingNumber', 'waiting:$waitingNumber');
+    
+    // 수신 전화 노티피케이션은 표시하지 않음 (일반 인코밍 콜과 다름)
+    _stopIncomingCallRefreshTimer();
   }
   
   // 모든 통화가 없는 상태 처리
@@ -490,6 +539,13 @@ class CallStateManager {
         '[CallStateManager] Received callStateChanged: state=$state, num=$number, name=$callerName, connected=$isConnected, reason=$reason',
       );
 
+      // 대기 통화 이벤트 특별 처리
+      if (reason == 'waiting_call') {
+        log('[CallStateManager] 대기 통화 이벤트 감지. 일반 인코밍으로 처리하지 않음.');
+        // 일반 상태 업데이트는 수행하되, 인코밍 처리는 하지 않음
+        return;
+      }
+
       // 통화 상태 캐싱 업데이트
       if (state == 'active') {
         _clearCallState();
@@ -504,6 +560,26 @@ class CallStateManager {
           '[CallStateManager] Call state changed to active, cleared previous state',
         );
       } else if (state == 'incoming') {
+        // 현재 활성 통화가 있는지 먼저 확인 - 대기 통화 상황인지 확인
+        try {
+          final nativeState = await _getCurrentCallStateFromNative();
+          if (nativeState != null) {
+            final activeState = nativeState['active_state'] as String? ?? 'IDLE';
+            final activeNumber = nativeState['active_number'] as String?;
+            
+            // 활성 통화가 있는 상태에서 인코밍이 왔다면 대기 통화로 처리
+            if ((activeState == 'ACTIVE' || activeState == 'DIALING') && 
+                activeNumber != null && 
+                activeNumber.isNotEmpty) {
+              log('[CallStateManager] 활성 통화가 있는 상태에서 인코밍 감지. 대기 통화로 처리');
+              _handleWaitingCall(activeNumber, number);
+              return;
+            }
+          }
+        } catch (e) {
+          log('[CallStateManager] 대기 통화 확인 중 오류: $e');
+        }
+      
         log(
           '[CallStateManager][CRITICAL] 이벤트에서 새 인코밍 콜 감지: $number - 모든 상태 초기화',
         );

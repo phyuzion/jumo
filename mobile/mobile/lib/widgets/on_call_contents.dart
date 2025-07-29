@@ -38,6 +38,7 @@ class _OnCallContentsState extends State<OnCallContents> {
   // 타이머 구독
   Timer? _callCheckTimer;
   StreamSubscription? _callStateSubscription;
+  StreamSubscription? _callWaitingSubscription; // 대기 통화 이벤트 구독 추가
   
   @override
   void initState() {
@@ -52,6 +53,9 @@ class _OnCallContentsState extends State<OnCallContents> {
       _checkWaitingCall();
     });
     
+    // 대기 통화 이벤트 구독
+    _callWaitingSubscription = appEventBus.on<CallWaitingEvent>().listen(_handleWaitingCall);
+    
     log('[OnCallContents] 상태 관리 초기화 완료');
   }
   
@@ -59,7 +63,43 @@ class _OnCallContentsState extends State<OnCallContents> {
   void dispose() {
     _callCheckTimer?.cancel();
     _callStateSubscription?.cancel();
+    _callWaitingSubscription?.cancel(); // 구독 취소 추가
     super.dispose();
+  }
+  
+  // 대기 통화 이벤트 처리 (직접적인 대기 통화 이벤트 수신 로직)
+  void _handleWaitingCall(CallWaitingEvent event) {
+    log('[OnCallContents] 대기 통화 이벤트 수신: 활성=${event.activeNumber}, 대기=${event.waitingNumber}');
+    
+    if (!mounted) return;
+    
+    // 대기 번호 정보 설정
+    _ringingNumber = event.waitingNumber;
+    
+    // CallStateProvider에서 발신자 이름 찾기
+    final provider = Provider.of<CallStateProvider>(context, listen: false);
+    _ringingCallerName = provider.ringingCallerName;
+    
+    // 즉시 다이얼로그 표시 (타이머나 추가 확인 없이)
+    log('[OnCallContents] 대기 통화 다이얼로그 즉시 표시 (이벤트 기반)');
+    if (mounted) {
+      // 기존에 대기 통화 다이얼로그가 표시 중인지 확인
+      if (_isShowingWaitingCallDialog) {
+        // 이미 표시 중이면 새로운 번호로 업데이트만
+        if (_ringingNumber != event.waitingNumber) {
+          log('[OnCallContents] 기존 다이얼로그 갱신: ${_ringingNumber} -> ${event.waitingNumber}');
+          setState(() {
+            _ringingNumber = event.waitingNumber;
+            _ringingCallerName = provider.ringingCallerName;
+          });
+        }
+      } else {
+        // 새로 표시
+        setState(() {
+          _isShowingWaitingCallDialog = true;
+        });
+      }
+    }
   }
   
   // 통화 상태 체크 타이머 시작
@@ -71,7 +111,7 @@ class _OnCallContentsState extends State<OnCallContents> {
     log('[OnCallContents] 통화 상태 체크 타이머 시작');
   }
   
-  // 수신 통화 확인 및 다이얼로그 관리
+  // 수신 통화 확인 및 다이얼로그 관리 (타이머 기반 체크)
   Future<void> _checkWaitingCall() async {
     if (!mounted) return;
     
@@ -84,6 +124,7 @@ class _OnCallContentsState extends State<OnCallContents> {
                                  ringingNumber != null && 
                                  ringingNumber.isNotEmpty;
     
+    // 대기 통화 다이얼로그가 표시되어야 하는 경우
     if (shouldShowDialog) {
       if (!_isShowingWaitingCallDialog || _ringingNumber != ringingNumber) {
         // 새로운 수신 통화가 있으면 다이얼로그 표시
@@ -91,7 +132,7 @@ class _OnCallContentsState extends State<OnCallContents> {
         _ringingCallerName = callStateProvider.ringingCallerName;
         
         // 다이얼로그 표시 상태 변경 (setState 호출 전에 log 기록)
-        log('[OnCallContents] 수신 통화 감지: $_ringingNumber, 다이얼로그 표시');
+        log('[OnCallContents] 타이머 체크: 수신 통화 감지: $_ringingNumber, 다이얼로그 표시');
         
         // 상태 업데이트 및 다이얼로그 표시
         if (mounted) {
@@ -100,16 +141,26 @@ class _OnCallContentsState extends State<OnCallContents> {
           });
         }
       }
-    } else if (_isShowingWaitingCallDialog) {
-      // 수신 통화가 없거나 active 상태가 아닌데 다이얼로그가 표시 중이면 숨김
-      if (mounted) {
-        setState(() {
-          _isShowingWaitingCallDialog = false;
-          _ringingNumber = null;
-          _ringingCallerName = null;
-        });
+    } 
+    // 대기 통화 다이얼로그가 표시 중이지만 표시되지 않아야 하는 경우
+    else if (_isShowingWaitingCallDialog) {
+      // 다이얼로그 표시 상태를 검증
+      final bool isValidDialog = 
+          currentState == CallState.active &&  // 현재 통화 중이고
+          _ringingNumber != null &&           // 링잉 번호가 있으며
+          _ringingNumber!.isNotEmpty;         // 그 번호가 유효할 때
+          
+      if (!isValidDialog) {
+        // 수신 통화가 없거나 active 상태가 아닌데 다이얼로그가 표시 중이면 숨김
+        if (mounted) {
+          setState(() {
+            _isShowingWaitingCallDialog = false;
+            _ringingNumber = null;
+            _ringingCallerName = null;
+          });
+          log('[OnCallContents] 타이머 체크: 수신 통화 없음 또는 active 상태 아님, 다이얼로그 숨김');
+        }
       }
-      log('[OnCallContents] 수신 통화 없음 또는 active 상태 아님, 다이얼로그 숨김');
     }
   }
 

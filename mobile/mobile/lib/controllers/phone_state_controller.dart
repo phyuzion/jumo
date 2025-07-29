@@ -335,6 +335,67 @@ class PhoneStateController with WidgetsBindingObserver {
     _incomingCallNotificationCount = 0;
   }
 
+  // 대기 통화 처리 메서드 추가
+  Future<void> handleWaitingCall(String activeNumber, String waitingNumber) async {
+    log('[PhoneStateController] 대기 통화 처리: 활성=$activeNumber, 대기=$waitingNumber');
+    
+    // 활성 통화와 대기 통화 번호 정규화
+    final normalizedActiveNumber = normalizePhone(activeNumber);
+    final normalizedWaitingNumber = normalizePhone(waitingNumber);
+    
+    // 차단된 번호인지 확인
+    bool isBlocked = false;
+    try {
+      isBlocked = await _blockedNumbersController.isNumberBlockedAsync(
+        normalizedWaitingNumber,
+        addHistory: false,
+      );
+    } catch (e) {
+      log('[PhoneStateController] 대기 통화 차단 상태 확인 오류: $e');
+    }
+    
+    // 차단된 번호면 바로 거절
+    if (isBlocked) {
+      log('[PhoneStateController] 차단된 대기 통화 감지: $normalizedWaitingNumber, 자동 거절');
+      try {
+        await NativeMethods.rejectCall();
+      } catch (e) {
+        log('[PhoneStateController] 차단된 대기 통화 거절 오류: $e');
+      }
+      return;
+    }
+    
+    // 중요: 노티피케이션 정리 - 기존 수신 전화 노티피케이션이 있다면 취소
+    _stopIncomingCallRefreshTimer();
+    try {
+      await LocalNotificationService.cancelNotification(9876);
+      log('[PhoneStateController] 대기 통화 처리: 기존 수신 전화 노티피케이션 취소 완료');
+    } catch (e) {
+      log('[PhoneStateController] 노티피케이션 취소 오류: $e');
+    }
+    
+    // 발신자 정보 초기화 이벤트
+    appEventBus.fire(CallSearchResetEvent(normalizedWaitingNumber));
+    
+    // 중요: 대기 통화는 일반 수신 전화와 다르게 처리
+    // CallWaitingEvent 발행하여 UI에 알림
+    log('[PhoneStateController] 대기 통화 이벤트 발행: 활성=$normalizedActiveNumber, 대기=$normalizedWaitingNumber');
+    appEventBus.fire(CallWaitingEvent(
+      activeNumber: normalizedActiveNumber,
+      waitingNumber: normalizedWaitingNumber
+    ));
+    
+    // 백그라운드 서비스에는 활성 상태 유지하면서 웨이팅 정보 추가
+    final service = FlutterBackgroundService();
+    service.invoke('callWaitingDetected', {
+      'active_number': normalizedActiveNumber,
+      'waiting_number': normalizedWaitingNumber
+    });
+    
+    // 중요: 대기 통화는 일반 인코밍 콜 처리 경로를 타지 않도록 함
+    // 따라서 notifyServiceCallState는 호출하지 않음
+  }
+
   Future<void> handleNativeEvent(
     String method,
     dynamic args,
@@ -364,6 +425,30 @@ class PhoneStateController with WidgetsBindingObserver {
     }
 
     switch (method) {
+      // 대기 통화 이벤트 처리 추가
+      case 'onWaitingCall':
+        if (args is Map) {
+          final activeNumber = args['active_number'] as String? ?? '';
+          final waitingNumber = args['waiting_number'] as String? ?? '';
+          
+          if (activeNumber.isNotEmpty && waitingNumber.isNotEmpty) {
+            log('[PhoneStateController] 네이티브에서 대기 통화 이벤트 수신: 활성=$activeNumber, 대기=$waitingNumber');
+            // 먼저 인코밍 콜 알림 타이머 정지
+            _stopIncomingCallRefreshTimer();
+            try {
+              await LocalNotificationService.cancelNotification(9876);
+              log('[PhoneStateController] 대기 통화 전 노티피케이션 취소 성공');
+            } catch (e) {
+              log('[PhoneStateController] 대기 통화 전 노티피케이션 취소 실패: $e');
+            }
+            
+            // 대기 통화 전용 처리
+            await handleWaitingCall(activeNumber, waitingNumber);
+            return; // 대기 통화는 일반 인코밍 콜로 처리하지 않고 여기서 종료
+          }
+        }
+        break;
+        
       case 'onIncomingNumber':
         status = PhoneStateStatus.CALL_INCOMING;
 

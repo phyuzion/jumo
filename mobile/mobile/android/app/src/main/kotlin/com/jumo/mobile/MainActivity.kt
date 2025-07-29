@@ -143,6 +143,17 @@ class MainActivity : FlutterFragmentActivity() {
                 Log.d(TAG, "Flutter init => notifyIncomingNumber($number)")
                 NativeBridge.notifyIncomingNumber(number)
             }
+        } else if (intent.getBooleanExtra("waiting_call", false)) {
+            Log.d(TAG, "Waiting call intent received")
+            // 대기 통화에도 화면 잠금 플래그 활성화
+            enableLockScreenFlags()
+            val activeNumber = intent.getStringExtra("active_number") ?: ""
+            val waitingNumber = intent.getStringExtra("waiting_number") ?: ""
+            Log.d(TAG, "Waiting call data: active=$activeNumber, waiting=$waitingNumber")
+            
+            // 여기서는 NativeBridge.notifyWaitingCall을 직접 호출하지 않음
+            // PhoneInCallService에서 이미 호출했기 때문
+            
         } else if (intent.getBooleanExtra("on_call", false)) {
             Log.d(TAG, "On Call intent received")
             // 통화 중에도 화면 잠금 플래그 활성화

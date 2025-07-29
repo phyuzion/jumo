@@ -146,6 +146,15 @@ object NativeBridge {
     fun notifyOnCall(number: String, connected: Boolean) { methodChannel?.invokeMethod("onCall", mapOf("number" to number, "connected" to connected)) }
     fun notifyCallEnded(endedNumber: String, reason: String) { methodChannel?.invokeMethod("onCallEnded", mapOf("number" to endedNumber, "reason" to reason)) }
     
+    // 대기 통화 알림 메서드 추가
+    fun notifyWaitingCall(activeNumber: String, waitingNumber: String) {
+        Log.d("NativeBridge", "notifyWaitingCall: 활성=$activeNumber, 대기=$waitingNumber")
+        methodChannel?.invokeMethod("onWaitingCall", mapOf(
+            "active_number" to activeNumber,
+            "waiting_number" to waitingNumber
+        ))
+    }
+    
     // 통화 상태 초기화 (기본 전화앱 설정 후 호출)
     fun resetCallState() {
         Log.d("NativeBridge", "resetCallState: 통화 상태 명시적 초기화")

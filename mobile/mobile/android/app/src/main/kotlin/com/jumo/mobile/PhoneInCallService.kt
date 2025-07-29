@@ -189,11 +189,30 @@ class PhoneInCallService : InCallService() {
                     true // API 28 이하에서는 방향을 확인할 수 없으므로 항상 수신 전화로 간주
                 }
                 
-                if (isIncoming) {
+                                    if (isIncoming) {
                     val number = call.details.handle?.schemeSpecificPart ?: ""
                     
-                    showIncomingCall(number)
-                    Log.d("PhoneInCallService", "[handleCallState] incoming Dialing... => $number")
+                    // 이미 활성화된 통화가 있는지 체크
+                    val activeCall = activeCalls.find { it != call && it.state == Call.STATE_ACTIVE }
+                    val dialingCall = activeCalls.find { it != call && it.state == Call.STATE_DIALING }
+                    
+                    if (activeCall != null) {
+                        // 활성 통화가 있는 상태에서 새로운 수신 = 대기 통화 상황
+                        val activeNumber = activeCall.details.handle?.schemeSpecificPart ?: ""
+                        Log.d("PhoneInCallService", "[handleCallState] 대기 통화 감지: 활성=$activeNumber, 수신=$number")
+                        
+                        // 대기 통화 상황만 알리고, 일반 수신 전화 알림은 보내지 않음
+                        showWaitingCall(activeNumber, number)
+                        // showIncomingCall은 호출하지 않음 - 이 부분이 중요!
+                    } else if (dialingCall != null) {
+                        // 발신 중인 통화가 있는 상태에서 새로운 수신 = 부재중으로 처리 (안드로이드 기본 동작)
+                        Log.d("PhoneInCallService", "[handleCallState] 발신 중 수신 전화 감지: $number - 부재중으로 처리")
+                        // 아무 작업 없이 시스템이 자동으로 부재중으로 처리하도록 함
+                    } else {
+                        // 일반 수신 전화
+                        showIncomingCall(number)
+                        Log.d("PhoneInCallService", "[handleCallState] incoming Dialing... => $number")
+                    }
                 }
             }
             Call.STATE_DIALING -> {
@@ -351,7 +370,7 @@ class PhoneInCallService : InCallService() {
     }
 
     /** ===========================
-     *  showIncomingCall & showOnCall & showCallEnded
+     *  showIncomingCall & showOnCall & showCallEnded & showWaitingCall
      * ========================== */
     private fun showIncomingCall(number: String) {
         val context = JumoApp.context
@@ -363,6 +382,31 @@ class PhoneInCallService : InCallService() {
             )
             putExtra("incoming_call", true)
             putExtra("incoming_number", number)
+        }
+        context.startActivity(intent)
+    }
+    
+    // 대기 통화 알림 메서드 추가
+    private fun showWaitingCall(activeNumber: String, incomingNumber: String) {
+        // 1. 먼저 NativeBridge를 통해 Flutter에 대기 통화 이벤트 전달
+        val context = JumoApp.context
+        Log.d("PhoneInCallService", "[showWaitingCall] 대기 통화 이벤트 전송: 활성=$activeNumber, 대기=$incomingNumber")
+        NativeBridge.notifyWaitingCall(activeNumber, incomingNumber)
+        
+        // 2. 화면 전환도 함께 처리 (incoming_call은 포함하지 않음)
+        val intent = Intent(context, MainActivity::class.java).apply {
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+            )
+            // 대기 통화임을 명확히 표시하고 일반 incoming_call 플래그는 설정하지 않음
+            putExtra("waiting_call", true)
+            putExtra("active_number", activeNumber)
+            putExtra("waiting_number", incomingNumber)
+            // 아래 플래그들은 포함하지 않음 - 중요!
+            // putExtra("incoming_call", true) - 이 플래그가 있으면 인코밍콜 플로우가 트리거됨
+            // putExtra("incoming_number", incomingNumber)
         }
         context.startActivity(intent)
     }
