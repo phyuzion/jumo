@@ -856,6 +856,51 @@ class PhoneStateController with WidgetsBindingObserver {
     }
   }
 
+  // 마지막으로 처리한 대기 통화 추적용 변수
+  String? _lastHandledActiveNumber;
+  String? _lastHandledWaitingNumber;
+  DateTime _lastHandledWaitingCallTime = DateTime.fromMillisecondsSinceEpoch(0);
+
+  // 대기 통화 처리 메서드
+  Future<void> _handleWaitingCall(String activeNumber, String waitingNumber) async {
+    if (activeNumber.isEmpty || waitingNumber.isEmpty) return;
+    
+    // 중복 이벤트 방지 - 일정 시간(3초) 내에 동일한 번호 조합으로 들어온 요청은 무시
+    final now = DateTime.now();
+    final timeDiff = now.difference(_lastHandledWaitingCallTime).inSeconds;
+    if (_lastHandledActiveNumber == activeNumber && 
+        _lastHandledWaitingNumber == waitingNumber && 
+        timeDiff < 3) {
+      log('[PhoneStateController] 중복된 대기 통화 이벤트 무시 ($timeDiff초 이내): 활성=$activeNumber, 대기=$waitingNumber');
+      return;
+    }
+    
+    // 처리 시간과 번호 기록
+    _lastHandledActiveNumber = activeNumber;
+    _lastHandledWaitingNumber = waitingNumber;
+    _lastHandledWaitingCallTime = now;
+    
+    log('[PhoneStateController] 대기 통화 처리: 활성=$activeNumber, 대기=$waitingNumber');
+    
+    // 기존에 표시 중인 인코밍 노티피케이션 취소
+    try {
+      await LocalNotificationService.cancelNotification(9876);
+      log('[PhoneStateController] 대기 통화 전 노티피케이션 취소 성공');
+    } catch (e) {
+      log('[PhoneStateController] 대기 통화 처리 중 노티피케이션 취소 오류: $e');
+    }
+    
+    // 대기 통화 이벤트 발행 - 이를 통해 CallWaitingDialog가 표시됨
+    appEventBus.fire(CallWaitingEvent(
+      activeNumber: activeNumber,
+      waitingNumber: waitingNumber
+    ));
+    
+    // 상태 명시적 초기화 방지 - 중요: 이 코드는 CallStateProvider의 상태를 유지하기 위함
+    // SearchRecordsController에는 이벤트 보내되, 상태 초기화 방지를 위한 플래그 설정
+    appEventBus.fire(CallSearchResetEvent(waitingNumber, isWaitingCall: true));
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -891,9 +936,37 @@ class PhoneStateController with WidgetsBindingObserver {
         );
         return;
       }
+      
+      // 활성 통화와 수신 통화가 동시에 있는 경우 = 대기 통화 상황
+      if ((activeNumber != null && activeNumber.isNotEmpty && 
+           (activeState == 'ACTIVE' || activeState == 'DIALING')) &&
+          ringingNumber != null && ringingNumber.isNotEmpty && ringingState == 'RINGING') {
+        log(
+          '[PhoneStateController] Detected active call and ringing call simultaneously - handling as waiting call'
+        );
+        
+        // 대기 통화 처리
+        await _handleWaitingCall(activeNumber, ringingNumber);
+        
+        // 대기 통화로 처리했으므로 더 이상 처리하지 않음
+        return;
+      }
+      
+      // 대기 통화가 있는 경우도 확인 (활성 통화와 대기 통화가 모두 있는 경우)
+      if ((activeNumber != null && activeNumber.isNotEmpty && activeState == 'ACTIVE') &&
+          (holdingNumber != null && holdingNumber.isNotEmpty && holdingState == 'HOLDING')) {
+        log(
+          '[PhoneStateController] Detected active call and holding call - maintaining current state'
+        );
+        
+        // 이미 통화 상태가 정상으로 유지되고 있음
+        // 여기서는 중복 이벤트를 발생시키지 않도록 아무 작업도 하지 않음
+        return;
+      }
 
-      // 수신 통화가 있으면 처리
-      if (ringingNumber != null && ringingNumber.isNotEmpty && ringingState == 'RINGING') {
+      // 수신 통화가 있고 활성 통화가 없는 경우에만 일반 수신 통화로 처리
+      if (ringingNumber != null && ringingNumber.isNotEmpty && ringingState == 'RINGING' &&
+          (activeNumber == null || activeNumber.isEmpty || activeState != 'ACTIVE')) {
         final normalizedNumber = normalizePhone(ringingNumber);
         log(
           '[PhoneStateController] Detected RINGING call on app start/resume: $normalizedNumber',

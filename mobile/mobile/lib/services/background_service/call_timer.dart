@@ -131,7 +131,7 @@ class CallTimer {
 
   Future<void> _updateForegroundNotification() async {
     if (_service is AndroidServiceInstance) {
-      final androidService = _service as AndroidServiceInstance;
+      final androidService = _service;
       if (await androidService.isForegroundService()) {
         String title = '통화중... (${_formatDuration(_ongoingSeconds)})';
         String content = '$_currentCallerName ($_currentNumber)';

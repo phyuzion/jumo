@@ -151,9 +151,19 @@ class CallStateProvider with ChangeNotifier {
           _ringingCallerName = await contactsController.getContactName(ringingNumber!);
           log('[CallStateProvider] 수신 중인 통화 정보 업데이트: $_ringingCallNumber, $_ringingCallerName');
           
-          // 수신 중인 통화가 있고 현재 CallState가 active나 ended가 아니면 incoming 상태로 업데이트
-          // (이미 활성 통화 중이라면 대기 통화로 처리됨)
-          if (_callState != CallState.incoming && _callState != CallState.active) {
+          // 수신 중인 통화가 있을 때 적절한 상태 전환 처리
+          if (hasActiveCall) {
+            // 활성 통화가 있는 경우, 수신 통화는 대기 통화로 처리함
+            // (별도의 상태 전환 없이 대기 통화 정보만 설정)
+            log('[CallStateProvider] 활성 통화 중에 수신된 통화는 대기 통화로 처리: $_ringingCallNumber');
+            
+            // 이벤트 발행하여 UI에서 대기 통화 처리하도록 함
+            appEventBus.fire(CallWaitingEvent(
+              activeNumber: activeNumber!, 
+              waitingNumber: ringingNumber
+            ));
+          } else if (_callState != CallState.incoming) {
+            // 활성 통화가 없고, 현재 incoming 상태가 아닌 경우에만 상태 변경
             await updateCallState(
               state: CallState.incoming, 
               number: ringingNumber, 
@@ -773,30 +783,65 @@ class CallStateProvider with ChangeNotifier {
     _proximitySensorSubscription = null;
   }
 
+  // 마지막 리셋 이벤트 추적 변수 (중복 방지용)
+  String? _lastResetPhoneNumber;
+  DateTime _lastResetEventTime = DateTime.fromMillisecondsSinceEpoch(0);
+
   // 리셋 이벤트 핸들러
   void _handleResetEvent(CallSearchResetEvent event) {
-    log('[CallStateProvider][CRITICAL] 검색 데이터 리셋 이벤트 수신: ${event.phoneNumber}');
+    log('[CallStateProvider][CRITICAL] 검색 데이터 리셋 이벤트 수신: ${event.phoneNumber}, isWaitingCall: ${event.isWaitingCall}');
 
     // 이벤트에 전화번호가 포함된 경우 (실제 전화 이벤트)
     if (event.phoneNumber.isNotEmpty) {
-      // 현재 표시 중인 번호와 다른 번호가 들어온 경우 전체 상태 리셋
+      // 중복 이벤트 방지 (1초 이내의 동일 번호 이벤트는 무시)
+      final now = DateTime.now();
+      final timeDiff = now.difference(_lastResetEventTime).inSeconds;
+      if (_lastResetPhoneNumber == event.phoneNumber && timeDiff < 1) {
+        log('[CallStateProvider] 중복된 리셋 이벤트 무시 ($timeDiff초 이내): ${event.phoneNumber}');
+        return;
+      }
+      
+      // 마지막 처리 정보 업데이트
+      _lastResetPhoneNumber = event.phoneNumber;
+      _lastResetEventTime = now;
+      
+      // 이벤트에 isWaitingCall이 true로 설정되어 있거나, 실제 대기 통화 상황인지 확인
+      final bool isWaitingCall = event.isWaitingCall || 
+                              (_callState == CallState.active && 
+                               (_holdingCallNumber != null || _ringingCallNumber != null));
+      
+      // 대기 통화 상황에서는 상태 초기화 하지 않음
+      if (isWaitingCall) {
+        // 대기 통화 상황에서 발신자 정보만 초기화
+        log('[CallStateProvider] 대기 통화 상황에서 검색 데이터만 초기화 (상태 유지)');
+        
+        // 대기 통화 번호에 대한 정보만 초기화 (상태는 유지)
+        if (event.phoneNumber == _ringingCallNumber) {
+          log('[CallStateProvider] 대기 통화 수신 번호에 대한 정보 초기화: ${event.phoneNumber}');
+        }
+        return;  // 더 이상 진행하지 않음 (상태 변경 방지)
+      }
+      
+      // 현재 표시 중인 번호와 다른 번호가 들어온 경우 전체 상태 리셋 판단
       if (_number.isNotEmpty && event.phoneNumber != _number) {
-        log(
-          '[CallStateProvider][CRITICAL] 기존 번호($_number)와 다른 새 번호(${event.phoneNumber}) 감지. 상태 리셋.',
-        );
-        resetState();
+        // 활성 통화 중에는 초기화하지 않음
+        if (_callState != CallState.active) {
+          log('[CallStateProvider][CRITICAL] 기존 번호($_number)와 다른 새 번호(${event.phoneNumber}) 감지. 상태 리셋.');
+          resetState();
+        } else {
+          log('[CallStateProvider] 활성 통화 중 다른 번호 이벤트, 상태 유지: $_number, 이벤트: ${event.phoneNumber}');
+          return; // 활성 통화 중에는 기존 상태 유지
+        }
       }
 
       // 새 전화 상태로 업데이트 (상태 증진)
       log('[CallStateProvider][CRITICAL] 새 전화 번호 감지. 통화 상태 업데이트 시작');
 
       // 현재 상태에 따라 적절한 다음 상태로 전환
-      CallState newState;
-
       if (_callState == CallState.idle || _callState == CallState.ended) {
         // 현재 앱이 foreground에서 실행 중이고 전화가 감지된 경우
         // Native 통화 상태에 따라 결정 (기본값은 INCOMING으로 설정)
-        newState = CallState.incoming;
+        final newState = CallState.incoming;
 
         // 번호는 이벤트에서 온 번호로 설정
         updateCallState(
@@ -810,11 +855,11 @@ class CallStateProvider with ChangeNotifier {
         _isPopupVisible = true;
 
         log(
-          '[CallStateProvider] 통화 상태 업데이트됨: $_callState, 번호: $event.phoneNumber, 팝업: $_isPopupVisible',
+          '[CallStateProvider] 통화 상태 업데이트됨: $_callState, 번호: ${event.phoneNumber}, 팝업: $_isPopupVisible',
         );
       }
-    } else {
-      // 빈 번호의 이벤트인 경우 (일반적인 초기화 요청)
+    } else if (!event.isWaitingCall) {
+      // 빈 번호의 이벤트인 경우 (일반적인 초기화 요청), isWaitingCall이 true가 아닌 경우에만 초기화
       log('[CallStateProvider][CRITICAL] 전체 상태 명시적 초기화');
       resetState();
     }

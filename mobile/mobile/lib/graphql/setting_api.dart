@@ -15,23 +15,6 @@ class SettingApi {
     }
   ''';
 
-  /// 사용자 설정 저장
-  ///
-  /// Map을 JSON 문자열로 변환하여 서버에 저장합니다.
-  ///
-  /// 사용 예시:
-  /// ```dart
-  /// final settingsMap = {
-  ///   'deviceInfo': {
-  ///     'model': 'SM-G970N',
-  ///     'osVersion': 'Android 13',
-  ///   },
-  ///   'appVersion': '0.2.3',
-  ///   'lastUpdateTime': DateTime.now().millisecondsSinceEpoch,
-  /// };
-  ///
-  /// final success = await SettingApi.setUserSetting(settingsMap);
-  /// ```
   static Future<bool> setUserSetting(Map<String, dynamic> settingsMap) async {
     try {
       final client = GraphQLClientManager.client;

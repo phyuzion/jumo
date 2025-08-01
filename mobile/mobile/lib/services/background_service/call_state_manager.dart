@@ -215,7 +215,7 @@ class CallStateManager {
   }
   
   // 대기 통화 처리 메서드 추가
-  void _handleWaitingCall(String activeNumber, String waitingNumber) {
+  Future<void> _handleWaitingCall(String activeNumber, String waitingNumber) async {
     log('[CallStateManager] 대기 통화 상황 감지: 활성=$activeNumber, 대기=$waitingNumber');
     
     // 기존 대기 통화와 동일하면 무시
@@ -225,7 +225,15 @@ class CallStateManager {
       return;
     }
     
-    // 캐싱된 상태 업데이트
+    // 기존에 표시 중인 인코밍 노티피케이션 취소
+    try {
+      await LocalNotificationService.cancelNotification(CALL_STATUS_NOTIFICATION_ID);
+      log('[CallStateManager] 대기 통화 전 노티피케이션 취소 성공');
+    } catch (e) {
+      log('[CallStateManager] 대기 통화 처리 중 노티피케이션 취소 오류: $e');
+    }
+    
+    // 캐싱된 상태 업데이트 (철저한 상태 초기화 하지 않음 - 중요!)
     _cachedCallActive = true;
     _cachedCallNumber = activeNumber;   // 활성 통화 번호 유지
     _cachedCallState = 'waiting_call';  // 특별한 상태로 마킹
@@ -241,7 +249,7 @@ class CallStateManager {
       
       // 기존 방식으로도 알림 (하위 호환성)
       _updateUiCallState(
-        'active',         // 상태는 active로 유지
+        'active',         // 상태는 active로 유지 (incoming으로 변경하지 않음)
         activeNumber,     // 활성 통화 번호
         waitingNumber,    // 대기 통화 번호를 callerName으로
         true,
@@ -253,7 +261,7 @@ class CallStateManager {
     // 포그라운드 알림 업데이트 - 대기 통화 표시
     _updateForegroundNotification('통화 중 (전화 대기)', '$activeNumber / $waitingNumber', 'waiting:$waitingNumber');
     
-    // 수신 전화 노티피케이션은 표시하지 않음 (일반 인코밍 콜과 다름)
+    // 수신 전화 노티피케이션 타이머 중지 (일반 인코밍 콜과 다름)
     _stopIncomingCallRefreshTimer();
   }
   
@@ -725,6 +733,28 @@ class CallStateManager {
           if (state == 'RINGING' &&
               incomingNumber != null &&
               incomingNumber.isNotEmpty) {
+            
+            // 먼저 현재 활성 통화가 있는지 확인 (대기 통화 상황인지 확인)
+            try {
+              final nativeState = await _getCurrentCallStateFromNative();
+              if (nativeState != null) {
+                final activeState = nativeState['active_state'] as String? ?? 'IDLE';
+                final activeNumber = nativeState['active_number'] as String?;
+                
+                // 활성 통화가 있는 상태에서 인코밍이 왔다면 대기 통화로 처리
+                if ((activeState == 'ACTIVE' || activeState == 'DIALING') && 
+                    activeNumber != null && 
+                    activeNumber.isNotEmpty) {
+                  log('[CallStateManager] 활성 통화가 있는 상태에서 인코밍 감지. 대기 통화로 처리');
+                  _handleWaitingCall(activeNumber, incomingNumber);
+                  return;
+                }
+              }
+            } catch (e) {
+              log('[CallStateManager] 대기 통화 확인 중 오류: $e');
+            }
+            
+            // 활성 통화가 없는 경우에만 일반 인코밍 콜로 처리
             log(
               '[CallStateManager][CRITICAL] 새 인코밍 콜 감지: $incomingNumber - 모든 상태 초기화',
             );
@@ -772,7 +802,7 @@ class CallStateManager {
               return;
             }
 
-            // 철저한 상태 초기화
+            // 철저한 상태 초기화 (활성 통화가 없을 때만)
             _thoroughCallStateReset(incomingNumber);
 
             // 연락처 이름 가져오기 시도
@@ -793,7 +823,7 @@ class CallStateManager {
               log('[CallStateManager] 수신 전화 노티피케이션 표시 오류: $e');
             }
 
-            // UI에 바로 상태 전달
+            // UI에 바로 상태 전달 (활성 통화가 없을 때만)
             if (_uiInitialized) {
               log(
                 '[CallStateManager][BroadcastReceiver] Sending immediate incoming call notification to UI',
@@ -843,43 +873,6 @@ class CallStateManager {
       timer,
     ) async {
       try {
-        // 로그인 상태 확인 먼저 수행
-        bool isLoggedIn = false;
-        try {
-          // 로그인 상태 확인 요청 전송
-          _service.invoke('checkLoginStatus');
-
-          // 응답 대기
-          final completer = Completer<bool>();
-          StreamSubscription? subscription;
-
-          subscription = _service.on('responseLoginStatus').listen((event) {
-            final loggedIn = event?['isLoggedIn'] as bool? ?? false;
-            if (!completer.isCompleted) {
-              completer.complete(loggedIn);
-              subscription?.cancel();
-            }
-          });
-
-          // 짧은 타임아웃 설정
-          isLoggedIn = await completer.future.timeout(
-            const Duration(milliseconds: 500),
-            onTimeout: () {
-              subscription?.cancel();
-              return false; // 타임아웃 시 로그인되지 않은 것으로 간주
-            },
-          );
-        } catch (e) {
-          log('[CallStateManager] 로그인 상태 확인 중 오류: $e');
-          isLoggedIn = false;
-        }
-
-        // 로그인되지 않은 경우 통화 상태 체크 건너뛰기
-        if (!isLoggedIn) {
-          // log('[CallStateManager] 로그인되지 않음. 통화 상태 체크 건너뛰기.');
-          return;
-        }
-
         // 네이티브 통화 상태 확인
         final nativeCallState = await _getCurrentCallStateFromNative();
         if (nativeCallState == null) return;
@@ -943,6 +936,28 @@ class CallStateManager {
               _callTimer.startCallTimer(number, '');
             }
           } else if (state.toUpperCase() == 'RINGING') {
+            // 현재 활성 통화가 있는지 확인 (타이머에서 감지한 경우)
+            bool hasActiveCall = false;
+            String? activeNumber;
+            try {
+              // 현재 상태에서 활성 통화가 있는지 확인
+              final activeState = nativeCallState['active_state'] as String? ?? 'IDLE';
+              activeNumber = nativeCallState['active_number'] as String?;
+              
+              hasActiveCall = (activeState == 'ACTIVE' || activeState == 'DIALING') && 
+                  activeNumber != null && 
+                  activeNumber.isNotEmpty;
+                  
+              if (hasActiveCall) {
+                log('[CallStateManager] 타이머에서 활성 통화 중에 수신된 통화 감지. 대기 통화로 처리');
+                _handleWaitingCall(activeNumber!, number);
+                return;
+              }
+            } catch (e) {
+              log('[CallStateManager] 타이머에서 활성 통화 확인 중 오류: $e');
+            }
+            
+            // 활성 통화가 없는 경우에만 일반 인코밍 콜로 처리
             log(
               '[CallStateManager][CRITICAL] 타이머에서 새 인코밍 콜 감지: $number - 모든 상태 초기화',
             );
@@ -986,7 +1001,7 @@ class CallStateManager {
               return;
             }
 
-            // 철저한 상태 초기화
+            // 철저한 상태 초기화 (활성 통화가 없는 경우에만)
             _thoroughCallStateReset(number);
 
             // 수신 전화 노티피케이션 표시 (새로 추가된 코드)
@@ -1008,7 +1023,7 @@ class CallStateManager {
               log('[CallStateManager] 타이머에서 수신 전화 노티피케이션 표시 오류: $e');
             }
 
-            // UI에 인코밍 상태 알림
+            // UI에 인코밍 상태 알림 (활성 통화가 없는 경우에만)
             if (_uiInitialized) {
               _updateUiCallState(
                 'incoming',
@@ -1152,7 +1167,7 @@ class CallStateManager {
     String payload,
   ) async {
     if (_service is AndroidServiceInstance) {
-      final androidService = _service as AndroidServiceInstance;
+      final androidService = _service;
       if (await androidService.isForegroundService()) {
         _notifications.show(
           FOREGROUND_SERVICE_NOTIFICATION_ID,

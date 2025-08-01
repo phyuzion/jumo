@@ -16,10 +16,15 @@ class NotificationCountUpdatedEvent {}
 /// 통화 검색 데이터 리셋 이벤트
 class CallSearchResetEvent {
   final String phoneNumber;
-  CallSearchResetEvent(this.phoneNumber);
+  
+  /// 대기 통화 상황에서의 리셋인지 여부 
+  /// true인 경우 CallStateProvider에서 상태 초기화를 방지함
+  final bool isWaitingCall;
+  
+  CallSearchResetEvent(this.phoneNumber, {this.isWaitingCall = false});
 }
 
-/// 통화 상태 변경 이벤트
+// 통화 상태 변경 이벤트
 class CallStateChangedEvent {
   final String state;
   final String? number;

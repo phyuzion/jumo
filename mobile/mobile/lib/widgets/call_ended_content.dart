@@ -5,6 +5,7 @@ import 'package:mobile/controllers/blocked_numbers_controller.dart';
 import 'package:mobile/screens/edit_contact_screen.dart'; // 편집 화면 이동
 import 'package:mobile/utils/constants.dart'; // normalizePhone
 import 'package:mobile/services/native_methods.dart'; // <<< NativeMethods 임포트 추가
+import 'package:mobile/providers/call_state_provider.dart'; // CallStateProvider 접근 추가
 
 // CallEndedScreen의 핵심 UI를 담당하는 위젯
 class CallEndedContent extends StatelessWidget {
@@ -89,6 +90,14 @@ class CallEndedContent extends StatelessWidget {
     // TODO: Close popup?
   }
 
+  // 닫기 버튼 핸들러 추가
+  void _onTapClose(BuildContext context) {
+    log('[CallEndedContent] Close button tapped, resetting state to idle');
+    // CallStateProvider의 resetState 호출하여 idle 상태로 전환
+    final callStateProvider = Provider.of<CallStateProvider>(context, listen: false);
+    callStateProvider.resetState();
+  }
+
   @override
   Widget build(BuildContext context) {
     // <<< 전달받은 reason 값 로깅 추가 >>>
@@ -106,95 +115,122 @@ class CallEndedContent extends StatelessWidget {
       statusColor = Colors.red;
     }
 
-    return Column(
+    return Stack(
       children: [
-        // --- 상단 정보 (컴팩트하게, 폰트 크기 다시 키움) ---
-        Padding(
-          padding: const EdgeInsets.only(top: 16.0, bottom: 4.0),
-          child: Text(
-            displayName,
-            style: const TextStyle(
-              color: Colors.black,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
+        // 기존 UI
+        Column(
+          children: [
+            // --- 상단 정보 (컴팩트하게, 폰트 크기 다시 키움) ---
+            Padding(
+              padding: const EdgeInsets.only(top: 16.0, bottom: 4.0),
+              child: Text(
+                displayName,
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12.0),
-          child: Text(
-            number,
-            style: const TextStyle(color: Colors.black54, fontSize: 16),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 16.0),
-          child: Text(
-            statusMessage, // <<< 계산된 메시지 사용
-            style: TextStyle(
-              fontSize: 18,
-              color: statusColor,
-              fontWeight: FontWeight.w500,
-            ), // <<< 계산된 색상 사용
-          ),
-        ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12.0),
+              child: Text(
+                number,
+                style: const TextStyle(color: Colors.black54, fontSize: 16),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Text(
+                statusMessage, // <<< 계산된 메시지 사용
+                style: TextStyle(
+                  fontSize: 18,
+                  color: statusColor,
+                  fontWeight: FontWeight.w500,
+                ), // <<< 계산된 색상 사용
+              ),
+            ),
 
-        const Spacer(),
+            const Spacer(),
 
-        // --- 하단 액션 버튼 (2줄 구조로 변경) ---
-        Padding(
-          padding: const EdgeInsets.only(bottom: 20.0, top: 10.0),
-          child: Column(
-            // <<< Row -> Column
-            children: [
-              // --- 첫 번째 줄: 전화, 문자 ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            // --- 하단 액션 버튼 (2줄 구조로 변경) ---
+            Padding(
+              padding: const EdgeInsets.only(bottom: 20.0, top: 10.0),
+              child: Column(
+                // <<< Row -> Column
                 children: [
-                  SizedBox(width: 40), // 간격 맞추기용 빈 공간
-                  _buildActionButton(
-                    icon: Icons.call, // 전화 아이콘
-                    color: Colors.green, // 전화 색상
-                    label: '전화',
-                    onTap: () => _onTapCall(context, number),
+                  // --- 첫 번째 줄: 전화, 문자 ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      SizedBox(width: 40), // 간격 맞추기용 빈 공간
+                      _buildActionButton(
+                        icon: Icons.call, // 전화 아이콘
+                        color: Colors.green, // 전화 색상
+                        label: '전화',
+                        onTap: () => _onTapCall(context, number),
+                      ),
+                      SizedBox(width: 20), // 간격 맞추기용 빈 공간
+                      _buildActionButton(
+                        icon: Icons.message, // 문자 아이콘
+                        color: Colors.blue, // 문자 색상
+                        label: '문자',
+                        onTap: () => _onTapMessage(context, number),
+                      ),
+                      SizedBox(width: 40), // 간격 맞추기용 빈 공간
+                    ],
                   ),
-                  SizedBox(width: 20), // 간격 맞추기용 빈 공간
-                  _buildActionButton(
-                    icon: Icons.message, // 문자 아이콘
-                    color: Colors.blue, // 문자 색상
-                    label: '문자',
-                    onTap: () => _onTapMessage(context, number),
+                  const SizedBox(height: 15), // <<< 줄 간격 추가
+                  // --- 두 번째 줄: 검색, 편집, 차단 ---
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _buildActionButton(
+                        icon: Icons.search,
+                        color: Colors.orange,
+                        label: '검색',
+                        onTap: () => _onTapSearch(context, number),
+                      ),
+                      _buildActionButton(
+                        icon: Icons.edit,
+                        color: Colors.blueGrey,
+                        label: '편집',
+                        onTap: () => _onTapEdit(context, number, callerName),
+                      ),
+                      _buildActionButton(
+                        icon: Icons.block,
+                        color: Colors.red,
+                        label: '차단',
+                        onTap: () => _onTapBlock(context, number),
+                      ),
+                    ],
                   ),
-                  SizedBox(width: 40), // 간격 맞추기용 빈 공간
                 ],
               ),
-              const SizedBox(height: 15), // <<< 줄 간격 추가
-              // --- 두 번째 줄: 검색, 편집, 차단 ---
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _buildActionButton(
-                    icon: Icons.search,
-                    color: Colors.orange,
-                    label: '검색',
-                    onTap: () => _onTapSearch(context, number),
-                  ),
-                  _buildActionButton(
-                    icon: Icons.edit,
-                    color: Colors.blueGrey,
-                    label: '편집',
-                    onTap: () => _onTapEdit(context, number, callerName),
-                  ),
-                  _buildActionButton(
-                    icon: Icons.block,
-                    color: Colors.red,
-                    label: '차단',
-                    onTap: () => _onTapBlock(context, number),
-                  ),
-                ],
+            ),
+          ],
+        ),
+        
+        // 왼쪽 위에 X 버튼 추가 (동그라미 안에)
+        Positioned(
+          top: 12.0,
+          left: 12.0,
+          child: GestureDetector(
+            onTap: () => _onTapClose(context),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.grey[300],
+                shape: BoxShape.circle,
               ),
-            ],
+              child: const Icon(
+                Icons.close,
+                color: Colors.black87,
+                size: 24,
+              ),
+            ),
           ),
         ),
       ],

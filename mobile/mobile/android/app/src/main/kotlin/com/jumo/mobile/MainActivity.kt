@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.telecom.TelecomManager
 import android.util.Log
 import android.view.WindowManager
@@ -27,6 +28,10 @@ class MainActivity : FlutterFragmentActivity() {
 
     private var flutterAppInitialized = false
     private var pendingIncomingNumber: String? = null
+    
+    // 마지막으로 처리한 통화 관련 인텐트 정보를 저장
+    private var lastCallIntentType: String? = null
+    private var lastCallIntentTime: Long = 0
     
     private val REQUEST_CODE_SET_DEFAULT_DIALER = 1001
 
@@ -94,18 +99,53 @@ class MainActivity : FlutterFragmentActivity() {
     override fun onResume() {
         super.onResume()
         
+        // 최근에 처리한 통화 관련 인텐트가 있고, 3초 이내면 상태 확인 스킵
+        // 이 경우 화면 잠금 플래그 설정은 인텐트 핸들러에서 이미 처리됨
+        val currentTime = System.currentTimeMillis()
+        if (lastCallIntentType != null && currentTime - lastCallIntentTime < 3000) {
+            Log.d(TAG, "onResume: 최근 처리한 통화 인텐트($lastCallIntentType) 있음, 상태 확인 스킵")
+            return
+        }
+        
         // 앱이 다시 활성화될 때 통화 상태 확인
         try {
             val callDetails = PhoneInCallService.getCurrentCallDetails()
-            val state = callDetails["state"] as String? ?: "IDLE"
+            
+            // 새로운 구현에서는 상태가 active_state, holding_state, ringing_state로 분리됨
+            val activeState = callDetails["active_state"] as String? ?: "IDLE"
+            val holdingState = callDetails["holding_state"] as String? ?: "IDLE"
+            val ringingState = callDetails["ringing_state"] as String? ?: "IDLE"
+            
+            // 활성, 대기, 또는 수신 통화가 있는지 확인
+            val hasActiveCall = activeState != "IDLE"
+            val hasHoldingCall = holdingState != "IDLE"
+            val hasRingingCall = ringingState != "IDLE"
             
             // 수신 전화 또는 통화 중인 경우 화면 잠금 플래그 활성화
-            if (state == "RINGING" || state == "ACTIVE" || state == "DIALING" || state == "HOLDING") {
-                Log.d(TAG, "onResume: 통화 관련 상태 감지($state), 화면 잠금 플래그 활성화")
+            if (hasActiveCall || hasHoldingCall || hasRingingCall) {
+                val stateMessage = when {
+                    hasRingingCall -> "RINGING"
+                    hasActiveCall -> activeState
+                    else -> holdingState
+                }
+                Log.d(TAG, "onResume: 통화 관련 상태 감지($stateMessage), 화면 잠금 플래그 활성화")
                 enableLockScreenFlags()
             } else {
-                Log.d(TAG, "onResume: 통화 중이 아님($state), 화면 잠금 플래그 비활성화")
-                disableLockScreenFlags()
+                // 다른 통화 인텐트 관련 플래그가 있는지 확인
+                val hasCallIntent = intent?.let { 
+                    it.getBooleanExtra("incoming_call", false) ||
+                    it.getBooleanExtra("waiting_call", false) ||
+                    it.getBooleanExtra("on_call", false) ||
+                    "ACCEPT_CALL" == it.action
+                } ?: false
+                
+                if (hasCallIntent) {
+                    Log.d(TAG, "onResume: 인텐트에 통화 관련 플래그 있음, 화면 잠금 플래그 유지")
+                    enableLockScreenFlags()
+                } else {
+                    Log.d(TAG, "onResume: 통화 중이 아님, 화면 잠금 플래그 비활성화")
+                    disableLockScreenFlags()
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "onResume: 통화 상태 확인 중 오류", e)
@@ -123,11 +163,19 @@ class MainActivity : FlutterFragmentActivity() {
             PhoneInCallService.acceptCall()
             // 수락 후 앱을 전면에 표시
             enableLockScreenFlags()
+            
+            // 마지막 인텐트 정보 업데이트
+            lastCallIntentType = "ACCEPT_CALL"
+            lastCallIntentTime = System.currentTimeMillis()
             return
         } else if (intent.action == "REJECT_CALL") {
             Log.d(TAG, "Reject call action from notification")
             PhoneInCallService.rejectCall()
             disableLockScreenFlags()
+            
+            // 마지막 인텐트 정보 업데이트
+            lastCallIntentType = "REJECT_CALL"
+            lastCallIntentTime = System.currentTimeMillis()
             return
         }
 
@@ -143,6 +191,10 @@ class MainActivity : FlutterFragmentActivity() {
                 Log.d(TAG, "Flutter init => notifyIncomingNumber($number)")
                 NativeBridge.notifyIncomingNumber(number)
             }
+            
+            // 마지막 인텐트 정보 업데이트
+            lastCallIntentType = "INCOMING_CALL"
+            lastCallIntentTime = System.currentTimeMillis()
         } else if (intent.getBooleanExtra("waiting_call", false)) {
             Log.d(TAG, "Waiting call intent received")
             // 대기 통화에도 화면 잠금 플래그 활성화
@@ -154,13 +206,20 @@ class MainActivity : FlutterFragmentActivity() {
             // 여기서는 NativeBridge.notifyWaitingCall을 직접 호출하지 않음
             // PhoneInCallService에서 이미 호출했기 때문
             
+            // 마지막 인텐트 정보 업데이트
+            lastCallIntentType = "WAITING_CALL"
+            lastCallIntentTime = System.currentTimeMillis()
         } else if (intent.getBooleanExtra("on_call", false)) {
             Log.d(TAG, "On Call intent received")
             // 통화 중에도 화면 잠금 플래그 활성화
             enableLockScreenFlags()
             val onCallNumber = intent.getStringExtra("on_call_number") ?: ""
             val onCallConnected = intent.getBooleanExtra("on_call_connected", false)
-            NativeBridge.notifyOnCall(onCallNumber, onCallConnected) 
+            NativeBridge.notifyOnCall(onCallNumber, onCallConnected)
+            
+            // 마지막 인텐트 정보 업데이트
+            lastCallIntentType = "ON_CALL"
+            lastCallIntentTime = System.currentTimeMillis()
         } else if (intent.getBooleanExtra("call_ended", false)) {
             Log.d(TAG, "Call ended intent received")
             // 통화 종료 시 화면 잠금 플래그 비활성화
@@ -168,20 +227,48 @@ class MainActivity : FlutterFragmentActivity() {
             val endedNumber = intent.getStringExtra("call_ended_number") ?: ""
             val reason = intent.getStringExtra("call_ended_reason") ?: ""
             NativeBridge.notifyCallEnded(endedNumber, reason) 
+            
+            // 마지막 인텐트 정보 업데이트
+            lastCallIntentType = "CALL_ENDED"
+            lastCallIntentTime = System.currentTimeMillis()
         } else {
             // 통화 관련 인텐트가 아닌 경우 화면 잠금 플래그 비활성화
             disableLockScreenFlags()
+            
+            // 마지막 인텐트 정보 초기화 (통화 관련 아닌 인텐트)
+            lastCallIntentType = null
+            lastCallIntentTime = 0
         }
         handleDialIntent(intent)
     }
 
+    private var _wakeLock: PowerManager.WakeLock? = null
+    
     private fun enableLockScreenFlags() {
         Log.d(TAG, "Enabling lock screen flags for incoming call")
         window.addFlags(
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
+        
+        // WakeLock 획득
+        try {
+            if (_wakeLock == null || (_wakeLock?.isHeld == false)) {
+                val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                _wakeLock = pm.newWakeLock(
+                    PowerManager.FULL_WAKE_LOCK or
+                            PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                            PowerManager.ON_AFTER_RELEASE,
+                    "JumoApp::IncomingCallWakeLock"
+                )
+                _wakeLock?.acquire(60 * 1000L) // 60초 동안 WakeLock 유지
+                Log.d(TAG, "WakeLock acquired for 60 seconds")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to acquire WakeLock", e)
+        }
     }
 
     private fun disableLockScreenFlags() {
@@ -189,8 +276,22 @@ class MainActivity : FlutterFragmentActivity() {
         window.clearFlags(
             WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD or
                     WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                    WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                    WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         )
+        
+        // WakeLock 해제
+        try {
+            _wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock released")
+                }
+            }
+            _wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release WakeLock", e)
+        }
     }
 
     private fun requestSetDefaultDialer() {
@@ -247,6 +348,39 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
+    override fun onPause() {
+        super.onPause()
+        
+        // 앱이 포그라운드에서 벗어날 때 WakeLock 해제
+        try {
+            _wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock released in onPause")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release WakeLock in onPause", e)
+        }
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        
+        // 액티비티가 종료될 때 WakeLock 해제 확인
+        try {
+            _wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock released in onDestroy")
+                }
+            }
+            _wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release WakeLock in onDestroy", e)
+        }
+    }
+    
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         

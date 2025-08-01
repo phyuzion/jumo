@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+
 import 'dart:developer';
 import 'package:mobile/services/native_methods.dart';
 import 'package:provider/provider.dart';
@@ -31,6 +32,8 @@ class OnCallContents extends StatefulWidget {
 
 class _OnCallContentsState extends State<OnCallContents> {
   // 통화 중 수신 관련 상태
+
+
   bool _isShowingWaitingCallDialog = false;
   String? _ringingNumber;
   String? _ringingCallerName;
@@ -68,21 +71,31 @@ class _OnCallContentsState extends State<OnCallContents> {
   }
   
   // 대기 통화 이벤트 처리 (직접적인 대기 통화 이벤트 수신 로직)
-  void _handleWaitingCall(CallWaitingEvent event) {
+  Future<void> _handleWaitingCall(CallWaitingEvent event) async {
     log('[OnCallContents] 대기 통화 이벤트 수신: 활성=${event.activeNumber}, 대기=${event.waitingNumber}');
     
     if (!mounted) return;
     
-    // 대기 번호 정보 설정
-    _ringingNumber = event.waitingNumber;
-    
-    // CallStateProvider에서 발신자 이름 찾기
-    final provider = Provider.of<CallStateProvider>(context, listen: false);
-    _ringingCallerName = provider.ringingCallerName;
-    
-    // 즉시 다이얼로그 표시 (타이머나 추가 확인 없이)
-    log('[OnCallContents] 대기 통화 다이얼로그 즉시 표시 (이벤트 기반)');
-    if (mounted) {
+    try {
+      // 현재 활성 통화인지 확인
+      final provider = Provider.of<CallStateProvider>(context, listen: false);
+      final currentState = provider.callState;
+      
+      if (currentState != CallState.active) {
+        log('[OnCallContents] 현재 활성 통화 상태가 아니므로 대기 통화 이벤트 무시: $currentState');
+        return;
+      }
+      
+      // 대기 번호 정보 설정
+      _ringingNumber = event.waitingNumber;
+      _ringingCallerName = provider.ringingCallerName;
+      
+      // 기존 타이머는 잠시 취소 (중복 처리 방지)
+      _callCheckTimer?.cancel();
+      
+      // 즉시 다이얼로그 표시 (타이머나 추가 확인 없이)
+      log('[OnCallContents] 대기 통화 다이얼로그 즉시 표시 (이벤트 기반)');
+      
       // 기존에 대기 통화 다이얼로그가 표시 중인지 확인
       if (_isShowingWaitingCallDialog) {
         // 이미 표시 중이면 새로운 번호로 업데이트만
@@ -94,75 +107,98 @@ class _OnCallContentsState extends State<OnCallContents> {
           });
         }
       } else {
-        // 새로 표시
+        // 새로 표시 - 상태 즉시 업데이트
         setState(() {
           _isShowingWaitingCallDialog = true;
         });
       }
+      
+      // 타이머 재시작
+      _startCallCheckTimer();
+    } catch (e) {
+      // 위젯이 dispose 되었거나 다른 예외가 발생한 경우
+      log('[OnCallContents] 대기 통화 이벤트 처리 중 오류 발생: $e');
+      // 타이머 재시작 시도 (오류 발생해도 타이머는 동작하도록)
+      _startCallCheckTimer();
     }
   }
-  
-  // 통화 상태 체크 타이머 시작
+  // 통화 상태 체크 타이머 시작 (최적화)
   void _startCallCheckTimer() {
     _callCheckTimer?.cancel();
-    _callCheckTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+    // 간격을 늈려 UI 영향 최소화 (1초 간격)
+    _callCheckTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       _checkWaitingCall();
     });
-    log('[OnCallContents] 통화 상태 체크 타이머 시작');
+    log('[OnCallContents] 통화 상태 체크 타이머 시작 (1초 간격)');
   }
   
   // 수신 통화 확인 및 다이얼로그 관리 (타이머 기반 체크)
   Future<void> _checkWaitingCall() async {
+    // 위젯이 화면에 표시되지 않으면 즉시 종료
     if (!mounted) return;
     
-    final callStateProvider = Provider.of<CallStateProvider>(context, listen: false);
-    final ringingNumber = callStateProvider.ringingCallNumber;
-    final currentState = callStateProvider.callState;
-    
-    // CallState.active 상태이고 ringingNumber가 있으면 무조건 다이얼로그 표시
-    final bool shouldShowDialog = currentState == CallState.active && 
-                                 ringingNumber != null && 
-                                 ringingNumber.isNotEmpty;
-    
-    // 대기 통화 다이얼로그가 표시되어야 하는 경우
-    if (shouldShowDialog) {
-      if (!_isShowingWaitingCallDialog || _ringingNumber != ringingNumber) {
-        // 새로운 수신 통화가 있으면 다이얼로그 표시
-        _ringingNumber = ringingNumber;
-        _ringingCallerName = callStateProvider.ringingCallerName;
-        
-        // 다이얼로그 표시 상태 변경 (setState 호출 전에 log 기록)
-        log('[OnCallContents] 타이머 체크: 수신 통화 감지: $_ringingNumber, 다이얼로그 표시');
-        
-        // 상태 업데이트 및 다이얼로그 표시
-        if (mounted) {
-          setState(() {
-            _isShowingWaitingCallDialog = true;
-          });
-        }
-      }
-    } 
-    // 대기 통화 다이얼로그가 표시 중이지만 표시되지 않아야 하는 경우
-    else if (_isShowingWaitingCallDialog) {
-      // 다이얼로그 표시 상태를 검증
-      final bool isValidDialog = 
-          currentState == CallState.active &&  // 현재 통화 중이고
-          _ringingNumber != null &&           // 링잉 번호가 있으며
-          _ringingNumber!.isNotEmpty;         // 그 번호가 유효할 때
-          
-      if (!isValidDialog) {
-        // 수신 통화가 없거나 active 상태가 아닌데 다이얼로그가 표시 중이면 숨김
-        if (mounted) {
+    try {
+      final callStateProvider = Provider.of<CallStateProvider>(context, listen: false);
+      final ringingNumber = callStateProvider.ringingCallNumber;
+      final currentState = callStateProvider.callState;
+      
+      // 현재 상태가 활성 통화가 아닌 경우 처리하지 않음 (상태 전환 중에는 작업 안함)
+      if (currentState != CallState.active) {
+        // 통화가 끝났거나 상태 전환 중인데 대기 통화 다이얼로그가 표시 중이면 숨김
+        if (_isShowingWaitingCallDialog) {
           setState(() {
             _isShowingWaitingCallDialog = false;
             _ringingNumber = null;
             _ringingCallerName = null;
           });
-          log('[OnCallContents] 타이머 체크: 수신 통화 없음 또는 active 상태 아님, 다이얼로그 숨김');
+          log('[OnCallContents] 활성 통화 종료 감지, 대기 통화 다이얼로그 숨김');
         }
+        return;
       }
+      
+      // 이미 이벤트 기반으로 처리되었는지 확인 (중복 처리 방지)
+      if (_isShowingWaitingCallDialog && _ringingNumber == ringingNumber && ringingNumber != null) {
+        // 이미 동일한 번호로 다이얼로그가 표시 중이면 추가 처리 생략
+        return;
+      }
+      
+      // CallState.active 상태이고 ringingNumber가 있으면 무조건 다이얼로그 표시
+      final bool shouldShowDialog = currentState == CallState.active && 
+                                   ringingNumber != null && 
+                                   ringingNumber.isNotEmpty;
+      
+      // 대기 통화 다이얼로그가 표시되어야 하는 경우
+      if (shouldShowDialog) {
+        if (!_isShowingWaitingCallDialog || _ringingNumber != ringingNumber) {
+          // 새로운 수신 통화가 있으면 다이얼로그 표시
+          _ringingNumber = ringingNumber;
+          _ringingCallerName = callStateProvider.ringingCallerName;
+          
+          // 다이얼로그 표시 상태 변경 (setState 호출 전에 log 기록)
+          log('[OnCallContents] 타이머 체크: 수신 통화 감지: $_ringingNumber, 다이얼로그 표시');
+          
+          // 상태 즉시 업데이트
+          setState(() {
+            _isShowingWaitingCallDialog = true;
+          });
+        }
+      } 
+      // 대기 통화 다이얼로그가 표시 중이지만 표시되지 않아야 하는 경우
+      else if (_isShowingWaitingCallDialog) {
+        // 수신 통화가 없어졌거나 달라졌으면 다이얼로그 숨김
+        setState(() {
+          _isShowingWaitingCallDialog = false;
+          _ringingNumber = null;
+          _ringingCallerName = null;
+        });
+        log('[OnCallContents] 대기 통화 종료 감지, 다이얼로그 숨김');
+      }
+    } catch (e) {
+      // 위젯이 dispose 되었거나 다른 예외가 발생한 경우
+      log('[OnCallContents] 통화 상태 체크 중 오류 발생: $e');
     }
   }
+
 
   String _formatDuration(int seconds) {
     final minutes = (seconds ~/ 60).toString().padLeft(2, '0');
@@ -179,15 +215,22 @@ class _OnCallContentsState extends State<OnCallContents> {
     final isSpeakerOn = callStateProvider.isSpeakerOn;
     final holdingCallNumber = callStateProvider.holdingCallNumber;
     final holdingCallerName = callStateProvider.holdingCallerName;
+    final currentCallState = callStateProvider.callState;
+
+    // 활성 통화 중에만 화면 표시
+    if (currentCallState != CallState.active) {
+      log('[OnCallContents] 활성 통화 상태가 아님: $currentCallState, UI를 표시하지 않음');
+      return const SizedBox.shrink(); // 빈 위젯 반환하여 화면 표시하지 않음
+    }
 
     // 발신자 이름 로직 수정 - Provider에서 직접 가져옴
     final callerName = callStateProvider.callerName;
     final number = widget.number;
     final displayName = callerName.isNotEmpty ? callerName : number;
     
-    // 발신자 정보 로그 기록
-    if (widget.number == number) {
-      log('[OnCallContents] 현재 통화 정보: 번호=$number, 이름=$callerName, 표시이름=$displayName');
+    // 발신자 정보 로그 기록 (로그 빈도 줄임)
+    if (widget.number == number && number.isNotEmpty) {
+      // log('[OnCallContents] 현재 통화 정보: 번호=$number, 이름=$callerName, 표시이름=$displayName');
     }
     
     final callStateText = widget.connected ? _formatDuration(widget.duration) : '통화 연결중...';
