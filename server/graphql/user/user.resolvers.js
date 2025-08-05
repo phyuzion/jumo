@@ -73,6 +73,26 @@ module.exports = {
         time: log.time.toISOString(),
         content: log.content || '',
         smsType: log.smsType,
+        userId: log.userId
+      }));
+    },
+    
+    // (Admin 전용) 모든 SMS 로그 조회
+    getAllSmsLogs: async (_, __, { tokenData }) => {
+      await checkAdminValid(tokenData);
+      
+      // 모든 SMS 로그 가져오기 (시간순 정렬)
+      // 주의: 실제 컬렉션 이름은 소문자 'smslogs'지만 Mongoose 모델은 'SmsLog'
+      const logs = await SmsLog.find({}).sort({ time: -1 });
+      
+      // 원본 데이터 반환 (클라이언트에서 캐시 및 필터링)
+      return logs.map(log => ({
+        phoneNumber: log.phoneNumber,
+        time: log.time.toISOString(),
+        content: log.content || '',
+        smsType: log.smsType,
+        // userId가 있을 경우만 문자열로 변환 (클라이언트에서 필터링 가능하도록)
+        userId: log.userId ? log.userId.toString() : null,
       }));
     },
 

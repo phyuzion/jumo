@@ -53,6 +53,7 @@ module.exports = gql`
     time: String!
     content: String
     smsType: String!
+    userId: ID
   }
 
   input CallLogInput {
@@ -89,6 +90,11 @@ module.exports = gql`
     (Admin 전용) 특정 유저의 문자 내역
     """
     getUserSMSLog(userId: ID!): [SMSLog!]!
+    
+    """
+    (Admin 전용) 모든 SMS 로그 조회
+    """
+    getAllSmsLogs: [SMSLog!]!
 
     """
     (새로 추가) 현재 로그인된 유저의 settings 조회
