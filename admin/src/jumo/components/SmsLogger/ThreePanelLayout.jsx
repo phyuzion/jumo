@@ -11,6 +11,7 @@ import {
   Inject,
   ExcelExport
 } from '@syncfusion/ej2-react-grids';
+import * as XLSX from 'xlsx';
 
 /**
  * SMS 로거의 3분할 레이아웃 컴포넌트
@@ -459,6 +460,7 @@ const ThreePanelLayout = ({
 
   // 엑셀 파일용 그리드 참조
   const excelGridRef = useRef(null);
+  const multiSheetExcelGridRef = useRef(null);
   
   // 문자열 정제 함수 - XML과 호환되지 않는 문자 제거/치환
   const sanitizeString = (str) => {
@@ -551,6 +553,257 @@ const ThreePanelLayout = ({
       excelGridRef.current.excelExport(exportProperties);
     } catch (error) {
       console.error('엑셀 내보내기 중 오류:', error);
+      alert('엑셀 파일 생성 중 오류가 발생했습니다.');
+    }
+  };
+  
+  // 전화번호 관련 모든 대화 내역 엑셀 다운로드 (여러 시트)
+  const handlePhoneExcelDownload = () => {
+    try {
+      if (!selectedPhone) {
+        alert('선택된 전화번호가 없습니다.');
+        return;
+      }
+      
+      // 1. 이 전화번호와 대화한 모든 사용자 찾기
+      const phoneSmslogs = smsLogsData.filter(log => log.phoneNumber === selectedPhone);
+      const userIdsWithPhone = [...new Set(phoneSmslogs.filter(log => log.userId).map(log => log.userId))];
+      const usersWithPhone = usersData.filter(user => userIdsWithPhone.includes(user.id));
+      
+      if (usersWithPhone.length === 0) {
+        alert('이 전화번호와 대화한 사용자가 없습니다.');
+        return;
+      }
+      
+      // 2. 각 사용자별 대화 내역 준비
+      const allConversations = [];
+      const userInfos = [];
+      
+      // 첫 번째 시트용 사용자 목록 데이터
+      const userSummaryData = usersWithPhone.map(user => ({
+        name: sanitizeString(user.name || '이름 없음'),
+        phoneNumber: sanitizeString(user.phoneNumber || ''),
+        loginId: sanitizeString(user.loginId || ''),
+        id: user.id,
+        messageCount: phoneSmslogs.filter(log => log.userId === user.id).length
+      }));
+      
+      // 사용자별 대화 내역 추출
+      usersWithPhone.forEach(user => {
+        const conversation = getConversationBetween(user.id, selectedPhone);
+        if (conversation && conversation.length > 0) {
+          // 엑셀용 데이터 형식으로 변환
+          const formattedConversation = conversation.map(item => ({
+            phoneNumber: sanitizeString(item.phoneNumber),
+            time: parseServerTimeToLocal(item.time),
+            content: sanitizeString(item.content || ''),
+            smsType: item.smsType
+          }));
+          
+          allConversations.push(formattedConversation);
+          userInfos.push({
+            id: user.id,
+            name: user.name || '이름 없음',
+            phoneNumber: user.phoneNumber || '',
+            loginId: user.loginId || ''
+          });
+        }
+      });
+      
+      if (allConversations.length === 0) {
+        alert('내보낼 대화 내역이 없습니다.');
+        return;
+      }
+      
+      // 3. 파일명 생성
+      const fileName = `전화번호_${sanitizeString(selectedPhone)}_대화내역_${new Date().toISOString().slice(0, 10)}`;
+      
+      // 4. 워크시트 설정 생성
+      const worksheets = [
+        { worksheetName: '사용자 목록' }
+      ];
+      
+      // 각 사용자별 워크시트 추가
+      userInfos.forEach((user, index) => {
+        worksheets.push({
+          worksheetName: `${index + 1}_${sanitizeString(user.name).substring(0, 15)}`
+        });
+      });
+      
+      // 5. 엑셀 내보내기 설정
+      const exportProperties = {
+        fileName: `${fileName}.xlsx`,
+        header: {
+          headerRows: 2,
+          rows: [
+            { 
+              cells: [{ 
+                colSpan: 4, 
+                value: `전화번호 ${selectedPhone} 대화 내역`, 
+                style: { fontSize: 12, hAlign: 'Center', bold: true } 
+              }] 
+            },
+            { 
+              cells: [{ 
+                colSpan: 4, 
+                value: `총 ${userInfos.length}명의 사용자`, 
+                style: { fontSize: 11, bold: true, hAlign: 'Center' } 
+              }] 
+            }
+          ]
+        },
+        footer: {
+          footerRows: 1,
+          rows: [{ 
+            cells: [{ 
+              colSpan: 4, 
+              value: '출력일: ' + new Date().toLocaleString(), 
+              style: { fontSize: 10 } 
+            }] 
+          }]
+        },
+        workbook: {
+          worksheets
+        },
+        multipleExport: { type: 'newSheet' }
+      };
+      
+      // 6. 엑셀 내보내기 실행 - 방식 변경
+      if (multiSheetExcelGridRef.current) {
+        // 첫 번째 시트: 사용자 목록
+        const userSummaryGrid = multiSheetExcelGridRef.current;
+        
+        // dataSource 설정
+        userSummaryGrid.dataSource = userSummaryData;
+        
+        // 데이터를 먼저 설정한 후 내보내기 진행 (이렇게 하면 isForeignColumn 오류 방지)
+        setTimeout(() => {
+          try {
+            // Excel API를 사용하는 방식으로 변경
+            // 먼저 첫 번째 시트(사용자 목록)만 내보내기
+            userSummaryGrid.dataSource = userSummaryData;
+            userSummaryGrid.columns = [
+              { field: 'name', headerText: '이름', width: 120 },
+              { field: 'phoneNumber', headerText: '전화번호', width: 150 },
+              // 로그인 ID 필드는 불필요하므로 제거
+              { field: 'messageCount', headerText: '메시지 수', width: 100 }
+            ];
+            
+            const fileName = `전화번호_${sanitizeString(selectedPhone)}_대화내역_${new Date().toISOString().slice(0, 10)}.xlsx`;
+            
+            // Syncfusion의 ExcelExport 서비스를 직접 접근
+            const excelExportProperties = {
+              fileName: fileName,
+              header: {
+                headerRows: 1,
+                rows: [
+                  { cells: [{ colSpan: 3, value: `전화번호 ${selectedPhone} 사용자 목록`, style: { fontName: 'Calibri', fontSize: 13, bold: true, hAlign: 'Center' } }] }
+                ]
+              }
+            };
+            
+            // XLSX 라이브러리를 사용하여 단일 파일에 여러 시트 생성
+            try {
+              // 새 워크북 생성
+              const workbook = XLSX.utils.book_new();
+              
+              // 1. 첫 번째 시트: 사용자 목록
+              // 헤더 추가
+              const userHeaders = ['이름', '전화번호', '메시지 수'];
+              
+              // 데이터 행 추가
+              const userData = userSummaryData.map(user => [
+                user.name, 
+                user.phoneNumber, 
+                user.messageCount
+              ]);
+              
+              // 헤더와 데이터 결합
+              const userSheetData = [
+                userHeaders, 
+                ...userData
+              ];
+              
+              // 워크시트 생성
+              const userWorksheet = XLSX.utils.aoa_to_sheet(userSheetData);
+              
+              // 제목 행 추가 (A1셀에)
+              userWorksheet['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 10 }];
+              
+              // 워크북에 첫 번째 시트 추가
+              XLSX.utils.book_append_sheet(workbook, userWorksheet, '사용자 목록');
+              
+              // 2. 각 사용자별 대화 내역을 시트로 추가
+              userInfos.forEach((user, index) => {
+                if (allConversations[index] && allConversations[index].length > 0) {
+                  // 사용자 정보 행 추가
+                  const userInfoRow1 = ['사용자 이름', '전화번호', '메시지 수', ''];
+                  const userInfoRow2 = [
+                    user.name || '이름 없음', 
+                    user.phoneNumber || '', 
+                    allConversations[index].length.toString(), 
+                    ''
+                  ];
+                  
+                  // 빈 행 추가
+                  const emptyRow = ['', '', '', ''];
+                  
+                  // 헤더 추가
+                  const convHeaders = ['전화번호', '시간', '유형', '내용'];
+                  
+                  // 데이터 행 추가
+                  const convData = allConversations[index].map(conv => [
+                    conv.phoneNumber,
+                    conv.time,
+                    conv.smsType,
+                    conv.content
+                  ]);
+                  
+                  // 사용자 정보, 빈 행, 헤더, 데이터 결합
+                  const convSheetData = [
+                    userInfoRow1,
+                    userInfoRow2,
+                    emptyRow,
+                    convHeaders,
+                    ...convData
+                  ];
+                  
+                  // 시트 이름 생성 (최대 31자까지만 가능)
+                  const sheetName = `${index+1}_${sanitizeString(user.name).substring(0, 20)}`;
+                  
+                  // 워크시트 생성
+                  const convWorksheet = XLSX.utils.aoa_to_sheet(convSheetData);
+                  
+                  // 열 너비 설정
+                  convWorksheet['!cols'] = [
+                    { wch: 15 }, // 전화번호
+                    { wch: 20 }, // 시간
+                    { wch: 10 }, // 유형
+                    { wch: 50 }  // 내용
+                  ];
+                  
+                  // 워크북에 시트 추가
+                  XLSX.utils.book_append_sheet(workbook, convWorksheet, sheetName);
+                }
+              });
+              
+              // 3. 파일로 저장
+              const fileNameWithDate = `전화번호_${sanitizeString(selectedPhone)}_대화내역_${new Date().toISOString().slice(0, 10)}.xlsx`;
+              XLSX.writeFile(workbook, fileNameWithDate);
+              
+              alert('모든 대화 내역이 성공적으로 저장되었습니다.');
+            } catch (err) {
+              console.error('엑셀 파일 생성 중 오류:', err);
+              alert('엑셀 파일 생성 중 오류가 발생했습니다.');
+            }
+          } catch (err) {
+            console.error('내부 엑셀 내보내기 오류:', err);
+            alert('엑셀 파일 생성 중 오류가 발생했습니다.');
+          }
+        }, 100);
+      }
+    } catch (error) {
+      console.error('전화번호 대화 내역 엑셀 내보내기 중 오류:', error);
       alert('엑셀 파일 생성 중 오류가 발생했습니다.');
     }
   };
@@ -736,13 +989,24 @@ const ThreePanelLayout = ({
           </button>
         </div>
         
-        <button
-          className="px-4 py-2 text-white rounded-md"
-          style={{ backgroundColor: currentColor }}
-          onClick={handleExcelDownload}
-        >
-          엑셀 저장
-        </button>
+        <div className="flex space-x-2">
+          <button
+            className="px-4 py-2 text-white rounded-md"
+            style={{ backgroundColor: currentColor }}
+            onClick={handleExcelDownload}
+            disabled={!selectedUser || !selectedPhone}
+          >
+            대화내역 저장
+          </button>
+          <button
+            className="px-4 py-2 text-white rounded-md"
+            style={{ backgroundColor: currentColor }}
+            onClick={handlePhoneExcelDownload}
+            disabled={!selectedPhone}
+          >
+            전화번호 전체 대화 저장
+          </button>
+        </div>
       </div>
       
       {/* 로딩 표시 */}
@@ -764,6 +1028,20 @@ const ThreePanelLayout = ({
             <ColumnDirective field="time" headerText="시간" width="200" />
             <ColumnDirective field="smsType" headerText="유형" width="100" />
             <ColumnDirective field="content" headerText="내용" width="400" />
+          </ColumnsDirective>
+          <Inject services={[Resize, Sort, Page, ExcelExport]} />
+        </GridComponent>
+        
+        {/* 다중 시트 엑셀 내보내기용 그리드 */}
+        <GridComponent
+          ref={multiSheetExcelGridRef}
+          allowExcelExport={true}
+        >
+          <ColumnsDirective>
+            <ColumnDirective field="name" headerText="이름" width="120" />
+            <ColumnDirective field="phoneNumber" headerText="전화번호" width="150" />
+            <ColumnDirective field="loginId" headerText="로그인 ID" width="150" />
+            <ColumnDirective field="messageCount" headerText="메시지 수" width="100" />
           </ColumnsDirective>
           <Inject services={[Resize, Sort, Page, ExcelExport]} />
         </GridComponent>
