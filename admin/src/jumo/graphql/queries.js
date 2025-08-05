@@ -84,6 +84,22 @@ export const GET_USER_SMS_LOG = gql`
       time
       content
       smsType
+      userId
+    }
+  }
+`;
+
+/**
+ * (Admin) 모든 SMS 로그 조회 
+ */
+export const GET_ALL_SMS_LOGS = gql`
+  query {
+    getAllSmsLogs {
+      phoneNumber
+      time
+      content
+      smsType
+      userId
     }
   }
 `;

@@ -1,7 +1,7 @@
 // RoutesConfig.js
-import { PhoneRecords, Summary, Users, Contents, Notifications, Version, CommonSettings } from './pages';
+import { PhoneRecords, Summary, Users, Contents, Notifications, Version, CommonSettings, SmsLogger } from './pages';
 import { FiShoppingBag } from 'react-icons/fi';
-import { AiOutlineCalendar, AiOutlinePhone, AiOutlineBook, AiOutlineBell, AiOutlineFile, AiOutlineSetting } from 'react-icons/ai';
+import { AiOutlineCalendar, AiOutlinePhone, AiOutlineBook, AiOutlineBell, AiOutlineFile, AiOutlineSetting, AiOutlineMessage } from 'react-icons/ai';
 
 export const routes = [
   {
@@ -29,6 +29,12 @@ export const routes = [
         name: "유저",
         component: <Users />,
         icon: <AiOutlineCalendar />,
+      },
+      {
+        path: "smslogger",
+        name: "SMS 로거",
+        component: <SmsLogger />,
+        icon: <AiOutlineMessage />,
       },
       {
         path: "records",
