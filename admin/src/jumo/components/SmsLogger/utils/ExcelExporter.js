@@ -16,6 +16,13 @@ export const sanitizeString = (str) => {
 
 export const sanitizeFileName = (name) => name.replace(/[\\/:*?"<>|]/g, '_');
 
+// Excel 시트명 정제 (금지문자 및 길이 제한 31자)
+export const sanitizeSheetName = (name) => {
+  const base = (name || '').toString().replace(/[:\\\/\?\*\[\]]/g, '_').trim();
+  const trimmed = base.length === 0 ? 'Sheet' : base;
+  return trimmed.substring(0, 31);
+};
+
 // 단일 대화 엑셀 데이터 변환
 export const mapConversationToRows = (items) => {
   if (!items || !Array.isArray(items)) return [];
@@ -42,7 +49,7 @@ export const exportPhoneConversations = ({
   const userSheetData = [userHeaders, ...userData];
   const userSheet = XLSX.utils.aoa_to_sheet(userSheetData);
   userSheet['!cols'] = [{ wch: 20 }, { wch: 15 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(workbook, userSheet, '사용자 목록');
+  XLSX.utils.book_append_sheet(workbook, userSheet, sanitizeSheetName('사용자 목록'));
 
   // 2) 사용자별 대화 시트들
   usersWithPhone.forEach((user, index) => {
@@ -59,11 +66,11 @@ export const exportPhoneConversations = ({
     const sheet = XLSX.utils.aoa_to_sheet(sheetData);
     sheet['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 50 }];
 
-    const sheetName = `${index + 1}_${sanitizeString((user.name || '').toString()).substring(0, 20)}`;
-    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    const rawName = `${index + 1}_${sanitizeString((user.name || '').toString()).substring(0, 20)}`;
+    XLSX.utils.book_append_sheet(workbook, sheet, sanitizeSheetName(rawName));
   });
 
-  const fileName = `전화번호_${sanitizeString(selectedPhone)}_대화내역_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `전화번호_${sanitizeFileName(sanitizeString(selectedPhone))}_대화내역_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 };
 
@@ -83,7 +90,7 @@ export const exportUserConversations = ({
   const summarySheetData = [headers, ...summaryRows];
   const summarySheet = XLSX.utils.aoa_to_sheet(summarySheetData);
   summarySheet['!cols'] = [{ wch: 18 }, { wch: 10 }];
-  XLSX.utils.book_append_sheet(workbook, summarySheet, '전화번호 목록');
+  XLSX.utils.book_append_sheet(workbook, summarySheet, sanitizeSheetName('전화번호 목록'));
 
   // 2) 전화번호별 대화 시트들
   phoneNumbers.forEach((phone, index) => {
@@ -100,11 +107,11 @@ export const exportUserConversations = ({
     const sheet = XLSX.utils.aoa_to_sheet(sheetData);
     sheet['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 10 }, { wch: 50 }];
 
-    const sheetName = `${index + 1}_${sanitizeString(phone).substring(0, 20)}`;
-    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    const rawName = `${index + 1}_${sanitizeString(phone).substring(0, 20)}`;
+    XLSX.utils.book_append_sheet(workbook, sheet, sanitizeSheetName(rawName));
   });
 
-  const fileName = `${sanitizeFileName(sanitizeString(selectedUserName || '사용자'))}_${sanitizeString(selectedUserPhone || '')}_대화내역_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileName = `${sanitizeFileName(sanitizeString(selectedUserName || '사용자'))}_${sanitizeFileName(sanitizeString(selectedUserPhone || ''))}_대화내역_${new Date().toISOString().slice(0, 10)}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 };
 
