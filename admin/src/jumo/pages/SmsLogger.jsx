@@ -8,7 +8,7 @@ import { Header } from "../components";
 import { useStateContext } from "../contexts/ContextProvider";
 import useIndexedDBCache from "../utils/useIndexedDBCache";
 import CacheControls from "../components/SmsLogger/CacheControls";
-import ThreePanelLayout from "../components/SmsLogger/ThreePanelLayout";
+import ThreePanelLayoutContainer from "../components/SmsLogger/ThreePanelLayoutContainer";
 
 /**
  * SMS 로거 페이지 컴포넌트
@@ -239,7 +239,7 @@ const SmsLogger = () => {
       {/* 메인 컨텐츠 영역 - 데이터가 로드된 경우에만 표시 */}
       {isDataLoaded ? (
         currentView === 'smsLogger' ? (
-          <ThreePanelLayout cache={cache} currentColor={currentColor} />
+          <ThreePanelLayoutContainer cache={cache} currentColor={currentColor} />
         ) : (
           <div className="bg-white shadow-md rounded-lg p-6 text-center">
             <p className="mb-4">캐시된 데이터를 사용하여 SMS 로거 기능을 이용할 수 있습니다.</p>
