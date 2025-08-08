@@ -9,6 +9,7 @@ import { useStateContext } from "../contexts/ContextProvider";
 import useIndexedDBCache from "../utils/useIndexedDBCache";
 import CacheControls from "../components/SmsLogger/CacheControls";
 import ThreePanelLayoutContainer from "../components/SmsLogger/ThreePanelLayoutContainer";
+import MultiExportPanel from "../components/SmsLogger/MultiExportPanel";
 
 /**
  * SMS 로거 페이지 컴포넌트
@@ -16,7 +17,7 @@ import ThreePanelLayoutContainer from "../components/SmsLogger/ThreePanelLayoutC
  */
 const SmsLogger = () => {
   const { currentColor } = useStateContext();
-  const [currentView, setCurrentView] = useState('cache'); // 'cache' | 'smsLogger'
+  const [currentView, setCurrentView] = useState('cache'); // 'cache' | 'smsLogger' | 'multiExport'
   
   // IndexedDB 캐시 훅
   const cache = useIndexedDBCache();
@@ -222,6 +223,13 @@ const SmsLogger = () => {
             >
               SMS 로거
             </button>
+            <button
+              className={`py-2 px-4 ${currentView === 'multiExport' ? 'border-b-2 font-medium' : 'text-gray-500'}`}
+              style={{ borderColor: currentView === 'multiExport' ? currentColor : 'transparent' }}
+              onClick={() => setCurrentView('multiExport')}
+            >
+              다중 저장
+            </button>
           </div>
         </div>
       )}
@@ -240,6 +248,8 @@ const SmsLogger = () => {
       {isDataLoaded ? (
         currentView === 'smsLogger' ? (
           <ThreePanelLayoutContainer cache={cache} currentColor={currentColor} />
+        ) : currentView === 'multiExport' ? (
+          <MultiExportPanel cache={cache} currentColor={currentColor} />
         ) : (
           <div className="bg-white shadow-md rounded-lg p-6 text-center">
             <p className="mb-4">캐시된 데이터를 사용하여 SMS 로거 기능을 이용할 수 있습니다.</p>
